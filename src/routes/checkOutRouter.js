@@ -4,6 +4,7 @@ const checkOutController = require("../controllers/checkOutController");
 const authMiddleware = require("../middleware/authMiddleware");
 const sepayAuth = require("../middleware/sepayAuth");
 const validationHandler = require("../middleware/validationHandler");
+const { checkoutLimiter, webhookLimiter } = require("../middleware/rateLimiter");
 const {
   checkoutSchema,
   sepayWebhookSchema,
@@ -13,15 +14,18 @@ const {
 // ==== User đặt hàng (COD hoặc online) ====
 router.post(
   "/check-out",
+  checkoutLimiter,
   authMiddleware.authMiddleware,
   validationHandler.validate(checkoutSchema, "body"),
   checkOutController.checkOut,
 );
 
 // ==== Webhook SePay — KHÔNG dùng authMiddleware (SePay không có JWT hệ thống),
-// chỉ xác thực bằng API key riêng ====
+// chỉ xác thực bằng API key riêng. Rate limit đặt TRƯỚC xác thực key để chặn
+// brute-force sớm nhất có thể ====
 router.post(
   "/sepay-webhook",
+  webhookLimiter,
   sepayAuth.verifyApiKey,
   validationHandler.validate(sepayWebhookSchema, "body"),
   checkOutController.sepayWebhook,

@@ -5,9 +5,11 @@ const userController = require('../controllers/userController');
 const authMiddleware = require('../middleware/authMiddleware');
 const validationHandler = require('../middleware/validationHandler');
 const validationSchemas = require('../middleware/validationSchemas');
+const { authLimiter } = require('../middleware/rateLimiter');
 
 routers.post(
   '/register',
+  authLimiter,
   validationHandler.validate(validationSchemas.registerSchema),
   userController.createUser
 );

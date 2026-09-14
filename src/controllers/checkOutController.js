@@ -180,7 +180,7 @@ class CheckOutController {
 
         const cart = await Cart.findOne({
           userId,
-          isSubcribeCart: false,
+          isSubscribeCart: false,
         }).session(session);
         if (!cart || cart.items.length === 0) {
           const err = new Error("Giỏ hàng trống");
