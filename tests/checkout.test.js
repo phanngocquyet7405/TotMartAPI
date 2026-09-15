@@ -34,7 +34,10 @@ describe("POST /api/checkout/check-out", () => {
     const res = await request(app)
       .post("/api/checkout/check-out")
       .set("Authorization", `Bearer ${token}`)
-      .send({ addressId: user.addresses[0]._id.toString(), paymentMethod: "cod" });
+      .send({
+        addressId: user.addresses[0]._id.toString(),
+        paymentMethod: "cod",
+      });
 
     expect(res.status).toBe(400);
     expect(res.body.success).toBe(false);
@@ -45,12 +48,17 @@ describe("POST /api/checkout/check-out", () => {
     const token = signToken(user);
     const brand = await createBrand();
     const product = await createProduct(brand, { price: 50000, stock: 5 });
-    await createCartWithItems(user._id, [{ productId: product._id, quantity: 2 }]);
+    await createCartWithItems(user._id, [
+      { productId: product._id, quantity: 2 },
+    ]);
 
     const res = await request(app)
       .post("/api/checkout/check-out")
       .set("Authorization", `Bearer ${token}`)
-      .send({ addressId: user.addresses[0]._id.toString(), paymentMethod: "cod" });
+      .send({
+        addressId: user.addresses[0]._id.toString(),
+        paymentMethod: "cod",
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -65,8 +73,11 @@ describe("POST /api/checkout/check-out", () => {
     expect(order.paymentStatus).toBe("pending");
     expect(order.stockDeducted).toBe(true);
 
-    const cart = await Cart.findOne({ userId: user._id, isSubscribeCart: false });
-    expect(cart.items).toHaveLength(0);
+    const cart = await Cart.findOne({
+      userId: user._id,
+      isSubscribeCart: false,
+    });
+    expect(cart).toBeNull();
   });
 
   test("does NOT deduct stock for an online order until payment is confirmed", async () => {
@@ -74,12 +85,17 @@ describe("POST /api/checkout/check-out", () => {
     const token = signToken(user);
     const brand = await createBrand();
     const product = await createProduct(brand, { price: 50000, stock: 5 });
-    await createCartWithItems(user._id, [{ productId: product._id, quantity: 2 }]);
+    await createCartWithItems(user._id, [
+      { productId: product._id, quantity: 2 },
+    ]);
 
     const res = await request(app)
       .post("/api/checkout/check-out")
       .set("Authorization", `Bearer ${token}`)
-      .send({ addressId: user.addresses[0]._id.toString(), paymentMethod: "online" });
+      .send({
+        addressId: user.addresses[0]._id.toString(),
+        paymentMethod: "online",
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.data.qrUrl).toBeDefined();
@@ -97,12 +113,17 @@ describe("POST /api/checkout/check-out", () => {
     const token = signToken(user);
     const brand = await createBrand();
     const product = await createProduct(brand, { price: 50000, stock: 1 });
-    await createCartWithItems(user._id, [{ productId: product._id, quantity: 5 }]);
+    await createCartWithItems(user._id, [
+      { productId: product._id, quantity: 5 },
+    ]);
 
     const res = await request(app)
       .post("/api/checkout/check-out")
       .set("Authorization", `Bearer ${token}`)
-      .send({ addressId: user.addresses[0]._id.toString(), paymentMethod: "cod" });
+      .send({
+        addressId: user.addresses[0]._id.toString(),
+        paymentMethod: "cod",
+      });
 
     expect(res.status).toBe(400);
 
@@ -116,7 +137,9 @@ describe("POST /api/checkout/check-out", () => {
     const token = signToken(user);
     const brand = await createBrand();
     const product = await createProduct(brand);
-    await createCartWithItems(user._id, [{ productId: product._id, quantity: 1 }]);
+    await createCartWithItems(user._id, [
+      { productId: product._id, quantity: 1 },
+    ]);
 
     const res = await request(app)
       .post("/api/checkout/check-out")
@@ -141,7 +164,10 @@ describe("POST /api/checkout/check-out", () => {
     const res = await request(app)
       .post("/api/checkout/check-out")
       .set("Authorization", `Bearer ${token}`)
-      .send({ addressId: user.addresses[0]._id.toString(), paymentMethod: "cod" });
+      .send({
+        addressId: user.addresses[0]._id.toString(),
+        paymentMethod: "cod",
+      });
 
     expect(res.status).toBe(200);
     expect(res.body.data.orders).toHaveLength(2);
@@ -157,8 +183,13 @@ describe("POST /api/checkout/check-out", () => {
     const token = signToken(user);
     const brand = await createBrand();
     const product = await createProduct(brand, { price: 100000, stock: 5 });
-    await createCartWithItems(user._id, [{ productId: product._id, quantity: 1 }]);
-    const coupon = await createCoupon({ discountType: "percentage", discount: 10 });
+    await createCartWithItems(user._id, [
+      { productId: product._id, quantity: 1 },
+    ]);
+    const coupon = await createCoupon({
+      discountType: "percentage",
+      discount: 10,
+    });
 
     const res = await request(app)
       .post("/api/checkout/check-out")
@@ -181,7 +212,9 @@ describe("POST /api/checkout/check-out", () => {
     const token = signToken(user);
     const brand = await createBrand();
     const product = await createProduct(brand, { price: 100000, stock: 5 });
-    await createCartWithItems(user._id, [{ productId: product._id, quantity: 1 }]);
+    await createCartWithItems(user._id, [
+      { productId: product._id, quantity: 1 },
+    ]);
     const coupon = await createCoupon({
       startDate: new Date(Date.now() - 2 * 60 * 60 * 1000),
       expiresAt: new Date(Date.now() - 60 * 60 * 1000),
@@ -211,7 +244,9 @@ describe("POST /api/checkout/check-out", () => {
     const product = await createProduct(brand, { price: 100000, stock: 5 });
     const coupon = await createCoupon({ usageLimit: 1 });
 
-    await createCartWithItems(user._id, [{ productId: product._id, quantity: 1 }]);
+    await createCartWithItems(user._id, [
+      { productId: product._id, quantity: 1 },
+    ]);
     const first = await request(app)
       .post("/api/checkout/check-out")
       .set("Authorization", `Bearer ${token}`)
@@ -222,7 +257,9 @@ describe("POST /api/checkout/check-out", () => {
       });
     expect(first.status).toBe(200);
 
-    await createCartWithItems(user._id, [{ productId: product._id, quantity: 1 }]);
+    await createCartWithItems(user._id, [
+      { productId: product._id, quantity: 1 },
+    ]);
     const second = await request(app)
       .post("/api/checkout/check-out")
       .set("Authorization", `Bearer ${token}`)
@@ -241,14 +278,21 @@ describe("POST /api/checkout/cancel/:_id", () => {
     const token = signToken(user);
     const brand = await createBrand();
     const product = await createProduct(brand, { price: 50000, stock: 5 });
-    await createCartWithItems(user._id, [{ productId: product._id, quantity: 2 }]);
+    await createCartWithItems(user._id, [
+      { productId: product._id, quantity: 2 },
+    ]);
 
     const checkoutRes = await request(app)
       .post("/api/checkout/check-out")
       .set("Authorization", `Bearer ${token}`)
-      .send({ addressId: user.addresses[0]._id.toString(), paymentMethod: "cod" });
+      .send({
+        addressId: user.addresses[0]._id.toString(),
+        paymentMethod: "cod",
+      });
 
-    const order = await Order.findOne({ orderId: checkoutRes.body.data.orders[0] });
+    const order = await Order.findOne({
+      orderId: checkoutRes.body.data.orders[0],
+    });
     expect((await Product.findById(product._id)).stock).toBe(3);
 
     const cancelRes = await request(app)
@@ -267,13 +311,20 @@ describe("POST /api/checkout/cancel/:_id", () => {
     const intruderToken = signToken(intruder);
     const brand = await createBrand();
     const product = await createProduct(brand, { stock: 5 });
-    await createCartWithItems(owner._id, [{ productId: product._id, quantity: 1 }]);
+    await createCartWithItems(owner._id, [
+      { productId: product._id, quantity: 1 },
+    ]);
 
     const checkoutRes = await request(app)
       .post("/api/checkout/check-out")
       .set("Authorization", `Bearer ${signToken(owner)}`)
-      .send({ addressId: owner.addresses[0]._id.toString(), paymentMethod: "cod" });
-    const order = await Order.findOne({ orderId: checkoutRes.body.data.orders[0] });
+      .send({
+        addressId: owner.addresses[0]._id.toString(),
+        paymentMethod: "cod",
+      });
+    const order = await Order.findOne({
+      orderId: checkoutRes.body.data.orders[0],
+    });
 
     const res = await request(app)
       .post(`/api/checkout/cancel/${order._id}`)

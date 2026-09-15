@@ -272,12 +272,14 @@ class CheckOutController {
         }
 
         // Tạo 1 loạt đơn hàng cùng lúc
-        createdOrders = await Order.create(ordersToCreate, { session });
+        createdOrders = [];
+        for (const orderData of ordersToCreate) {
+          const [newOrder] = await Order.create([orderData], { session });
+          createdOrders.push(newOrder);
+        }
 
         // Dọn giỏ hàng
-        cart.items = [];
-        cart.totalPrice = 0;
-        await cart.save({ session });
+        await Cart.deleteOne({ _id: cart._id }, { session });
       });
 
       // Báo notification cho TỪNG merchant nếu là COD
