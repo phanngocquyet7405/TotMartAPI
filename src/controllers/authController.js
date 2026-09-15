@@ -1,122 +1,137 @@
-const jwt = require('jsonwebtoken');
-const User = require('../models/User');
-const bcrypt = require('bcrypt');
-const crypto = require('crypto');
-const sendEmailWithBrevo = require('../utils/sendEmail');
+const jwt = require("jsonwebtoken");
+const User = require("../models/User");
+const bcrypt = require("bcrypt");
+const crypto = require("crypto");
+const sendEmailWithBrevo = require("../utils/sendEmail");
+const config = require("../config/environment");
 
 class AuthController {
-    async login(req, res, next) {
-        try {
-            const { email, password } = req.body;
-            const user = await User.findOne({ email });
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'User not found'
-                });
-            }
-            const isMatch = await bcrypt.compare(password, user.password);
-            if (!isMatch) {
-                return res.status(401).json({
-                    success: false,
-                    message: 'Invalid password'
-                });
-            }
-            const token = jwt.sign({
-                userId: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                avatar: user.avatar
-            }, process.env.JWT_SECRET, { expiresIn: process.env.JWT_EXPIRES_IN });
+  async login(req, res, next) {
+    try {
+      const { email, password } = req.body;
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found",
+        });
+      }
+      const isMatch = await bcrypt.compare(password, user.password);
+      if (!isMatch) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid password",
+        });
+      }
+      const token = jwt.sign(
+        {
+          userId: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          avatar: user.avatar,
+        },
+        config.jwt.secret,
+        { expiresIn: config.jwt.expiresIn },
+      );
 
-            const refreshToken = jwt.sign({
-                userId: user._id,
-                name: user.name,
-                email: user.email,
-                role: user.role,
-                avatar: user.avatar
-            }, process.env.JWT_REFRESH_SECRET, { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN });
-            res.cookie('token', token, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
-                maxAge: 1000 * 60 * 60 * 24 * 7
-            })
-            res.cookie('refreshToken', refreshToken, {
-                httpOnly: true,
-                secure: process.env.NODE_ENV === 'production',
-                sameSite: 'strict',
-                maxAge: 1000 * 60 * 60 * 24 * 30
-            });
-            user.refreshToken.push(refreshToken);
-            await user.save();
-            res.status(200).json({
-                success: true,
-                message: 'Login successful',
-                token,
-                refreshToken
-            });
-        } catch (error) {
-            next(error);
-        }
+      const refreshToken = jwt.sign(
+        {
+          userId: user._id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
+          avatar: user.avatar,
+        },
+        config.jwt.refreshSecret,
+        { expiresIn: config.jwt.refreshExpiresIn },
+      );
+
+      res.cookie("token", token, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 1000 * 60 * 60 * 24 * 7,
+      });
+      res.cookie("refreshToken", refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "strict",
+        maxAge: 1000 * 60 * 60 * 24 * 30,
+      });
+      user.refreshToken.push(refreshToken);
+      await user.save();
+      res.status(200).json({
+        success: true,
+        message: "Login successful",
+        token,
+        refreshToken,
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    async logout(req, res, next) {
-        try {
-            const refreshToken = req.cookies.refreshToken;
-            if (!refreshToken) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Refresh token not found'
-                });
-            }
-            const user = await User.findOne({ refreshToken: refreshToken });
-            if (!user) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid refresh token'
-                });
-            }
-            user.refreshToken = user.refreshToken.filter(token => token !== refreshToken);
-            await user.save();
-            res.clearCookie('token');
-            res.clearCookie('refreshToken');
-            res.status(200).json({
-                success: true,
-                message: 'Logout successful'
-            });
-        } catch (error) {
-            next(error);
-        }
+  async logout(req, res, next) {
+    try {
+      const refreshToken = req.cookies.refreshToken;
+      if (!refreshToken) {
+        return res.status(400).json({
+          success: false,
+          message: "Refresh token not found",
+        });
+      }
+      const user = await User.findOne({ refreshToken: refreshToken });
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid refresh token",
+        });
+      }
+      user.refreshToken = user.refreshToken.filter(
+        (token) => token !== refreshToken,
+      );
+      await user.save();
+      res.clearCookie("token");
+      res.clearCookie("refreshToken");
+      res.status(200).json({
+        success: true,
+        message: "Logout successful",
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    async forgotPassword(req, res, next) {
-        try {
-            const { email } = req.body;
-            const user = await User.findOne({ email });
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'User with that email does not exist'
-                });
-            }
+  async forgotPassword(req, res, next) {
+    try {
+      const { email } = req.body;
+      const user = await User.findOne({ email });
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User with that email does not exist",
+        });
+      }
 
-            const resetToken = crypto.randomBytes(20).toString('hex');
+      const resetToken = crypto.randomBytes(20).toString("hex");
 
-            user.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-            user.resetPasswordExpires = Date.now() + 10 * 60 * 1000; // 10 min
+      user.resetPasswordToken = crypto
+        .createHash("sha256")
+        .update(resetToken)
+        .digest("hex");
+      user.resetPasswordExpires = Date.now() + 10 * 60 * 1000; // 10 min
 
-            await user.save();
+      await user.save();
 
-            // url frontend reset password
-            const resetUrl = `https://totmartapi.onrender.com/reset-password?token=${resetToken}`;
+      // url frontend reset password
+      const resetUrl = `https://totmartapi.onrender.com/reset-password?token=${resetToken}`;
 
-            try {
-                await sendEmailWithBrevo(
-                    user.email,
-                    'TotMart - Password Reset Link',
-                    `
+      try {
+        await sendEmailWithBrevo(
+          user.email,
+          "TotMart - Password Reset Link",
+          `
     <div style="font-family: Arial, sans-serif; max-width: 450px; margin: auto;">
         <h2 style="color: #4CAF50;">TotMart</h2>
         <p>Xin chào,</p>
@@ -127,62 +142,64 @@ class AuthController {
         <p style="color: #999; font-size: 12px;">Nếu bạn không yêu cầu, vui lòng bỏ qua email này.</p>
         <p style="color: #999; font-size: 12px;">TotMart - Your Trusted Shopping Partner</p>
     </div>
-    `
-                );
+    `,
+        );
 
-                res.status(200).json({
-                    success: true,
-                    message: 'Reset password email sent successfully'
-                });
-            } catch (error) {
-                user.resetPasswordToken = undefined;
-                user.resetPasswordExpires = undefined;
-                await user.save();
-                return res.status(500).json({
-                    success: false,
-                    message: 'Email could not be sent ' + error
-                });
-            }
-        } catch (error) {
-            next(error);
-        }
+        res.status(200).json({
+          success: true,
+          message: "Reset password email sent successfully",
+        });
+      } catch (error) {
+        user.resetPasswordToken = undefined;
+        user.resetPasswordExpires = undefined;
+        await user.save();
+        return res.status(500).json({
+          success: false,
+          message: "Email could not be sent " + error,
+        });
+      }
+    } catch (error) {
+      next(error);
     }
+  }
 
-    async resetPassword(req, res, next) {
-        try {
-            const { password } = req.body;
-            const token = req.query.token;
+  async resetPassword(req, res, next) {
+    try {
+      const { password } = req.body;
+      const token = req.query.token;
 
-            const resetPasswordToken = crypto.createHash('sha256').update(token).digest('hex');
+      const resetPasswordToken = crypto
+        .createHash("sha256")
+        .update(token)
+        .digest("hex");
 
-            const user = await User.findOne({
-                resetPasswordToken,
-                resetPasswordExpires: { $gt: Date.now() }
-            });
+      const user = await User.findOne({
+        resetPasswordToken,
+        resetPasswordExpires: { $gt: Date.now() },
+      });
 
-            if (!user) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid or expired reset password token'
-                });
-            }
+      if (!user) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired reset password token",
+        });
+      }
 
-            user.password = await bcrypt.hash(password, 9);
+      user.password = await bcrypt.hash(password, 9);
 
-            user.resetPasswordToken = undefined;
-            user.resetPasswordExpires = undefined;
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpires = undefined;
 
-            await user.save();
+      await user.save();
 
-            res.status(200).json({
-                success: true,
-                message: 'Password updated successfully'
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(200).json({
+        success: true,
+        message: "Password updated successfully",
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 }
-
 
 module.exports = new AuthController();

@@ -65,14 +65,45 @@ class ProductController {
 
   async getAllProducts(req, res, next) {
     try {
-      const products = await productModel
-        .find()
-        .populate("brand")
-        .populate("category");
+      const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+      const limit = Math.min(parseInt(req.query.limit, 10) || 10, 100);
+      const skip = (page - 1) * limit;
+      const { keyword, category, brand, sort } = req.query;
+
+      const filter = {};
+
+      if (keyword) {
+        filter.name = { $regex: keyword, $options: "i" };
+      }
+
+      if (category) filter.category = category;
+      if (brand) filter.brand = brand;
+
+      let sortCondition = { createdAt: -1 };
+      if (sort === "price_asc") sortCondition = { price: 1 };
+      if (sort === "price_desc") sortCondition = { price: -1 };
+
+      const [products, total] = await Promise.all([
+        productModel
+          .find(filter)
+          .populate("brand", "name logo")
+          .populate("category", "name slug")
+          .sort(sortCondition)
+          .skip(skip)
+          .limit(limit),
+        productModel.countDocuments(filter),
+      ]);
+
       res.status(200).json({
         success: true,
         message: "Products retrieved successfully",
         data: products,
+        pagination: {
+          page,
+          limit,
+          total,
+          totalPages: Math.ceil(total / limit),
+        },
       });
     } catch (error) {
       next(error);
