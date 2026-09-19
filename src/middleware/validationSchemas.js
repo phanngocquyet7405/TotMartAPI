@@ -36,6 +36,28 @@ const idParamSchema = joi.object({
   _id: joi.string().hex().length(24).required(),
 });
 
+// paymentCode được sinh ở checkOutController.checkOut(): "TMART" + Date.now()
+// + 3 byte hex random viết hoa — pattern dưới đây khớp đúng format đó.
+const paymentCodeParamSchema = joi.object({
+  paymentCode: joi
+    .string()
+    .trim()
+    .pattern(/^TMART[A-Z0-9]+$/)
+    .max(50)
+    .required(),
+});
+
+// Dùng cho POST /admin/orders/:_id/status — CHỈ 3 giá trị này, vì đây là
+// endpoint "generic" không có side-effect (hoàn kho/hoàn coupon/hoàn tiền).
+// "cancelled" đi qua checkOutController.cancelOrder, "processing" từ COD
+// "pending" đi qua confirmCodOrder, "delivered" cho đơn COD đi qua
+// markCodDelivered — cả 3 route đó đã có sẵn, không lặp lại ở đây. Kiểm tra
+// transition CHI TIẾT (đúng trạng thái hiện tại + đúng paymentMethod) nằm ở
+// orderAdminController.updateOrderStatus(), Joi chỉ chặn giá trị rác.
+const orderStatusUpdateSchema = joi.object({
+  status: joi.string().valid("processing", "shipped", "delivered").required(),
+});
+
 const productSchema = joi.object({
   name: joi.string().min(3).max(100).required(),
   description: joi.string().max(500).required(),
@@ -301,6 +323,8 @@ module.exports = {
   brandSchema,
   updateUserSchema,
   idParamSchema,
+  paymentCodeParamSchema,
+  orderStatusUpdateSchema,
   categorySchema,
   updateCategorySchema,
   createBoxSchema,

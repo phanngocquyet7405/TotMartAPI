@@ -9,6 +9,7 @@ const checkOutRouter = require("./checkOutRouter");
 const boxRouter = require("./boxRouter");
 const notificationRouter = require("./notificationRouter");
 const couponRouter = require("./couponRouter");
+const orderRouter = require("./orderRouter");
 // Health check endpoint
 function router(app) {
   app.use("/api/users", userRouter);
@@ -21,6 +22,7 @@ function router(app) {
   app.use("/api/boxes", boxRouter);
   app.use("/api/home", homeRouter);
   app.use("/api/admin/notifications", notificationRouter);
+  app.use("/api/admin/orders", orderRouter);
   app.use("/api/coupons", couponRouter);
 }
 

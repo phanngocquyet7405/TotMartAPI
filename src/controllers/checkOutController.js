@@ -13,14 +13,12 @@ function buildQrUrl(orderId, amount) {
   return `https://qr.sepay.vn/img?acc=${acc}&bank=${bank}&amount=${amount}&des=${orderId}`;
 }
 
-// Build mảng products cho Order từ Cart hiện tại — snapshot giá thật tại thời điểm mua
-// (áp dụng salePercent nếu có), đồng thời validate tồn kho ngay tại bước này.
+// Build mảng products cho Order từ Cart hiện tại
 async function buildOrderProductsFromCart(cart, session) {
   const products = [];
   for (const item of cart.items) {
     if (!item.productId) continue;
 
-    // Phải .populate("brand") ngay trong này để lấy được ownerId
     const product = await Product.findById(item.productId)
       .populate("brand")
       .session(session);
@@ -59,8 +57,7 @@ async function buildOrderProductsFromCart(cart, session) {
   }
   return products;
 }
-// Trừ kho atomic — điều kiện stock nằm ngay trong query filter để tránh 2 request
-// cùng trừ vượt quá tồn kho thực tế (race condition).
+
 async function deductStock(products, session) {
   for (const item of products) {
     const updated = await Product.findOneAndUpdate(
@@ -93,9 +90,6 @@ async function restoreStock(products, session) {
   }
 }
 
-// Xác thực coupon (còn hạn, đủ điều kiện đơn tối thiểu) và trừ lượt dùng atomic —
-// điều kiện usageLimit nằm ngay trong query filter (giống pattern deductStock ở trên)
-// để 2 request cùng dùng 1 coupon giới hạn lượt không thể cùng vượt quá usageLimit.
 async function applyCoupon(couponCode, subtotal, session) {
   const coupon = await Coupon.findOne({ code: couponCode }).session(session);
   if (!coupon) {
@@ -146,7 +140,6 @@ async function applyCoupon(couponCode, subtotal, session) {
   return { discountAmount, couponCode: claimed.code };
 }
 
-// Trả lại lượt dùng coupon khi đơn có dùng mã bị huỷ — đối xứng với restoreStock ở trên.
 async function restoreCouponUsage(couponCode, session) {
   if (!couponCode) return;
   await Coupon.findOneAndUpdate(
@@ -191,7 +184,11 @@ class CheckOutController {
         const products = await buildOrderProductsFromCart(cart, session);
         const subtotal = products.reduce((sum, p) => sum + p.totalPrice, 0);
 
-        // Xử lý Coupon tổng
+        // [THAY ĐỔI 1]: Tính tổng phí ship dựa trên subtotal (nhỏ hơn 500k thì tính 30k)
+        // Nếu lúc bàn giao KHÔNG CẦN TÍNH PHÍ SHIP, chỉ cần sửa dòng này thành:
+        // const totalShippingFee = 0;
+        const totalShippingFee = subtotal > 0 && subtotal < 500000 ? 30000 : 0;
+
         let totalDiscountAmount = 0;
         let appliedCouponCode;
         if (couponCode) {
@@ -200,7 +197,6 @@ class CheckOutController {
           appliedCouponCode = result.couponCode;
         }
 
-        // BƯỚC QUAN TRỌNG: Nhóm sản phẩm theo merchantId
         const groupedProducts = products.reduce((acc, curr) => {
           const mId = curr.merchantId.toString();
           if (!acc[mId]) acc[mId] = [];
@@ -208,7 +204,6 @@ class CheckOutController {
           return acc;
         }, {});
 
-        // Tạo mã thanh toán chung để gửi cho SePay (Nếu khách dùng SePay QR)
         paymentCode =
           "TMART" +
           Date.now() +
@@ -216,7 +211,6 @@ class CheckOutController {
 
         const ordersToCreate = [];
 
-        // Lặp qua từng gian hàng để tách thành từng Order riêng biệt
         for (const merchantId of Object.keys(groupedProducts)) {
           const merchantProducts = groupedProducts[merchantId];
           const merchantSubtotal = merchantProducts.reduce(
@@ -224,17 +218,21 @@ class CheckOutController {
             0,
           );
 
-          // Chia đều tiền giảm giá coupon theo tỷ lệ giá trị đơn hàng của từng gian hàng
           const merchantDiscount =
             subtotal > 0
               ? Math.round(totalDiscountAmount * (merchantSubtotal / subtotal))
               : 0;
-          const merchantTotal = Math.max(
-            0,
-            merchantSubtotal - merchantDiscount,
-          );
 
-          grandTotalAmount += merchantTotal; // Cộng dồn vào tổng tiền cuối cùng phải trả
+          // [THAY ĐỔI 2]: Chỉ gán phí vận chuyển vào đơn hàng đầu tiên được tách ra
+          // Điều này giúp khách hàng không bị nhân đôi (hoặc nhân ba) phí ship nếu giỏ hàng có nhiều gian hàng khác nhau.
+          const orderShippingFee =
+            ordersToCreate.length === 0 ? totalShippingFee : 0;
+
+          // [THAY ĐỔI 3]: Cộng phí ship vào merchantTotal
+          const merchantTotal =
+            Math.max(0, merchantSubtotal - merchantDiscount) + orderShippingFee;
+
+          grandTotalAmount += merchantTotal; // Lúc này mã QR đã chứa số tiền chính xác, bao gồm cả ship
           const orderId =
             "ORD" +
             Date.now() +
@@ -242,12 +240,13 @@ class CheckOutController {
 
           ordersToCreate.push({
             userId,
-            merchantId, // Đừng quên thêm 2 trường này vào models/Order.js nhé!
+            merchantId,
             paymentCode,
             customerEmail: user.email,
             products: merchantProducts,
             orderId,
             totalAmount: merchantTotal,
+            shippingFee: orderShippingFee, // [THAY ĐỔI 4]: Lưu trường shippingFee vào Database để đối soát
             discountAmount: merchantDiscount,
             couponCode: appliedCouponCode,
             shippingAddress: {
@@ -265,35 +264,30 @@ class CheckOutController {
             stockDeducted: paymentMethod === "cod" ? true : false,
           });
 
-          // Trừ kho luôn nếu là COD
           if (paymentMethod === "cod") {
             await deductStock(merchantProducts, session);
           }
         }
 
-        // Tạo 1 loạt đơn hàng cùng lúc
         createdOrders = [];
         for (const orderData of ordersToCreate) {
           const [newOrder] = await Order.create([orderData], { session });
           createdOrders.push(newOrder);
         }
 
-        // Dọn giỏ hàng
         await Cart.deleteOne({ _id: cart._id }, { session });
       });
 
-      // Báo notification cho TỪNG merchant nếu là COD
       if (createdOrders[0].paymentMethod === "cod") {
         for (const order of createdOrders) {
           await notifyMerchant(order, "new_order");
         }
       }
 
-      // Format dữ liệu trả về cho Frontend
       const data = {
         paymentCode: paymentCode,
         grandTotalAmount: grandTotalAmount,
-        orders: createdOrders.map((o) => o.orderId), // Trả về danh sách mã đơn hàng vừa tách
+        orders: createdOrders.map((o) => o.orderId),
       };
 
       if (createdOrders[0].paymentMethod === "online") {
@@ -310,7 +304,6 @@ class CheckOutController {
     }
   }
 
-  // ==== Webhook SePay — field đúng theo docs thật: content, transferAmount, transferType, code, referenceCode ====
   // ==== Webhook SePay ====
   async sepayWebhook(req, res, next) {
     try {
@@ -324,7 +317,6 @@ class CheckOutController {
         });
       }
 
-      // 1. Lấy mã thanh toán chung (paymentCode)
       const matched = code || (content.match(/TMART[A-Z0-9]+/) || [])[0];
       if (!matched) {
         return res
@@ -332,7 +324,6 @@ class CheckOutController {
           .json({ success: true, message: "No order code found" });
       }
 
-      // 2. Chống xử lý trùng webhook
       const alreadyProcessed = await Order.exists({
         paidReferenceCode: referenceCode,
       });
@@ -342,7 +333,6 @@ class CheckOutController {
           .json({ success: true, message: "Already processed" });
       }
 
-      // 3. Tìm TẤT CẢ các đơn hàng con có chung paymentCode
       const pendingOrders = await Order.find({
         paymentCode: matched,
         paymentStatus: "pending",
@@ -355,13 +345,11 @@ class CheckOutController {
         });
       }
 
-      // 4. Tính TỔNG TIỀN yêu cầu của tất cả đơn hàng con này
       const totalRequiredAmount = pendingOrders.reduce(
         (sum, order) => sum + order.totalAmount,
         0,
       );
 
-      // 5. Kiểm tra khách chuyển đủ tiền chưa
       if (Number(transferAmount) < totalRequiredAmount) {
         for (const order of pendingOrders) {
           order._statusChangeNote = `Nhận ${transferAmount}/${totalRequiredAmount} qua ref ${referenceCode} — thiếu tiền, cần đối soát thủ công`;
@@ -373,11 +361,10 @@ class CheckOutController {
       }
 
       const session = await mongoose.startSession();
-      const paidOrders = []; // Mảng lưu các đơn đã xử lý thành công để báo notification
+      const paidOrders = [];
 
       try {
         await session.withTransaction(async () => {
-          // 6. Xử lý TỪNG đơn hàng con
           for (const pendingOrder of pendingOrders) {
             const order = await Order.findOneAndUpdate(
               { _id: pendingOrder._id, paymentStatus: "pending" },
@@ -390,10 +377,9 @@ class CheckOutController {
               { session, new: true },
             );
 
-            if (!order) continue; // Đơn đã được update bởi process khác
+            if (!order) continue;
 
             try {
-              // Online checkout chưa trừ kho, giờ thanh toán xong mới trừ
               await deductStock(order.products, session);
               order.status = "processing";
               order.stockDeducted = true;
@@ -409,7 +395,6 @@ class CheckOutController {
         session.endSession();
       }
 
-      // 7. Bắn thông báo cho TỪNG Merchant
       for (const paidOrder of paidOrders) {
         await notifyMerchant(paidOrder, "payment_received");
       }
@@ -423,7 +408,62 @@ class CheckOutController {
     }
   }
 
-  // ==== Admin xác nhận đơn COD (bước gọi điện xác nhận trước khi giao) ====
+  // ==== User: kiểm tra trạng thái thanh toán theo paymentCode ====
+  async getOrderStatus(req, res, next) {
+    try {
+      const { paymentCode } = req.params;
+
+      const orders = await Order.find({ paymentCode }).select(
+        "orderId userId status paymentStatus totalAmount paymentMethod",
+      );
+
+      if (orders.length === 0) {
+        const err = new Error("Không tìm thấy đơn hàng với mã thanh toán này");
+        err.statusCode = 404;
+        throw err;
+      }
+
+      if (
+        req.user.role !== "admin" &&
+        String(orders[0].userId) !== req.userId
+      ) {
+        const err = new Error("Không có quyền xem đơn hàng này");
+        err.statusCode = 403;
+        throw err;
+      }
+
+      const paymentStatus = orders.every((o) => o.paymentStatus === "paid")
+        ? "paid"
+        : "pending";
+
+      const data = {
+        paymentStatus,
+        orders: orders.map((o) => ({
+          orderId: o.orderId,
+          status: o.status,
+          paymentStatus: o.paymentStatus,
+          totalAmount: o.totalAmount,
+        })),
+      };
+
+      if (paymentStatus === "pending" && orders[0].paymentMethod === "online") {
+        const grandTotalAmount = orders.reduce(
+          (sum, o) => sum + o.totalAmount,
+          0,
+        );
+        data.qrUrl = buildQrUrl(paymentCode, grandTotalAmount);
+      }
+
+      res.status(200).json({
+        success: true,
+        data,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  // ==== Admin xác nhận đơn COD ====
   async confirmCodOrder(req, res, next) {
     try {
       const order = await Order.findOne({
@@ -475,7 +515,7 @@ class CheckOutController {
     }
   }
 
-  // ==== Huỷ đơn — user tự huỷ đơn của mình, hoặc admin huỷ bất kỳ đơn nào ====
+  // ==== Huỷ đơn ====
   async cancelOrder(req, res, next) {
     const session = await mongoose.startSession();
     let cancelled;
@@ -559,7 +599,7 @@ class CheckOutController {
     }
   }
 
-  // ==== Admin: đánh dấu đã hoàn tiền xong (thao tác hoàn tiền thật diễn ra ngoài hệ thống) ====
+  // ==== Admin: đánh dấu đã hoàn tiền xong ====
   async completeRefund(req, res, next) {
     try {
       const order = await Order.findOne({
