@@ -6,7 +6,7 @@ const { startOrderExpiryScheduler } = require("./jobs/orderExpiryScheduler");
 
 const server = async () => {
   const requiredEnvVars = [
-    "DB_URI",
+    "MONGODB_URI",
     "JWT_SECRET",
     "CLOUDINARY_CLOUD_NAME",
     "CLOUDINARY_API_KEY",
