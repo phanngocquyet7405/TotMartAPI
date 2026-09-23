@@ -1,364 +1,333 @@
 const UserSubscription = require("../models/UserSubscription");
 const SubscriptionTemplate = require("../models/SubscriptionTemplate");
-const { processDeliveries, checkTodayDeliveries } = require("../jobs/deliveryScheduler");
+const {
+  processDeliveries,
+  checkTodayDeliveries,
+} = require("../jobs/deliveryScheduler");
 const boxModel = require("../models/Box");
+const { paginate } = require("../utils/pagination");
 
 function getPlanConfig(planType) {
-    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
-    const configs = {
-        '1_month': {
-            intervalMs: THIRTY_DAYS,
-            periodMs: THIRTY_DAYS,
-            deliveriesCount: 1
-        },
-        '3_month': {
-            intervalMs: THIRTY_DAYS,
-            periodMs: 3 * THIRTY_DAYS,
-            deliveriesCount: 3
-        },
-        '6_month': {
-            intervalMs: THIRTY_DAYS,
-            periodMs: 6 * THIRTY_DAYS,
-            deliveriesCount: 6
-        },
-        '12_month': {
-            intervalMs: THIRTY_DAYS,
-            periodMs: 12 * THIRTY_DAYS,
-            deliveriesCount: 12
-        },
-    };
-    return configs[planType] || configs['1_month'];
+  const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+  const configs = {
+    "1_month": {
+      intervalMs: THIRTY_DAYS,
+      periodMs: THIRTY_DAYS,
+      deliveriesCount: 1,
+    },
+    "3_month": {
+      intervalMs: THIRTY_DAYS,
+      periodMs: 3 * THIRTY_DAYS,
+      deliveriesCount: 3,
+    },
+    "6_month": {
+      intervalMs: THIRTY_DAYS,
+      periodMs: 6 * THIRTY_DAYS,
+      deliveriesCount: 6,
+    },
+    "12_month": {
+      intervalMs: THIRTY_DAYS,
+      periodMs: 12 * THIRTY_DAYS,
+      deliveriesCount: 12,
+    },
+  };
+  return configs[planType] || configs["1_month"];
 }
 
 class UserSubscriptionController {
-    // User: Đăng ký từ mẫu gói
-    async subscribeToTemplate(req, res, next) {
-        try {
-            const validated = req.validatedBody;
-            const userId = req.userId; // From auth middleware
+  async subscribeToTemplate(req, res, next) {
+    try {
+      const validated = req.validatedBody;
+      const userId = req.userId;
 
-            const template = await SubscriptionTemplate.findById(validated.templateId);
-            if (!template) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Subscription template not found'
-                });
-            }
+      const template = await SubscriptionTemplate.findById(
+        validated.templateId,
+      );
+      if (!template)
+        return res
+          .status(404)
+          .json({ success: false, message: "Subscription template not found" });
+      if (!template.isActive)
+        return res.status(400).json({
+          success: false,
+          message: "This subscription template is no longer available",
+        });
 
-            if (!template.isActive) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'This subscription template is no longer available'
-                });
-            }
+      const User = require("../models/User");
+      const user = await User.findById(userId);
+      if (!user)
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
 
-            // Validate user exists
-            const User = require('../models/User');
-            const user = await User.findById(userId);
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'User not found'
-                });
-            }
+      const subscription = new UserSubscription({
+        userId: userId,
+        templateId: validated.templateId,
+        boxId: template.boxId,
+        planType: template.planType,
+        shippingAddress: validated.shippingAddress,
+      });
 
-            const subscription = new UserSubscription({
-                userId: userId,
-                templateId: validated.templateId,
-                boxId: template.boxId,
-                planType: template.planType,
-                shippingAddress: validated.shippingAddress
-            });
+      const now = new Date();
+      const { intervalMs, periodMs, deliveriesCount } = getPlanConfig(
+        template.planType,
+      );
 
-            const now = new Date();
-            const { intervalMs, periodMs, deliveriesCount } = getPlanConfig(template.planType);
+      subscription.currentPeriodStart = now;
+      subscription.currentPeriodEnd = new Date(now.getTime() + periodMs);
+      subscription.nextDeliveries = new Date(now.getTime() + intervalMs);
+      subscription.totalDeliveries = deliveriesCount;
+      subscription.remainDeliveries = deliveriesCount;
+      subscription.oldPrice = template.basePrice;
+      subscription.discountPercent = template.discountPercent;
+      subscription.price = template.discountPrice;
+      subscription.discount = subscription.oldPrice - subscription.price;
 
-            // Thiết lập thông tin đơn hàng
-            subscription.currentPeriodStart = now;
-            subscription.currentPeriodEnd = new Date(now.getTime() + periodMs);
-            subscription.nextDeliveries = new Date(now.getTime() + intervalMs);
-            subscription.totalDeliveries = deliveriesCount;
-            subscription.remainDeliveries = deliveriesCount;
-            subscription.oldPrice = template.basePrice;
-            subscription.discountPercent = template.discountPercent;
-            subscription.price = template.discountPrice;
-            subscription.discount = subscription.oldPrice - subscription.price;
+      subscription.gift =
+        template.gift && template.gift.length > 0
+          ? JSON.parse(JSON.stringify(template.gift))
+          : [];
 
-            // Deep copy gift boxes để tránh reference issues
-            subscription.gift = template.gift && template.gift.length > 0
-                ? JSON.parse(JSON.stringify(template.gift))
-                : [];
+      await subscription.save();
 
-            await subscription.save();
+      await subscription.populate("userId", "name email");
+      await subscription.populate("templateId", "name planType");
+      await subscription.populate("boxId", "name value");
+      await subscription.populate("gift.boxId", "name");
 
-            // Populate for response
-            await subscription.populate('userId', 'name email');
-            await subscription.populate('templateId', 'name planType');
-            await subscription.populate('boxId', 'name value');
-            await subscription.populate('gift.boxId', 'name');
-
-            res.status(201).json({
-                success: true,
-                message: 'Subscription created successfully',
-                data: subscription
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(201).json({
+        success: true,
+        message: "Subscription created successfully",
+        data: subscription,
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    // User: Lấy danh sách đăng ký của user
-    async getUserSubscriptions(req, res, next) {
-        try {
-            const userId = req.userId; // From auth middleware
+  async getUserSubscriptions(req, res, next) {
+    try {
+      const userId = req.userId;
+      const subscriptions = await UserSubscription.find({ userId: userId })
+        .populate("templateId", "name planType")
+        .populate("boxId", "name value")
+        .populate("gift.boxId", "name")
+        .sort({ createdAt: -1 });
 
-            const subscriptions = await UserSubscription.find({ userId: userId })
-                .populate('templateId', 'name planType')
-                .populate('boxId', 'name value')
-                .populate('gift.boxId', 'name')
-                .sort({ createdAt: -1 });
-
-            res.status(200).json({
-                success: true,
-                count: subscriptions.length,
-                data: subscriptions
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(200).json({
+        success: true,
+        count: subscriptions.length,
+        data: subscriptions,
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    // User: Lấy chi tiết đăng ký theo ID
-    async getSubscriptionById(req, res, next) {
-        try {
-            const userId = req.userId; // From auth middleware
-            const subscription = await UserSubscription.findById(req.params.id)
-                .populate('userId', 'name email')
-                .populate('templateId', 'name planType')
-                .populate('boxId', 'name value')
-                .populate('gift.boxId', 'name');
+  async getSubscriptionById(req, res, next) {
+    try {
+      const userId = req.userId;
+      const subscription = await UserSubscription.findById(req.params.id)
+        .populate("userId", "name email")
+        .populate("templateId", "name planType")
+        .populate("boxId", "name value")
+        .populate("gift.boxId", "name");
 
-            if (!subscription) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Subscription not found'
-                });
-            }
+      if (!subscription)
+        return res
+          .status(404)
+          .json({ success: false, message: "Subscription not found" });
+      if (subscription.userId._id.toString() !== userId)
+        return res
+          .status(403)
+          .json({ success: false, message: "You do not have permission" });
 
-            // Check ownership (user can only view their own subscriptions)
-            if (subscription.userId._id.toString() !== userId) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'You do not have permission to view this subscription'
-                });
-            }
-
-            res.status(200).json({
-                success: true,
-                data: subscription
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(200).json({ success: true, data: subscription });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    // User: Hủy đăng ký cuối kỳ
-    async cancelAtPeriodEnd(req, res, next) {
-        try {
-            const userId = req.userId; // From auth middleware
-            const subscription = await UserSubscription.findById(req.params.id);
+  async cancelAtPeriodEnd(req, res, next) {
+    try {
+      const userId = req.userId;
+      const subscription = await UserSubscription.findById(req.params.id);
 
-            if (!subscription) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Subscription not found'
-                });
-            }
+      if (!subscription)
+        return res
+          .status(404)
+          .json({ success: false, message: "Subscription not found" });
+      if (subscription.userId.toString() !== userId)
+        return res
+          .status(403)
+          .json({ success: false, message: "Permission denied" });
+      if (subscription.status !== "active")
+        return res.status(400).json({
+          success: false,
+          message: `Cannot cancel: ${subscription.status}`,
+        });
 
-            // Check ownership
-            if (subscription.userId.toString() !== userId) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'You do not have permission to cancel this subscription'
-                });
-            }
+      subscription.cancelAtPeriodEnd = true;
+      await subscription.save();
 
-            if (subscription.status !== 'active') {
-                return res.status(400).json({
-                    success: false,
-                    message: `Cannot cancel subscription with status: ${subscription.status}`
-                });
-            }
-
-            subscription.cancelAtPeriodEnd = true;
-            await subscription.save();
-
-            res.status(200).json({
-                success: true,
-                message: 'Subscription will be cancelled at end of current period',
-                data: subscription
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(200).json({
+        success: true,
+        message: "Subscription cancelled at period end",
+        data: subscription,
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    // User: Hủy ngay lập tức
-    async cancelImmediately(req, res, next) {
-        try {
-            const userId = req.userId; // From auth middleware
-            const subscription = await UserSubscription.findById(req.params.id);
+  async cancelImmediately(req, res, next) {
+    try {
+      const userId = req.userId;
+      const subscription = await UserSubscription.findById(req.params.id);
 
-            if (!subscription) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'Subscription not found'
-                });
-            }
+      if (!subscription)
+        return res
+          .status(404)
+          .json({ success: false, message: "Subscription not found" });
+      if (subscription.userId.toString() !== userId)
+        return res
+          .status(403)
+          .json({ success: false, message: "Permission denied" });
+      if (subscription.status !== "active")
+        return res.status(400).json({
+          success: false,
+          message: `Cannot cancel: ${subscription.status}`,
+        });
 
-            // Check ownership
-            if (subscription.userId.toString() !== userId) {
-                return res.status(403).json({
-                    success: false,
-                    message: 'You do not have permission to cancel this subscription'
-                });
-            }
+      subscription.status = "cancelled";
+      subscription.nextDeliveries = null;
+      await subscription.save();
 
-            if (subscription.status !== 'active') {
-                return res.status(400).json({
-                    success: false,
-                    message: `Cannot cancel subscription with status: ${subscription.status}`
-                });
-            }
-
-            subscription.status = 'cancelled';
-            subscription.nextDeliveries = null;
-            await subscription.save();
-
-            res.status(200).json({
-                success: true,
-                message: 'Subscription cancelled immediately',
-                data: subscription
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(200).json({
+        success: true,
+        message: "Subscription cancelled immediately",
+        data: subscription,
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    // Admin: Lấy tất cả đăng ký (for admin dashboard)
-    async getAllSubscriptions(req, res, next) {
-        try {
-            const subscriptions = await UserSubscription.find()
-                .populate('userId', 'name email')
-                .populate('templateId', 'name')
-                .populate('boxId', 'name')
-                .sort({ createdAt: -1 });
+  async getAllSubscriptions(req, res, next) {
+    try {
+      // [FIX]: Áp dụng phân trang thay vì find()
+      const { data, pagination } = await paginate(
+        UserSubscription,
+        req.query,
+        {},
+        {
+          populate: [
+            { path: "userId", select: "name email" },
+            { path: "templateId", select: "name" },
+            { path: "boxId", select: "name" },
+          ],
+          sort: { createdAt: -1 },
+        },
+      );
 
-            res.status(200).json({
-                success: true,
-                count: subscriptions.length,
-                data: subscriptions
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(200).json({
+        success: true,
+        count: data.length,
+        data: data,
+        pagination: pagination,
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    // Admin: Lấy đăng ký theo userId
-    async getSubscriptionsByUserId(req, res, next) {
-        try {
-            const subscriptions = await UserSubscription.find({ userId: req.params.userId })
-                .populate('templateId', 'name')
-                .populate('boxId', 'name')
-                .populate('gift.boxId', 'name')
-                .sort({ createdAt: -1 });
+  async getSubscriptionsByUserId(req, res, next) {
+    try {
+      const subscriptions = await UserSubscription.find({
+        userId: req.params.userId,
+      })
+        .populate("templateId", "name")
+        .populate("boxId", "name")
+        .populate("gift.boxId", "name")
+        .sort({ createdAt: -1 });
 
-            res.status(200).json({
-                success: true,
-                count: subscriptions.length,
-                data: subscriptions
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(200).json({
+        success: true,
+        count: subscriptions.length,
+        data: subscriptions,
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    // Trigger xử lý giao hàng thủ công (dùng cho admin/testing)
-    async triggerDeliveryProcessing(req, res, next) {
-        try {
-            await processDeliveries();
-            res.status(200).json({
-                success: true,
-                message: 'Delivery processing triggered successfully'
-            });
-        } catch (error) {
-            next(error);
-        }
+  async triggerDeliveryProcessing(req, res, next) {
+    try {
+      await processDeliveries();
+      res.status(200).json({
+        success: true,
+        message: "Delivery processing triggered successfully",
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    // ====== KIỂM TRA ĐƠN HÀNG ĐẾN HẠN HÔM NAY ======
+  async getTodayDeliveries(req, res, next) {
+    try {
+      const result = await checkTodayDeliveries(false);
 
-    /**
-     * API Endpoint: Lấy danh sách đơn hàng cần giao hôm nay
-     * Sử dụng: GET /api/subcribe-plans/today-deliveries (Admin)
-     */
-    async getTodayDeliveries(req, res, next) {
-        try {
-            const result = await checkTodayDeliveries(false); // Không log khi gọi từ API
+      if (!result.success)
+        return res
+          .status(500)
+          .json({ success: false, message: result.message });
 
-            if (!result.success) {
-                return res.status(500).json({
-                    success: false,
-                    message: result.message
-                });
-            }
-
-            res.status(200).json({
-                success: true,
-                message: `${result.count} đơn hàng cần giao hôm nay (${result.date})`,
-                date: result.date,
-                count: result.count,
-                data: result.deliveries
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(200).json({
+        success: true,
+        message: `${result.count} đơn hàng cần giao hôm nay (${result.date})`,
+        date: result.date,
+        count: result.count,
+        data: result.deliveries,
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 
-    /**
-     * API Endpoint: Lấy danh sách đơn hàng cần giao cho 1 user hôm nay
-     * Sử dụng: GET /api/subscriptions/my-today-deliveries
-     */
-    async getMyTodayDeliveries(req, res, next) {
-        try {
-            const userId = req.userId; // From auth middleware
+  async getMyTodayDeliveries(req, res, next) {
+    try {
+      const userId = req.userId;
+      const today = new Date();
+      const startOfDay = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate(),
+      );
+      const endOfDay = new Date(
+        today.getFullYear(),
+        today.getMonth(),
+        today.getDate() + 1,
+      );
 
-            const today = new Date();
-            const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-            const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1);
+      const todayDeliveries = await UserSubscription.find({
+        userId: userId,
+        status: "active",
+        nextDeliveries: { $gte: startOfDay, $lt: endOfDay },
+      })
+        .populate("templateId", "name planType")
+        .populate("boxId", "name value")
+        .populate("gift.boxId", "name");
 
-            const todayDeliveries = await UserSubscription.find({
-                userId: userId,
-                status: 'active',
-                nextDeliveries: {
-                    $gte: startOfDay,
-                    $lt: endOfDay
-                }
-            })
-                .populate('templateId', 'name planType')
-                .populate('boxId', 'name value')
-                .populate('gift.boxId', 'name');
-
-            res.status(200).json({
-                success: true,
-                message: `Bạn có ${todayDeliveries.length} đơn hàng cần giao hôm nay`,
-                count: todayDeliveries.length,
-                data: todayDeliveries
-            });
-        } catch (error) {
-            next(error);
-        }
+      res.status(200).json({
+        success: true,
+        message: `Bạn có ${todayDeliveries.length} đơn hàng cần giao hôm nay`,
+        count: todayDeliveries.length,
+        data: todayDeliveries,
+      });
+    } catch (error) {
+      next(error);
     }
+  }
 }
 
 module.exports = new UserSubscriptionController();

@@ -5,6 +5,22 @@ const { startDeliveryScheduler } = require("./jobs/deliveryScheduler");
 const { startOrderExpiryScheduler } = require("./jobs/orderExpiryScheduler");
 
 const server = async () => {
+  const requiredEnvVars = [
+    "DB_URI",
+    "JWT_SECRET",
+    "CLOUDINARY_CLOUD_NAME",
+    "CLOUDINARY_API_KEY",
+    "CLOUDINARY_API_SECRET",
+    "SEPAY_API_KEY",
+  ];
+
+  const missingVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
+  if (missingVars.length > 0) {
+    console.error(
+      `[FATAL ERROR] Không thể khởi động Server. Thiếu các biến môi trường: ${missingVars.join(", ")}`,
+    );
+    process.exit(1);
+  }
   try {
     await connectDB();
 

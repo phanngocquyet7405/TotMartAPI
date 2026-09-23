@@ -165,26 +165,25 @@ class ProductController {
   async deleteProduct(req, res, next) {
     try {
       const foundProduct = await productModel.findById(req.params._id);
-      if (
-        foundProduct &&
-        foundProduct.images &&
-        foundProduct.images.length > 0
-      ) {
-        const folderName =
-          "products/" +
-          foundProduct.name.trim().toLowerCase().replace(/\s+/g, "-");
-        await cloudinary.api.delete_resources_by_prefix(folderName);
-        await cloudinary.api.delete_folder(folderName);
-        await productModel.findByIdAndDelete(req.params._id);
-        return res.status(200).json({
-          success: true,
-          message: "Product deleted successfully",
-        });
+      if (!foundProduct) {
+        return res
+          .status(404)
+          .json({ success: false, message: "Product not found" });
       }
-      return res.status(404).json({
-        success: false,
-        message: "Product not found",
-      });
+
+      // Xóa ảnh an toàn qua public_id
+      if (foundProduct.images && foundProduct.images.length > 0) {
+        for (const img of foundProduct.images) {
+          if (img.public_id) {
+            await cloudinary.uploader.destroy(img.public_id);
+          }
+        }
+      }
+
+      await productModel.findByIdAndDelete(req.params._id);
+      return res
+        .status(200)
+        .json({ success: true, message: "Product deleted successfully" });
     } catch (error) {
       next(error);
     }

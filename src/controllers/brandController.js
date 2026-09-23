@@ -1,5 +1,6 @@
 const brand = require("../models/Brand");
 const productModel = require("../models/Product");
+const { paginate } = require("../utils/pagination");
 
 class BrandController {
   async createBrand(req, res, next) {
@@ -83,11 +84,15 @@ class BrandController {
 
   async getAllBrands(req, res, next) {
     try {
-      const brands = await brand.find();
+      const { data, pagination } = await paginate(brand, req.query, {
+        sort: { name: 1 },
+      });
+
       res.status(200).json({
         success: true,
         message: "Brands retrieved successfully",
-        data: brands,
+        data: data,
+        pagination: pagination,
       });
     } catch (error) {
       next(error);

@@ -23,7 +23,12 @@ afterAll(async () => {
   await closeDatabase();
 });
 
-function webhookPayload({ paymentCode, amount, referenceCode, transferType = "in" }) {
+function webhookPayload({
+  paymentCode,
+  amount,
+  referenceCode,
+  transferType = "in",
+}) {
   return {
     id: Math.floor(Math.random() * 1000000),
     gateway: "TestBank",
@@ -52,7 +57,10 @@ async function placeOnlineOrder(overrides = {}) {
   const res = await request(app)
     .post("/api/checkout/check-out")
     .set("Authorization", `Bearer ${token}`)
-    .send({ addressId: user.addresses[0]._id.toString(), paymentMethod: "online" });
+    .send({
+      addressId: user.addresses[0]._id.toString(),
+      paymentMethod: "online",
+    });
 
   return {
     user,
@@ -66,17 +74,32 @@ describe("POST /api/checkout/sepay-webhook", () => {
   test("rejects a call with no API key", async () => {
     const res = await request(app)
       .post("/api/checkout/sepay-webhook")
-      .send(webhookPayload({ paymentCode: "TMARTX", amount: 1000, referenceCode: "R1" }));
+      .send(
+        webhookPayload({
+          paymentCode: "TMARTX",
+          amount: 1000,
+          referenceCode: "R1",
+        }),
+      );
     expect(res.status).toBe(401);
   });
 
   test("marks the matching order paid, deducts stock at payment time, and is reflected via the order status", async () => {
-    const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({ stock: 5, quantity: 1 });
+    const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({
+      stock: 5,
+      quantity: 1,
+    });
 
     const res = await request(app)
       .post("/api/checkout/sepay-webhook")
       .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
-      .send(webhookPayload({ paymentCode, amount: grandTotalAmount, referenceCode: "REF-PAID-1" }));
+      .send(
+        webhookPayload({
+          paymentCode,
+          amount: grandTotalAmount,
+          referenceCode: "REF-PAID-1",
+        }),
+      );
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -91,8 +114,15 @@ describe("POST /api/checkout/sepay-webhook", () => {
   });
 
   test("is idempotent — replaying the same reference code does not reprocess the order", async () => {
-    const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({ stock: 5, quantity: 1 });
-    const payload = webhookPayload({ paymentCode, amount: grandTotalAmount, referenceCode: "REF-DUP-1" });
+    const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({
+      stock: 5,
+      quantity: 1,
+    });
+    const payload = webhookPayload({
+      paymentCode,
+      amount: grandTotalAmount,
+      referenceCode: "REF-DUP-1",
+    });
 
     const first = await request(app)
       .post("/api/checkout/sepay-webhook")
@@ -113,7 +143,10 @@ describe("POST /api/checkout/sepay-webhook", () => {
   });
 
   test("flags an underpaid transfer for manual review instead of marking the order paid", async () => {
-    const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({ stock: 5, quantity: 1 });
+    const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({
+      stock: 5,
+      quantity: 1,
+    });
 
     const res = await request(app)
       .post("/api/checkout/sepay-webhook")
@@ -157,11 +190,20 @@ describe("POST /api/checkout/sepay-webhook", () => {
   });
 
   test("a fully paid order can be cancelled and is flagged for refund", async () => {
-    const { paymentCode, grandTotalAmount } = await placeOnlineOrder({ stock: 5, quantity: 1 });
+    const { paymentCode, grandTotalAmount } = await placeOnlineOrder({
+      stock: 5,
+      quantity: 1,
+    });
     await request(app)
       .post("/api/checkout/sepay-webhook")
       .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
-      .send(webhookPayload({ paymentCode, amount: grandTotalAmount, referenceCode: "REF-REFUND-1" }));
+      .send(
+        webhookPayload({
+          paymentCode,
+          amount: grandTotalAmount,
+          referenceCode: "REF-REFUND-1",
+        }),
+      );
 
     const order = await Order.findOne({ paymentCode });
     const User = require("../src/models/User");
@@ -178,5 +220,60 @@ describe("POST /api/checkout/sepay-webhook", () => {
     expect(cancelled.status).toBe("cancelled");
     expect(cancelled.refundStatus).toBe("pending");
     expect(cancelled.refundAmount).toBe(order.totalAmount);
+  });
+  test("marks the order paid but flags it if the user transfers more than the grandTotalAmount", async () => {
+    const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({
+      stock: 5,
+      quantity: 1,
+    });
+
+    const res = await request(app)
+      .post("/api/checkout/sepay-webhook")
+      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .send(
+        webhookPayload({
+          paymentCode,
+          amount: grandTotalAmount + 50000,
+          referenceCode: "REF-OVERPAY-1",
+        }),
+      );
+
+    expect(res.status).toBe(200);
+
+    const order = await Order.findOne({ paymentCode });
+    expect(order.paymentStatus).toBe("paid");
+    expect(order.isOverpaid).toBe(true);
+    expect(order.overpaidAmount).toBe(50000);
+  });
+
+  test("extracts order code correctly even with messy transfer content (case-insensitive, extra spaces)", async () => {
+    const { paymentCode, grandTotalAmount } = await placeOnlineOrder({
+      stock: 5,
+      quantity: 1,
+    });
+
+    const messyContent = `  Thanh toan don ${paymentCode.toLowerCase()}  nhe  `;
+
+    const payload = {
+      ...webhookPayload({
+        paymentCode,
+        amount: grandTotalAmount,
+        referenceCode: "REF-MESSY-1",
+      }),
+      content: messyContent,
+      code: null,
+    };
+
+    const res = await request(app)
+      .post("/api/checkout/sepay-webhook")
+      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .send(payload);
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+
+    const order = await Order.findOne({ paymentCode });
+    expect(order).not.toBeNull();
+    expect(order.paymentStatus).toBe("paid");
   });
 });

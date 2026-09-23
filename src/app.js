@@ -2,6 +2,7 @@ const express = require("express");
 const routes = require("./routes");
 const errorHandler = require("./middleware/errorHandler");
 const cors = require("cors");
+const mongoSanitize = require("express-mongo-sanitize");
 const helmet = require("helmet");
 const cookieParser = require("cookie-parser");
 const config = require("./config/environment");
@@ -13,6 +14,7 @@ app.set("trust proxy", 1); // trust first proxy (for secure cookies behind rever
 app.use(helmet());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(mongoSanitize());
 
 const allowedOrigins = (process.env.CORS_ORIGINS || config.frontendUrl)
   .split(",")

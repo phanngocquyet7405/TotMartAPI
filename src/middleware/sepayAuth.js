@@ -12,11 +12,12 @@ class SepayAuth {
         .json({ success: false, message: "Webhook is not configured" });
     }
 
-    const received = req.headers["authorization"] || "";
-    const expected = `Apikey ${configuredKey}`;
+    const receivedHeader = req.headers["authorization"] || "";
+    const tokenMatch = receivedHeader.match(/^(?:Apikey|Bearer)\s+(.+)$/i);
+    const receivedToken = tokenMatch ? tokenMatch[1] : receivedHeader;
 
-    const receivedBuf = Buffer.from(received);
-    const expectedBuf = Buffer.from(expected);
+    const receivedBuf = Buffer.from(receivedToken);
+    const expectedBuf = Buffer.from(configuredKey);
 
     const isValid =
       receivedBuf.length === expectedBuf.length &&

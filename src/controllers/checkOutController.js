@@ -184,9 +184,7 @@ class CheckOutController {
         const products = await buildOrderProductsFromCart(cart, session);
         const subtotal = products.reduce((sum, p) => sum + p.totalPrice, 0);
 
-        // [THAY ĐỔI 1]: Tính tổng phí ship dựa trên subtotal (nhỏ hơn 500k thì tính 30k)
-        // Nếu lúc bàn giao KHÔNG CẦN TÍNH PHÍ SHIP, chỉ cần sửa dòng này thành:
-        // const totalShippingFee = 0;
+        // Tính tổng phí ship dựa trên subtotal (nhỏ hơn 500k thì tính 30k)
         const totalShippingFee = subtotal > 0 && subtotal < 500000 ? 30000 : 0;
 
         let totalDiscountAmount = 0;
@@ -223,16 +221,15 @@ class CheckOutController {
               ? Math.round(totalDiscountAmount * (merchantSubtotal / subtotal))
               : 0;
 
-          // [THAY ĐỔI 2]: Chỉ gán phí vận chuyển vào đơn hàng đầu tiên được tách ra
-          // Điều này giúp khách hàng không bị nhân đôi (hoặc nhân ba) phí ship nếu giỏ hàng có nhiều gian hàng khác nhau.
+          // Chỉ gán phí vận chuyển vào đơn hàng đầu tiên được tách ra
           const orderShippingFee =
             ordersToCreate.length === 0 ? totalShippingFee : 0;
 
-          // [THAY ĐỔI 3]: Cộng phí ship vào merchantTotal
+          // Cộng phí ship vào merchantTotal
           const merchantTotal =
             Math.max(0, merchantSubtotal - merchantDiscount) + orderShippingFee;
 
-          grandTotalAmount += merchantTotal; // Lúc này mã QR đã chứa số tiền chính xác, bao gồm cả ship
+          grandTotalAmount += merchantTotal;
           const orderId =
             "ORD" +
             Date.now() +
@@ -246,7 +243,7 @@ class CheckOutController {
             products: merchantProducts,
             orderId,
             totalAmount: merchantTotal,
-            shippingFee: orderShippingFee, // [THAY ĐỔI 4]: Lưu trường shippingFee vào Database để đối soát
+            shippingFee: orderShippingFee,
             discountAmount: merchantDiscount,
             couponCode: appliedCouponCode,
             shippingAddress: {
@@ -317,7 +314,15 @@ class CheckOutController {
         });
       }
 
-      const matched = code || (content.match(/TMART[A-Z0-9]+/) || [])[0];
+      // [FIX]: Trích xuất mã đơn hàng không phân biệt chữ hoa/thường (case-insensitive)
+      let matched = code;
+      if (!matched && content) {
+        const regexResult = content.match(/TMART[A-Z0-9]+/i);
+        if (regexResult) {
+          matched = regexResult[0].toUpperCase();
+        }
+      }
+
       if (!matched) {
         return res
           .status(200)
@@ -350,14 +355,23 @@ class CheckOutController {
         0,
       );
 
+      // [FIX]: Xử lý khách chuyển THIẾU tiền
       if (Number(transferAmount) < totalRequiredAmount) {
         for (const order of pendingOrders) {
           order._statusChangeNote = `Nhận ${transferAmount}/${totalRequiredAmount} qua ref ${referenceCode} — thiếu tiền, cần đối soát thủ công`;
           await order.save();
+          // Gọi hàm cảnh báo đến Admin/Merchant
+          await notifyMerchant(order, "payment_underpaid");
         }
         return res
           .status(200)
           .json({ success: true, message: "Underpaid, flagged for review" });
+      }
+
+      // [FIX]: Xử lý khách chuyển THỪA tiền (Tính toán độ lệch)
+      let overpaidAmount = 0;
+      if (Number(transferAmount) > totalRequiredAmount) {
+        overpaidAmount = Number(transferAmount) - totalRequiredAmount;
       }
 
       const session = await mongoose.startSession();
@@ -366,14 +380,26 @@ class CheckOutController {
       try {
         await session.withTransaction(async () => {
           for (const pendingOrder of pendingOrders) {
+            // Xây dựng payload để cập nhật
+            const updateData = {
+              paymentStatus: "paid",
+              paidReferenceCode: referenceCode,
+            };
+
+            // Nếu chuyển dư tiền, gán cờ flag và note lại vào DB
+            if (overpaidAmount > 0) {
+              updateData.isOverpaid = true;
+              updateData.overpaidAmount = overpaidAmount;
+              updateData._statusChangeNote =
+                (pendingOrder._statusChangeNote
+                  ? pendingOrder._statusChangeNote + " | "
+                  : "") +
+                `Khách chuyển dư ${overpaidAmount}đ qua ref ${referenceCode}`;
+            }
+
             const order = await Order.findOneAndUpdate(
               { _id: pendingOrder._id, paymentStatus: "pending" },
-              {
-                $set: {
-                  paymentStatus: "paid",
-                  paidReferenceCode: referenceCode,
-                },
-              },
+              { $set: updateData },
               { session, new: true },
             );
 
@@ -385,7 +411,11 @@ class CheckOutController {
               order.stockDeducted = true;
             } catch (stockError) {
               order.status = "on_hold";
-              order._statusChangeNote = `Đã nhận tiền nhưng thiếu hàng khi xử lý: ${stockError.message}`;
+              order._statusChangeNote =
+                (order._statusChangeNote
+                  ? order._statusChangeNote + " | "
+                  : "") +
+                `Đã nhận tiền nhưng thiếu hàng khi xử lý: ${stockError.message}`;
             }
             await order.save({ session });
             paidOrders.push(order);
@@ -558,7 +588,7 @@ class CheckOutController {
         cancelled = order;
       });
 
-      await notifyMerchant(cancelled, "order_cancelled");
+      await notifyRefundOrCancel(cancelled);
       res
         .status(200)
         .json({ success: true, message: "Đã huỷ đơn hàng", data: cancelled });
@@ -623,6 +653,14 @@ class CheckOutController {
     } catch (error) {
       next(error);
     }
+  }
+}
+
+async function notifyRefundOrCancel(cancelledOrder) {
+  try {
+    await notifyMerchant(cancelledOrder, "order_cancelled");
+  } catch (err) {
+    console.error("Lỗi gửi thông báo huỷ đơn:", err);
   }
 }
 

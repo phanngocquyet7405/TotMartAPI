@@ -1,6 +1,7 @@
 const userModel = require("../models/User");
 const bcrypt = require("bcrypt");
 const cloudinary = require("cloudinary").v2;
+const { paginate } = require("../utils/pagination");
 require("dotenv").config();
 
 cloudinary.config({
@@ -31,17 +32,20 @@ class UserController {
 
   async getAllUsers(req, res) {
     try {
-      const users = await userModel.find({ isActive: true });
+      const { data, pagination } = await paginate(userModel, req.query, {
+        isActive: true,
+      });
+
       res.status(200).json({
         success: true,
         message: "Users retrieved successfully",
-        data: users,
+        data: data,
+        pagination: pagination,
       });
     } catch (error) {
-      res.status(500).json({ message: error });
+      res.status(500).json({ message: error.message });
     }
   }
-
   async getUserById(req, res) {
     try {
       const user = await userModel.findById(req.params._id);
@@ -106,16 +110,20 @@ class UserController {
   async deleteUser(req, res, next) {
     try {
       const foundUser = await userModel.findById(req.params._id);
-      if (foundUser && foundUser.avatar && foundUser.avatar.public_id) {
-        const folderName = "users/" + foundUser.name;
-        await cloudinary.api.delete_resources_by_prefix(folderName);
-        await cloudinary.api.delete_folder(folderName);
+      if (!foundUser) {
+        return res
+          .status(404)
+          .json({ success: false, message: "User not found" });
       }
+      
+      if (foundUser.avatar && foundUser.avatar.public_id) {
+        await cloudinary.uploader.destroy(foundUser.avatar.public_id);
+      }
+
       await userModel.findByIdAndDelete(req.params._id);
-      res.status(200).json({
-        success: true,
-        message: "User deleted successfully",
-      });
+      res
+        .status(200)
+        .json({ success: true, message: "User deleted successfully" });
     } catch (error) {
       next(error);
     }

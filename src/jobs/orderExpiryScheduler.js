@@ -1,16 +1,16 @@
 const cron = require("node-cron");
 const Order = require("../models/Order");
+const Coupon = require("../models/Coupon");
 const config = require("../config/environment");
 
 const EXPIRY_HOURS = config.orderExpiryHours;
 
-/**
- * Huỷ các đơn online (paymentMethod: 'online') còn ở paymentStatus 'pending' quá
- * EXPIRY_HOURS kể từ lúc tạo — vì khách không thanh toán, không có webhook nào bắn
- * tới nữa. Đơn COD KHÔNG bị job này đụng vào: COD đã trừ kho ngay lúc tạo và cần
- * admin xử lý qua confirm/cancel thủ công, không tự động huỷ theo thời gian.
- */
+let isProcessingExpiry = false;
+
 async function expireStaleOrders() {
+  if (isProcessingExpiry) return;
+  isProcessingExpiry = true;
+
   try {
     const cutoff = new Date(Date.now() - EXPIRY_HOURS * 60 * 60 * 1000);
 
@@ -29,11 +29,22 @@ async function expireStaleOrders() {
 
     for (const order of staleOrders) {
       try {
-        // stockDeducted luôn false ở đây vì online chỉ trừ kho lúc webhook báo paid —
-        // đơn pending chưa từng chạm vào kho, không cần hoàn kho.
+        if (order.couponCode) {
+          const restored = await Coupon.findOneAndUpdate(
+            { code: order.couponCode, usedCount: { $gt: 0 } },
+            { $inc: { usedCount: -1 } },
+            { new: true },
+          );
+          if (restored) {
+            console.log(
+              `[OrderExpiryScheduler] Đã hoàn lại 1 lượt dùng cho coupon: ${order.couponCode}`,
+            );
+          }
+        }
+
         order.status = "cancelled";
         order.cancelReason = `Tự động huỷ - quá ${EXPIRY_HOURS}h không thanh toán`;
-        order.cancelledBy = null; // null = hệ thống
+        order.cancelledBy = null;
         order._statusChangeNote = "Huỷ tự động bởi orderExpiryScheduler";
         await order.save();
       } catch (err) {
@@ -45,6 +56,8 @@ async function expireStaleOrders() {
     }
   } catch (error) {
     console.error("[OrderExpiryScheduler] Lỗi:", error.message);
+  } finally {
+    isProcessingExpiry = false;
   }
 }
 
