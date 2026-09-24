@@ -10,9 +10,9 @@ const upload = require("../middleware/uploadMiddleware");
 
 router.post(
   "/create-product/",
-  upload.array("images", 10),
   authMiddleware.authMiddleware,
   authMiddleware.adminMiddleware,
+  upload.array("images", 10),
   validationHandler.validate(validationSchemas.productSchema),
   productController.createProduct,
 );
@@ -21,18 +21,18 @@ router.get("/get-all-products/", productController.getAllProducts);
 
 router.put(
   "/update-product/:_id",
-  upload.array("images", 10),
-  validationHandler.validate(validationSchemas.productUpdateSchema),
   authMiddleware.authMiddleware,
   authMiddleware.adminMiddleware,
+  upload.array("images", 10),
+  validationHandler.validate(validationSchemas.productUpdateSchema),
   productController.updateProduct,
 );
 
 router.delete(
   "/delete-product/:_id",
-  validationHandler.validate(validationSchemas.idParamSchema, "params"),
   authMiddleware.authMiddleware,
   authMiddleware.adminMiddleware,
+  validationHandler.validate(validationSchemas.idParamSchema, "params"),
   productController.deleteProduct,
 );
 

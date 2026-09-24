@@ -10,9 +10,9 @@ const authMiddleware = require("../middleware/authMiddleware");
 
 router.post(
   "/create-box",
-  upload.array("images", 10),
   authMiddleware.authMiddleware,
   authMiddleware.adminMiddleware,
+  upload.array("images", 10),
   validateHandler.validate(validationSchemas.createBoxSchema),
   boxController.createBox,
 );
@@ -28,9 +28,9 @@ router.get(
 
 router.put(
   "/update-box/:_id",
-  upload.array("images", 10),
   authMiddleware.authMiddleware,
   authMiddleware.adminMiddleware,
+  upload.array("images", 10),
   validateHandler.validate(validationSchemas.updateBoxSchema),
   boxController.updateBox,
 );
