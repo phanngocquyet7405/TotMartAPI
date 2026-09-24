@@ -125,7 +125,7 @@ class AuthController {
       await user.save();
 
       // url frontend reset password
-      const resetUrl = `https://totmartapi.onrender.com/reset-password?token=${resetToken}`;
+      const resetUrl = `${config.frontendUrl}/reset-password?token=${resetToken}`;
 
       try {
         await sendEmailWithBrevo(

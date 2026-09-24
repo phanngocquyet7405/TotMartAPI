@@ -4,7 +4,12 @@ const notificationSchema = new mongoose.Schema(
   {
     type: {
       type: String,
-      enum: ["new_order", "payment_received", "order_cancelled"],
+      enum: [
+        "new_order",
+        "payment_received",
+        "order_cancelled",
+        "payment_underpaid",
+      ],
       required: true,
     },
 
@@ -13,11 +18,10 @@ const notificationSchema = new mongoose.Schema(
       ref: "Order",
       required: true,
     },
-    orderCode: { type: String, required: true }, // denormalize orderId để FE render list không cần populate
+    orderCode: { type: String, required: true },
 
     message: { type: String, required: true },
 
-    // Dữ liệu tóm tắt để hiển thị nhanh trên danh sách thông báo, khỏi phải populate Order mỗi lần
     meta: {
       totalAmount: { type: Number },
       paymentMethod: { type: String },
@@ -30,7 +34,7 @@ const notificationSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       default: null,
-    }, // admin nào đã đọc
+    },
   },
   {
     timestamps: true,

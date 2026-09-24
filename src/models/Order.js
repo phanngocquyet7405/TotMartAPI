@@ -44,6 +44,8 @@ const orderSchema = new mongoose.Schema(
     totalAmount: { type: Number, required: true },
     shippingFee: { type: Number, default: 0 },
     discountAmount: { type: Number, default: 0 },
+    isOverpaid: { type: Boolean, default: false },
+    overpaidAmount: { type: Number, default: 0 },
 
     shippingAddress: {
       fullName: { type: String },

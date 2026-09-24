@@ -1,8 +1,4 @@
-// Các test trong file này KHÔNG cần kết nối MongoDB — chúng chỉ kiểm tra các
-// đường "chặn sớm" (early-reject) trong middleware, vốn chạy trước khi bất kỳ
-// query DB nào xảy ra. Giữ tách riêng khỏi checkout.test.js / webhook.test.js
-// (vốn cần mongodb-memory-server) để nhóm test này chạy được ở bất kỳ máy nào,
-// kể cả môi trường không có quyền tải MongoDB binary.
+
 const request = require("supertest");
 const app = require("../src/app");
 

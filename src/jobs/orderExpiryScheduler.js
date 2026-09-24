@@ -2,6 +2,7 @@ const cron = require("node-cron");
 const Order = require("../models/Order");
 const Coupon = require("../models/Coupon");
 const config = require("../config/environment");
+const logger = require("../utils/logger");
 
 const EXPIRY_HOURS = config.orderExpiryHours;
 
@@ -23,8 +24,9 @@ async function expireStaleOrders() {
 
     if (staleOrders.length === 0) return;
 
-    console.log(
-      `[OrderExpiryScheduler] Tìm thấy ${staleOrders.length} đơn online quá hạn thanh toán`,
+    logger.info(
+      { count: staleOrders.length },
+      "[OrderExpiryScheduler] Tìm thấy đơn online quá hạn thanh toán",
     );
 
     for (const order of staleOrders) {
@@ -36,8 +38,9 @@ async function expireStaleOrders() {
             { new: true },
           );
           if (restored) {
-            console.log(
-              `[OrderExpiryScheduler] Đã hoàn lại 1 lượt dùng cho coupon: ${order.couponCode}`,
+            logger.info(
+              { couponCode: order.couponCode },
+              "[OrderExpiryScheduler] Đã hoàn lại 1 lượt dùng cho coupon",
             );
           }
         }
@@ -48,30 +51,29 @@ async function expireStaleOrders() {
         order._statusChangeNote = "Huỷ tự động bởi orderExpiryScheduler";
         await order.save();
       } catch (err) {
-        console.error(
-          `[OrderExpiryScheduler] Lỗi huỷ đơn ${order.orderId}:`,
-          err.message,
+        logger.error(
+          { err, orderId: order.orderId },
+          "[OrderExpiryScheduler] Lỗi huỷ đơn",
         );
       }
     }
   } catch (error) {
-    console.error("[OrderExpiryScheduler] Lỗi:", error.message);
+    logger.error({ err: error }, "[OrderExpiryScheduler] Lỗi");
   } finally {
     isProcessingExpiry = false;
   }
 }
 
 function startOrderExpiryScheduler() {
-  console.log(
-    `[OrderExpiryScheduler] Đã khởi động - chạy mỗi giờ, ngưỡng ${EXPIRY_HOURS}h`,
+  logger.info(
+    { expiryHours: EXPIRY_HOURS },
+    "[OrderExpiryScheduler] Đã khởi động - chạy mỗi giờ",
   );
 
   expireStaleOrders();
 
   cron.schedule("0 * * * *", () => {
-    console.log(
-      `[OrderExpiryScheduler] Đang kiểm tra đơn quá hạn... ${new Date().toISOString()}`,
-    );
+    logger.debug("[OrderExpiryScheduler] Đang kiểm tra đơn quá hạn...");
     expireStaleOrders();
   });
 }

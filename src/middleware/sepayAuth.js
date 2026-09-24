@@ -1,10 +1,12 @@
 const crypto = require("crypto");
+const logger = require("../utils/logger");
 
 class SepayAuth {
   verifyApiKey(req, res, next) {
     const configuredKey = process.env.SEPAY_API_KEY;
     if (!configuredKey) {
-      console.error(
+      logger.error(
+        { ip: req.ip },
         "[sepayAuth] SEPAY_API_KEY chưa được cấu hình trong environment",
       );
       return res
@@ -24,10 +26,7 @@ class SepayAuth {
       crypto.timingSafeEqual(receivedBuf, expectedBuf);
 
     if (!isValid) {
-      console.warn("[sepayAuth] Webhook auth failed", {
-        ip: req.ip,
-        at: new Date().toISOString(),
-      });
+      logger.warn({ ip: req.ip }, "[sepayAuth] Webhook auth failed");
       return res.status(401).json({ success: false, message: "Unauthorized" });
     }
 

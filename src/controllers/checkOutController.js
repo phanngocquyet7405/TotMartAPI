@@ -6,6 +6,7 @@ const User = require("../models/User");
 const Product = require("../models/Product");
 const Coupon = require("../models/Coupon");
 const { notifyMerchant } = require("../utils/notify");
+const logger = require("../utils/logger");
 
 function buildQrUrl(orderId, amount) {
   const acc = process.env.SEPAY_BANK_ACCOUNT;
@@ -360,15 +361,23 @@ class CheckOutController {
         for (const order of pendingOrders) {
           order._statusChangeNote = `Nhận ${transferAmount}/${totalRequiredAmount} qua ref ${referenceCode} — thiếu tiền, cần đối soát thủ công`;
           await order.save();
-          // Gọi hàm cảnh báo đến Admin/Merchant
-          await notifyMerchant(order, "payment_underpaid");
+          // Gọi hàm cảnh báo đến Admin/Merchant — không để lỗi gửi thông báo
+          // làm gãy response chính (khách vẫn cần biết webhook đã nhận được).
+          try {
+            await notifyMerchant(order, "payment_underpaid");
+          } catch (notifyErr) {
+            logger.error(
+              { err: notifyErr, orderId: order.orderId, ip: req.ip },
+              "[sepayWebhook] notifyMerchant error",
+            );
+          }
         }
         return res
           .status(200)
           .json({ success: true, message: "Underpaid, flagged for review" });
       }
 
-      // [FIX]: Xử lý khách chuyển THỪA tiền (Tính toán độ lệch)
+      // Xử lý khách chuyển THỪA tiền (Tính toán độ lệch)
       let overpaidAmount = 0;
       if (Number(transferAmount) > totalRequiredAmount) {
         overpaidAmount = Number(transferAmount) - totalRequiredAmount;
@@ -431,7 +440,7 @@ class CheckOutController {
 
       res.status(200).json({ success: true });
     } catch (error) {
-      console.error("[sepayWebhook] error:", error);
+      logger.error({ err: error }, "[sepayWebhook] error");
       res
         .status(200)
         .json({ success: false, message: "Internal error, logged for review" });
@@ -660,7 +669,10 @@ async function notifyRefundOrCancel(cancelledOrder) {
   try {
     await notifyMerchant(cancelledOrder, "order_cancelled");
   } catch (err) {
-    console.error("Lỗi gửi thông báo huỷ đơn:", err);
+    logger.error(
+      { err, orderId: cancelledOrder.orderId },
+      "Lỗi gửi thông báo huỷ đơn",
+    );
   }
 }
 

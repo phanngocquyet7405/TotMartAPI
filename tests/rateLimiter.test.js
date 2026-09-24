@@ -1,8 +1,4 @@
-// Test middleware rate limiter trên một app Express riêng, KHÔNG dùng chung
-// app.js với các file test khác — vì bộ đếm của express-rate-limit là in-memory
-// theo IP/app instance, nếu dùng chung app thật thì số lượt gọi ở các file test
-// khác (checkout.test.js, webhook.test.js, security.test.js) sẽ cộng dồn vào
-// cùng bộ đếm và làm test bị lệch/flaky.
+
 const express = require("express");
 const request = require("supertest");
 const rateLimit = require("express-rate-limit");

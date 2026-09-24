@@ -46,6 +46,8 @@ const NOTIFICATION_MESSAGES = {
   payment_received: (order) =>
     `Đã nhận thanh toán đơn ${order.orderId} - ${order.totalAmount.toLocaleString("vi-VN")}đ`,
   order_cancelled: (order) => `Đơn hàng ${order.orderId} đã bị huỷ`,
+  payment_underpaid: (order) =>
+    `Đơn ${order.orderId} nhận thiếu tiền — cần đối soát thủ công`,
 };
 
 async function notifyMerchant(order, type) {

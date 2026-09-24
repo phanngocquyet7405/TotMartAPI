@@ -1,10 +1,11 @@
 const cron = require("node-cron");
 const UserSubscription = require("../models/UserSubscription");
+const logger = require("../utils/logger");
 
 let isProcessingDeliveries = false;
 async function processDeliveries() {
   if (isProcessingDeliveries) {
-    console.log(
+    logger.debug(
       "[DeliveryScheduler] Tiến trình trước đang chạy, bỏ qua lượt này để tránh trùng lặp.",
     );
     return;
@@ -24,8 +25,9 @@ async function processDeliveries() {
       return;
     }
 
-    console.log(
-      `[DeliveryScheduler] Tìm thấy ${duePlans.length} gói đến hạn giao hàng`,
+    logger.info(
+      { count: duePlans.length },
+      "[DeliveryScheduler] Tìm thấy gói đến hạn giao hàng",
     );
 
     for (const subscription of duePlans) {
@@ -38,8 +40,9 @@ async function processDeliveries() {
           subscription.remainDeliveries = 0;
           subscription.status = "expired";
           subscription.nextDeliveries = null;
-          console.log(
-            `[DeliveryScheduler] Subscription ${subscription._id} đã hết lượt giao → expired`,
+          logger.info(
+            { subscriptionId: subscription._id },
+            "[DeliveryScheduler] Subscription đã hết lượt giao → expired",
           );
         } else if (
           subscription.cancelAtPeriodEnd &&
@@ -47,8 +50,9 @@ async function processDeliveries() {
         ) {
           subscription.status = "cancelled";
           subscription.nextDeliveries = null;
-          console.log(
-            `[DeliveryScheduler] Subscription ${subscription._id} đã hủy cuối kỳ → cancelled`,
+          logger.info(
+            { subscriptionId: subscription._id },
+            "[DeliveryScheduler] Subscription đã hủy cuối kỳ → cancelled",
           );
         } else {
           const intervalMonths = {
@@ -63,25 +67,32 @@ async function processDeliveries() {
           nextDate.setMonth(nextDate.getMonth() + addMonths);
 
           subscription.nextDeliveries = nextDate;
-          console.log(
-            `[DeliveryScheduler] Subscription ${subscription._id} → nextDeliveries: ${subscription.nextDeliveries.toISOString()}`,
+          logger.info(
+            {
+              subscriptionId: subscription._id,
+              nextDeliveries: subscription.nextDeliveries,
+            },
+            "[DeliveryScheduler] Subscription cập nhật nextDeliveries",
           );
         }
 
         await subscription.save();
       } catch (err) {
-        console.error(
-          `[DeliveryScheduler] Lỗi xử lý subscription ${subscription._id}:`,
-          err.message,
+        logger.error(
+          { err, subscriptionId: subscription._id },
+          "[DeliveryScheduler] Lỗi xử lý subscription",
         );
       }
     }
 
-    console.log(`[DeliveryScheduler] Hoàn tất xử lý ${duePlans.length} gói`);
+    logger.info(
+      { count: duePlans.length },
+      "[DeliveryScheduler] Hoàn tất xử lý",
+    );
   } catch (error) {
-    console.error(
-      "[DeliveryScheduler] Lỗi khi xử lý deliveries:",
-      error.message,
+    logger.error(
+      { err: error },
+      "[DeliveryScheduler] Lỗi khi xử lý deliveries",
     );
   } finally {
     isProcessingDeliveries = false;
@@ -123,41 +134,30 @@ async function checkTodayDeliveries(shouldLog = true) {
 
     if (shouldLog) {
       if (todayDeliveries.length > 0) {
-        console.log(
-          `\n╔════════════════════════════════════════════════════════════╗`,
-        );
-        console.log(
-          `║ [THÔNG BÁO GẬP] Hôm nay (${result.date}) có ${todayDeliveries.length} đơn cần giao`,
-        );
-        console.log(
-          `╠════════════════════════════════════════════════════════════╣`,
-        );
-
-        todayDeliveries.forEach((sub, index) => {
-          console.log(
-            `║ ${index + 1}. Khách: ${sub.userId.name} | Box: ${sub.boxId.name}`,
-          );
-          console.log(
-            `║    SĐT: ${sub.userId.phone || "N/A"} | Email: ${sub.userId.email}`,
-          );
-          console.log(
-            `║    Địa chỉ: ${sub.shippingAddress.address}, ${sub.shippingAddress.district}, ${sub.shippingAddress.city}`,
-          );
-        });
-
-        console.log(
-          `╚════════════════════════════════════════════════════════════╝\n`,
+        logger.info(
+          {
+            date: result.date,
+            deliveries: todayDeliveries.map((sub) => ({
+              customer: sub.userId?.name,
+              phone: sub.userId?.phone || "N/A",
+              email: sub.userId?.email,
+              box: sub.boxId?.name,
+              address: `${sub.shippingAddress.address}, ${sub.shippingAddress.district}, ${sub.shippingAddress.city}`,
+            })),
+          },
+          `[DeliveryScheduler] Hôm nay có ${todayDeliveries.length} đơn cần giao`,
         );
       } else {
-        console.log(
-          `[CheckDeliveries] Hôm nay (${result.date}) không có đơn nào cần giao`,
+        logger.info(
+          { date: result.date },
+          "[CheckDeliveries] Hôm nay không có đơn nào cần giao",
         );
       }
     }
 
     return result;
   } catch (error) {
-    console.error("[CheckTodayDeliveries] Lỗi:", error.message);
+    logger.error({ err: error }, "[CheckTodayDeliveries] Lỗi");
     return {
       success: false,
       message: error.message,
@@ -166,22 +166,18 @@ async function checkTodayDeliveries(shouldLog = true) {
 }
 
 function startDeliveryScheduler() {
-  console.log("[DeliveryScheduler] Đã khởi động - chạy mỗi 15 phút");
+  logger.info("[DeliveryScheduler] Đã khởi động - chạy mỗi 15 phút");
 
   processDeliveries();
   checkTodayDeliveries(true);
 
   cron.schedule("*/15 * * * *", () => {
-    console.log(
-      `[DeliveryScheduler] Đang chạy kiểm tra... ${new Date().toISOString()}`,
-    );
+    logger.debug("[DeliveryScheduler] Đang chạy kiểm tra...");
     processDeliveries();
   });
 
   cron.schedule("0 6 * * *", () => {
-    console.log(
-      `[CheckDeliveries] Đang kiểm tra đơn cần giao hôm nay... ${new Date().toISOString()}`,
-    );
+    logger.debug("[CheckDeliveries] Đang kiểm tra đơn cần giao hôm nay...");
     checkTodayDeliveries(true);
   });
 }
