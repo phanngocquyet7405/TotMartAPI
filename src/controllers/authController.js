@@ -29,6 +29,7 @@ class AuthController {
           name: user.name,
           email: user.email,
           role: user.role,
+          tokenVersion: user.tokenVersion,
           avatar: user.avatar,
         },
         config.jwt.secret,
@@ -41,6 +42,7 @@ class AuthController {
           name: user.name,
           email: user.email,
           role: user.role,
+          tokenVersion: user.tokenVersion,
           avatar: user.avatar,
         },
         config.jwt.refreshSecret,
@@ -108,9 +110,10 @@ class AuthController {
       const { email } = req.body;
       const user = await User.findOne({ email });
       if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "User with that email does not exist",
+        return res.status(200).json({
+          success: true,
+          message:
+            "If the email is registered, a password reset link has been sent.",
         });
       }
 
@@ -128,7 +131,7 @@ class AuthController {
       const resetUrl = `${config.frontendUrl}/reset-password?token=${resetToken}`;
 
       try {
-        await sendEmailWithBrevo(
+        const delivery = await sendEmailWithBrevo(
           user.email,
           "TotMart - Password Reset Link",
           `
@@ -145,9 +148,12 @@ class AuthController {
     `,
         );
 
+        if (!delivery?.success)
+          throw new Error("Password reset email delivery failed");
         res.status(200).json({
           success: true,
-          message: "Reset password email sent successfully",
+          message:
+            "If the email is registered, a password reset link has been sent.",
         });
       } catch (error) {
         user.resetPasswordToken = undefined;
@@ -155,7 +161,7 @@ class AuthController {
         await user.save();
         return res.status(500).json({
           success: false,
-          message: "Email could not be sent " + error,
+          message: "Email could not be sent. Please try again later.",
         });
       }
     } catch (error) {
@@ -167,16 +173,30 @@ class AuthController {
     try {
       const { password } = req.body;
       const token = req.query.token;
+      if (typeof token !== "string" || !/^[a-f0-9]{40}$/.test(token)) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Invalid or expired reset password token",
+          });
+      }
 
       const resetPasswordToken = crypto
         .createHash("sha256")
         .update(token)
         .digest("hex");
 
-      const user = await User.findOne({
-        resetPasswordToken,
-        resetPasswordExpires: { $gt: Date.now() },
-      });
+      // Consume the token atomically so concurrent requests cannot reuse it.
+      const passwordHash = await bcrypt.hash(password, 9);
+      const user = await User.findOneAndUpdate(
+        { resetPasswordToken, resetPasswordExpires: { $gt: Date.now() } },
+        {
+          $set: { password: passwordHash, refreshToken: [] },
+          $unset: { resetPasswordToken: "", resetPasswordExpires: "" },
+          $inc: { tokenVersion: 1 },
+        },
+      );
 
       if (!user) {
         return res.status(400).json({
@@ -185,12 +205,8 @@ class AuthController {
         });
       }
 
-      user.password = await bcrypt.hash(password, 9);
-
-      user.resetPasswordToken = undefined;
-      user.resetPasswordExpires = undefined;
-
-      await user.save();
+      res.clearCookie("token");
+      res.clearCookie("refreshToken");
 
       res.status(200).json({
         success: true,

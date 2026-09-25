@@ -28,10 +28,7 @@ class authMiddleware {
         });
       }
 
-      if (
-        decoded.tokenVersion !== undefined &&
-        decoded.tokenVersion !== user.tokenVersion
-      ) {
+      if ((decoded.tokenVersion ?? 0) !== user.tokenVersion) {
         return res.status(401).json({
           success: false,
           message: "Token has been revoked. Please login again.",
@@ -65,10 +62,7 @@ class authMiddleware {
           .json({ success: false, message: "User not found" });
       }
 
-      if (
-        decoded.tokenVersion !== undefined &&
-        decoded.tokenVersion !== user.tokenVersion
-      ) {
+      if ((decoded.tokenVersion ?? 0) !== user.tokenVersion) {
         return res
           .status(401)
           .json({ success: false, message: "Token has been revoked." });
