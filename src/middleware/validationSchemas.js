@@ -95,7 +95,7 @@ const brandSchema = joi.object({
   name: joi.string().min(3).max(100).required(),
   description: joi.string().max(500).optional(),
   cityAddress: joi.string().max(255).optional(),
-  logo: joi.string().uri().optional(),
+  logo: joi.forbidden(),
 });
 
 const updateBrandSchema = joi
@@ -103,7 +103,7 @@ const updateBrandSchema = joi
     name: joi.string().min(3).max(100).optional(),
     description: joi.string().max(500).optional(),
     cityAddress: joi.string().max(255).optional(),
-    logo: joi.string().uri().optional(),
+    logo: joi.forbidden(),
   })
   .min(1);
 

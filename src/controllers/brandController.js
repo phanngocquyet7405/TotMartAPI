@@ -1,43 +1,71 @@
 const brand = require("../models/Brand");
 const productModel = require("../models/Product");
 const { paginate } = require("../utils/pagination");
+const { uploadLogo, removeLogo } = require("../utils/brandLogoStorage");
 
 class BrandController {
   async createBrand(req, res, next) {
+    let uploaded;
+    let saved = false;
     try {
-      const validated = req.validatedBody;
+      const validated = { ...req.validatedBody };
+      if (req.file) {
+        uploaded = await uploadLogo(req.file);
+        validated.logo = uploaded.url;
+        validated.logoPublicId = uploaded.publicId;
+      }
       const newBrand = new brand(validated);
       newBrand.ownerId = req.userId;
       await newBrand.save();
+      saved = true;
       res.status(201).json({
         success: true,
         message: "Brand created successfully",
         data: newBrand,
       });
     } catch (error) {
+      if (uploaded && !saved) await removeLogo(uploaded.publicId);
       next(error);
     }
   }
 
   async updateBrand(req, res, next) {
+    let uploaded;
+    let saved = false;
     try {
       const validated = req.validatedBody;
       const newData = {
         ...validated,
       };
-      const updatedBrand = await brand.findByIdAndUpdate(
-        req.params._id,
-        newData,
-        { new: true },
-      );
+      if (req.file) {
+        // Avoid uploading for a target that does not exist.
+        if (!(await brand.exists({ _id: req.params._id }))) {
+          return res.status(404).json({ message: "Brand not found" });
+        }
+        uploaded = await uploadLogo(req.file);
+        newData.logo = uploaded.url;
+        newData.logoPublicId = uploaded.publicId;
+      }
+      // Return the atomically replaced version so concurrent uploads each clean
+      // up the correct preceding logo, rather than a stale pre-read image.
+      const updatedBrand = await brand
+        .findByIdAndUpdate(req.params._id, newData, {
+          new: false,
+          runValidators: true,
+        })
+        .select("+logoPublicId");
       if (!updatedBrand) {
+        if (uploaded) await removeLogo(uploaded.publicId);
         return res.status(404).json({ message: "Brand not found" });
       }
+      saved = true;
+      if (uploaded) await removeLogo(updatedBrand.logoPublicId);
       res.status(200).json({
         success: true,
         message: "Brand updated successfully",
       });
     } catch (error) {
+      if (uploaded && !saved) await removeLogo(uploaded.publicId);
       next(error);
     }
   }
@@ -52,13 +80,16 @@ class BrandController {
         });
       }
 
-      const deletedBrand = await brand.findByIdAndDelete(req.params._id);
+      const deletedBrand = await brand
+        .findByIdAndDelete(req.params._id)
+        .select("+logoPublicId");
       if (!deletedBrand) {
         return res.status(404).json({
           success: false,
           message: "Brand not found",
         });
       }
+      await removeLogo(deletedBrand.logoPublicId);
       res.status(200).json({
         success: true,
         message: "Brand deleted successfully",
