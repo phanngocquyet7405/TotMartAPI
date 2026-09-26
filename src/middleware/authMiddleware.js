@@ -35,8 +35,9 @@ class authMiddleware {
         });
       }
 
-      req.user = decoded;
-      req.userId = decoded.userId;
+      // Authorization must use the current database role, not a stale JWT claim.
+      req.user = { ...decoded, role: user.role };
+      req.userId = String(user._id);
       next();
     } catch (error) {
       next(error);
@@ -62,23 +63,48 @@ class authMiddleware {
           .json({ success: false, message: "User not found" });
       }
 
+      if (user.isActive === false) {
+        return res.status(403).json({
+          success: false,
+          message: "Account is locked. Please contact Admin to support.",
+        });
+      }
+
       if ((decoded.tokenVersion ?? 0) !== user.tokenVersion) {
         return res
           .status(401)
           .json({ success: false, message: "Token has been revoked." });
       }
 
-      if (decoded.role !== "admin" && user.role !== "admin") {
+      if (user.role !== "admin") {
         return res
           .status(403)
           .json({ success: false, message: "Access denied! Admins only" });
       }
 
-      req.userId = decoded.userId;
+      req.user = { ...decoded, role: user.role };
+      req.userId = String(user._id);
       next();
     } catch (error) {
       next(error);
     }
+  }
+
+  requireOwnerOrAdmin(req, res, next) {
+    // This guard must run after authentication and ID parameter validation.
+    if (!req.userId) {
+      return res
+        .status(401)
+        .json({ success: false, message: "Authentication required" });
+    }
+
+    const isOwner =
+      String(req.userId).toLowerCase() === String(req.params._id).toLowerCase();
+    if (!isOwner && req.user?.role !== "admin") {
+      return res.status(403).json({ success: false, message: "Access denied" });
+    }
+
+    next();
   }
 }
 module.exports = new authMiddleware();

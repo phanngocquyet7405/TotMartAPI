@@ -1,77 +1,86 @@
-const express = require('express');
+const express = require("express");
 const routers = express.Router();
 
-const userController = require('../controllers/userController');
-const authMiddleware = require('../middleware/authMiddleware');
-const validationHandler = require('../middleware/validationHandler');
-const validationSchemas = require('../middleware/validationSchemas');
-const { authLimiter } = require('../middleware/rateLimiter');
+const userController = require("../controllers/userController");
+const authMiddleware = require("../middleware/authMiddleware");
+const validationHandler = require("../middleware/validationHandler");
+const validationSchemas = require("../middleware/validationSchemas");
+const { authLimiter } = require("../middleware/rateLimiter");
 
 routers.post(
-  '/register',
+  "/register",
   authLimiter,
   validationHandler.validate(validationSchemas.registerSchema),
-  userController.createUser
+  userController.createUser,
 );
 routers.get(
-  '/get-all-users',
+  "/get-all-users",
   authMiddleware.adminMiddleware,
   authMiddleware.authMiddleware,
-  userController.getAllUsers
+  userController.getAllUsers,
 );
 routers.get(
-  '/get-user-by-id/:_id',
+  "/get-user-by-id/:_id",
   authMiddleware.authMiddleware,
-  validationHandler.validate(validationSchemas.idParamSchema, 'params'),
-  userController.getUserById
+  validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireOwnerOrAdmin,
+  userController.getUserById,
 );
 routers.put(
-  '/update-user/:_id',
+  "/update-user/:_id",
   authMiddleware.authMiddleware,
+  validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireOwnerOrAdmin,
   validationHandler.validate(validationSchemas.updateUserSchema),
-  validationHandler.validate(validationSchemas.idParamSchema, 'params'),
-  userController.updateUser
+  userController.updateUser,
 );
-routers.delete('/lock-user/:_id',
-  authMiddleware.adminMiddleware,
-  authMiddleware.authMiddleware,
-  userController.lockUser);
-routers.patch('/unlock-user/:_id',
-  authMiddleware.adminMiddleware,
-  authMiddleware.authMiddleware,
-  userController.unlockUser);
 routers.delete(
-  '/delete-user/:_id',
+  "/lock-user/:_id",
   authMiddleware.adminMiddleware,
   authMiddleware.authMiddleware,
-  validationHandler.validate(validationSchemas.idParamSchema, 'params'),
-  userController.deleteUser
+  userController.lockUser,
 );
-routers.post('/update-address/:_id',
+routers.patch(
+  "/unlock-user/:_id",
+  authMiddleware.adminMiddleware,
   authMiddleware.authMiddleware,
-  validationHandler.validate(validationSchemas.idParamSchema, 'params'),
+  userController.unlockUser,
+);
+routers.delete(
+  "/delete-user/:_id",
+  authMiddleware.adminMiddleware,
+  authMiddleware.authMiddleware,
+  validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  userController.deleteUser,
+);
+routers.post(
+  "/update-address/:_id",
+  authMiddleware.authMiddleware,
+  validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireOwnerOrAdmin,
   validationHandler.validate(validationSchemas.updateUserSchema),
   validationHandler.validate(validationSchemas.updateAddressSchema),
-  userController.updateAddress
+  userController.updateAddress,
 );
 
-routers.put('/edit-address/:_id/:address_id',
+routers.put(
+  "/edit-address/:_id/:address_id",
   authMiddleware.authMiddleware,
-  validationHandler.validate(validationSchemas.idParamSchema, 'params'),
+  validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireOwnerOrAdmin,
   validationHandler.validate(validationSchemas.updateAddressSchema),
-  userController.editAddress
+  userController.editAddress,
 );
 
-routers.delete('/delete-address/:_id/:address_id',
+routers.delete(
+  "/delete-address/:_id/:address_id",
   authMiddleware.authMiddleware,
-  validationHandler.validate(validationSchemas.idParamSchema, 'params'),
+  validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireOwnerOrAdmin,
   validationHandler.validate(validationSchemas.updateAddressSchema),
-  userController.deleteAddress
+  userController.deleteAddress,
 );
 
-routers.get('/me',
-  authMiddleware.authMiddleware,
-  userController.getMyProfile
-);
+routers.get("/me", authMiddleware.authMiddleware, userController.getMyProfile);
 
 module.exports = routers;

@@ -3,10 +3,8 @@ const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const sendEmailWithBrevo = require("../utils/sendEmail");
-const {
-  terminateUserStreams,
-} = require("../controllers/notificationController");
 const config = require("../config/environment");
+const { terminateUserStreams } = require("./notificationController");
 
 class AuthController {
   async login(req, res, next) {
@@ -24,6 +22,13 @@ class AuthController {
         return res.status(401).json({
           success: false,
           message: "Invalid password",
+        });
+      }
+      // Verify credentials first, but never issue tokens or cookies to locked users.
+      if (user.isActive === false) {
+        return res.status(403).json({
+          success: false,
+          message: "Account is locked. Please contact Admin to support.",
         });
       }
       const token = jwt.sign(
@@ -130,6 +135,7 @@ class AuthController {
 
       await user.save();
 
+      // url frontend reset password
       const issuedTokenHash = user.resetPasswordToken;
       const resetUrl = `${config.frontendUrl}/reset-password?token=${resetToken}`;
 
@@ -159,19 +165,11 @@ class AuthController {
             "If the email is registered, a password reset link has been sent.",
         });
       } catch (error) {
+        // An older delivery failure must not erase a newer request's token.
         await User.updateOne(
-          {
-            _id: user._id,
-            resetPasswordToken: issuedTokenHash,
-          },
-          {
-            $unset: {
-              resetPasswordToken: 1,
-              resetPasswordExpires: 1,
-            },
-          },
+          { _id: user._id, resetPasswordToken: issuedTokenHash },
+          { $unset: { resetPasswordToken: 1, resetPasswordExpires: 1 } },
         );
-
         return res.status(500).json({
           success: false,
           message: "Email could not be sent. Please try again later.",
@@ -187,10 +185,12 @@ class AuthController {
       const { password } = req.body;
       const token = req.query.token;
       if (typeof token !== "string" || !/^[a-f0-9]{40}$/.test(token)) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid or expired reset password token",
-        });
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message: "Invalid or expired reset password token",
+          });
       }
 
       const resetPasswordToken = crypto
@@ -217,7 +217,6 @@ class AuthController {
       }
 
       terminateUserStreams(user._id);
-
       res.clearCookie("token");
       res.clearCookie("refreshToken");
 
