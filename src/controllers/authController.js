@@ -3,6 +3,9 @@ const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
 const sendEmailWithBrevo = require("../utils/sendEmail");
+const {
+  terminateUserStreams,
+} = require("../controllers/notificationController");
 const config = require("../config/environment");
 
 class AuthController {
@@ -127,7 +130,7 @@ class AuthController {
 
       await user.save();
 
-      // url frontend reset password
+      const issuedTokenHash = user.resetPasswordToken;
       const resetUrl = `${config.frontendUrl}/reset-password?token=${resetToken}`;
 
       try {
@@ -156,9 +159,19 @@ class AuthController {
             "If the email is registered, a password reset link has been sent.",
         });
       } catch (error) {
-        user.resetPasswordToken = undefined;
-        user.resetPasswordExpires = undefined;
-        await user.save();
+        await User.updateOne(
+          {
+            _id: user._id,
+            resetPasswordToken: issuedTokenHash,
+          },
+          {
+            $unset: {
+              resetPasswordToken: 1,
+              resetPasswordExpires: 1,
+            },
+          },
+        );
+
         return res.status(500).json({
           success: false,
           message: "Email could not be sent. Please try again later.",
@@ -174,12 +187,10 @@ class AuthController {
       const { password } = req.body;
       const token = req.query.token;
       if (typeof token !== "string" || !/^[a-f0-9]{40}$/.test(token)) {
-        return res
-          .status(400)
-          .json({
-            success: false,
-            message: "Invalid or expired reset password token",
-          });
+        return res.status(400).json({
+          success: false,
+          message: "Invalid or expired reset password token",
+        });
       }
 
       const resetPasswordToken = crypto
@@ -204,6 +215,8 @@ class AuthController {
           message: "Invalid or expired reset password token",
         });
       }
+
+      terminateUserStreams(user._id);
 
       res.clearCookie("token");
       res.clearCookie("refreshToken");

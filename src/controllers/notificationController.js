@@ -1,26 +1,43 @@
 const Notification = require("../models/Notification");
+const { randomUUID } = require("crypto");
 const {
   registerSseClient,
   removeSseClient,
   issueSseTicket,
   consumeSseTicket,
+  revokeUserSseTickets,
 } = require("../utils/notify");
 
+// Each user may have several open tabs.
+const activeUserStreams = new Map();
+
+function terminateUserStreams(userId) {
+  const key = String(userId);
+
+  // Prevent previously issued tickets from reopening a revoked stream.
+  revokeUserSseTickets(key);
+
+  const streams = activeUserStreams.get(key);
+  if (!streams) return;
+
+  // Closing a stream removes it from the original Set.
+  for (const close of [...streams]) close();
+}
+
 class NotificationController {
-  // Admin gọi API này trước (JWT header bình thường) để lấy vé, rồi FE mở
-  // EventSource kèm vé qua query string.
   issueStreamTicket(req, res) {
     const ticket = issueSseTicket(req.userId);
     res.status(200).json({ success: true, data: { ticket } });
   }
 
-  // Kết nối SSE thật — không qua authMiddleware, xác thực bằng vé.
   streamNotifications(req, res) {
     const userId = consumeSseTicket(req.query.ticket);
+
     if (!userId) {
-      return res
-        .status(401)
-        .json({ success: false, message: "Invalid or expired ticket" });
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired ticket",
+      });
     }
 
     res.writeHead(200, {
@@ -30,24 +47,56 @@ class NotificationController {
     });
     res.write("\n");
 
-    const clientId = `${userId}-${Date.now()}`;
+    const key = String(userId);
+    const clientId = randomUUID();
+    let closed = false;
+    let heartbeat;
+
+    const cleanup = () => {
+      if (closed) return;
+      closed = true;
+
+      clearInterval(heartbeat);
+      removeSseClient(clientId);
+
+      const streams = activeUserStreams.get(key);
+      streams?.delete(close);
+
+      if (streams?.size === 0) {
+        activeUserStreams.delete(key);
+      }
+    };
+
+    const close = () => {
+      cleanup();
+
+      if (!res.writableEnded && !res.destroyed) {
+        try {
+          res.end();
+        } catch {
+          res.destroy();
+        }
+      }
+    };
+
+    if (!activeUserStreams.has(key)) {
+      activeUserStreams.set(key, new Set());
+    }
+
+    activeUserStreams.get(key).add(close);
     registerSseClient(clientId, res);
 
-    // Heartbeat giữ kết nối sống qua proxy/load balancer (nhiều proxy tự đóng
-    // connection nhàn rỗi sau ~30-60s nếu không có dữ liệu được gửi).
-    const heartbeat = setInterval(() => {
+    heartbeat = setInterval(() => {
       try {
         res.write(": ping\n\n");
-      } catch (err) {
-        clearInterval(heartbeat);
-        removeSseClient(clientId);
+      } catch {
+        close();
       }
     }, 20000);
 
-    req.on("close", () => {
-      clearInterval(heartbeat);
-      removeSseClient(clientId);
-    });
+    // Observe response closure, not completion of the incoming request.
+    res.once("close", cleanup);
+    res.once("error", close);
   }
 
   async getNotifications(req, res, next) {
@@ -118,3 +167,4 @@ class NotificationController {
 }
 
 module.exports = new NotificationController();
+module.exports.terminateUserStreams = terminateUserStreams;

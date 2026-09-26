@@ -22,8 +22,6 @@ function broadcastToAdmins(payload) {
   }
 }
 
-// Vé dùng 1 lần, sống 30s — cho phép SSE hoạt động đúng bất kể FE/BE cùng domain hay khác domain
-// (xem giải thích ở trên).
 const ssePendingTickets = new Map();
 
 function issueSseTicket(userId) {
@@ -34,10 +32,24 @@ function issueSseTicket(userId) {
 
 function consumeSseTicket(ticket) {
   const entry = ssePendingTickets.get(ticket);
+
   if (!entry) return null;
-  ssePendingTickets.delete(ticket); // dùng 1 lần, dùng xong xoá ngay
-  if (entry.expiresAt < Date.now()) return null;
+
+  ssePendingTickets.delete(ticket);
+
+  if (entry.expiresAt <= Date.now()) return null;
+
   return entry.userId;
+}
+
+function revokeUserSseTickets(userId) {
+  const key = String(userId);
+
+  for (const [ticket, entry] of ssePendingTickets) {
+    if (String(entry.userId) === key) {
+      ssePendingTickets.delete(ticket);
+    }
+  }
 }
 
 const NOTIFICATION_MESSAGES = {
@@ -86,4 +98,5 @@ module.exports = {
   removeSseClient,
   issueSseTicket,
   consumeSseTicket,
+  revokeUserSseTickets,
 };
