@@ -1,5 +1,4 @@
 $kind: http-request
-name: https://totmartapi-7z4s.onrender.com/api/login
 description: ""
 url: https://totmartapi-7z4s.onrender.com/api/users/login
 method: POST
@@ -12,4 +11,4 @@ body:
     \    \"password\": \"abcxyz123@\"\r
 
     }"
-order: 2000
+order: 1600

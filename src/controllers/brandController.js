@@ -115,9 +115,12 @@ class BrandController {
 
   async getAllBrands(req, res, next) {
     try {
-      const { data, pagination } = await paginate(brand, req.query, {
-        sort: { name: 1 },
-      });
+      const { data, pagination } = await paginate(
+        brand,
+        req.query,
+        {},
+        { sort: { name: 1 } },
+      );
 
       res.status(200).json({
         success: true,
