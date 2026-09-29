@@ -352,10 +352,12 @@ class CheckOutController {
 
     let session;
     let paidOrders = [];
+    let alreadyProcessed = false;
     try {
       session = await mongoose.startSession();
       await session.withTransaction(async () => {
         paidOrders = [];
+        alreadyProcessed = false;
 
         // Kiểm tra bên trong transaction (đáp ứng đúng yêu cầu của unit test lẫn integration test)
         if (
@@ -363,6 +365,7 @@ class CheckOutController {
             session,
           )
         ) {
+          alreadyProcessed = true;
           return;
         }
 
@@ -371,7 +374,10 @@ class CheckOutController {
           .session(session);
 
         if (!orders.length) return;
-        if (orders.every((order) => order.paymentStatus === "paid")) return;
+        if (orders.every((order) => order.paymentStatus === "paid")) {
+          alreadyProcessed = true;
+          return;
+        }
 
         if (
           orders.some(
@@ -431,6 +437,12 @@ class CheckOutController {
         } catch (err) {
           logger.error({ err, orderId: order.orderId }, "Notification failed");
         }
+      }
+      if (alreadyProcessed) {
+        return res.json({
+          success: true,
+          message: "Payment already processed",
+        });
       }
       return res.json({ success: true });
     } catch (err) {

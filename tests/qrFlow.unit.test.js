@@ -126,7 +126,10 @@ test("replayed reference does not deduct inventory", async () => {
   const res = response();
   await controller.sepayWebhook(webhook(), res);
   expect(Product.findOneAndUpdate).not.toHaveBeenCalled();
-  expect(res.json).toHaveBeenCalledWith({ success: true });
+  expect(res.json).toHaveBeenCalledWith({
+    success: true,
+    message: "Payment already processed",
+  });
 });
 test.each(["cancelled", "cod"])(
   "%s cannot be paid/reserved through online webhook",
