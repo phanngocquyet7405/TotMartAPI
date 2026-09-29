@@ -2,11 +2,83 @@ const Cart = require("../models/Cart");
 const SubscriptionTemplate = require("../models/SubscriptionTemplate");
 const Product = require("../models/Product");
 
+// Giá bán thực tế — phải khớp buildOrderProductsFromCart trong checkOutController
+function getUnitPrice(product) {
+  return product.salePercent > 0
+    ? Math.round(product.price * (1 - product.salePercent / 100))
+    : product.price;
+}
+
 class CartController {
+  // PUT /carts/sync — thay thế TOÀN BỘ giỏ sản phẩm của user bằng danh sách FE gửi lên.
+  // Idempotent: gọi bao nhiêu lần cũng ra cùng kết quả (khác add-to-cart là cộng dồn).
+  async syncCart(req, res, next) {
+    try {
+      const userId = req.userId;
+      const { items } = req.validatedBody;
+      const filter = { userId, isSubscribeCart: false };
+
+      // Gộp các dòng trùng productId
+      const merged = new Map();
+      for (const { productId, quantity } of items) {
+        merged.set(
+          productId,
+          Math.min((merged.get(productId) || 0) + quantity, 999),
+        );
+      }
+
+      // Bỏ qua sản phẩm không còn tồn tại (vd localStorage giữ sản phẩm đã bị xoá)
+      const products = merged.size
+        ? await Product.find({ _id: { $in: [...merged.keys()] } }).select(
+            "price salePercent",
+          )
+        : [];
+      const productById = new Map(products.map((p) => [String(p._id), p]));
+
+      const cartItems = [];
+      const skipped = [];
+      let totalPrice = 0;
+      for (const [productId, quantity] of merged) {
+        const product = productById.get(productId);
+        if (!product) {
+          skipped.push(productId);
+          continue;
+        }
+        cartItems.push({ productId, quantity });
+        totalPrice += getUnitPrice(product) * quantity;
+      }
+
+      if (cartItems.length === 0) {
+        await Cart.deleteOne(filter);
+        return res.status(200).json({
+          success: true,
+          message: "Cart is empty",
+          data: null,
+          skipped,
+        });
+      }
+
+      const cart = await Cart.findOneAndUpdate(
+        filter,
+        { $set: { items: cartItems, totalPrice } },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      ).populate("items.productId", "name price");
+
+      res.status(200).json({
+        success: true,
+        message: "Cart synced successfully",
+        data: cart,
+        skipped,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }
+
   async addToCart(req, res, next) {
     try {
       if (req.user) {
-        const { productId, quantity } = req.body;
+        const { productId, quantity } = req.validatedBody;
         const userId = req.userId; // safely taken from token
 
         const product = await Product.findById(productId);
@@ -136,8 +208,8 @@ class CartController {
 
   async updateCart(req, res, next) {
     try {
-      const productId = req.params._id || req.body.productId;
-      const { quantity } = req.body;
+      const productId = req.params._id || req.validatedBody.productId;
+      const { quantity } = req.validatedBody;
       const userId = req.userId;
 
       const product = await Product.findById(productId);

@@ -160,6 +160,9 @@ class CheckOutController {
 
     try {
       await session.withTransaction(async () => {
+        // Reset mỗi lần chạy callback: withTransaction có thể retry khi gặp
+        // TransientTransactionError, nếu không reset thì tổng tiền bị cộng dồn.
+        grandTotalAmount = 0;
         const userId = req.userId;
         const { addressId, paymentMethod, note, couponCode } =
           req.validatedBody;

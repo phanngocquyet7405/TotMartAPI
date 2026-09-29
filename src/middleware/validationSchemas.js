@@ -267,6 +267,34 @@ const checkoutSchema = joi.object({
   couponCode: joi.string().trim().uppercase().min(3).max(30).optional(),
 });
 
+const cartProductIdField = joi.string().hex().length(24);
+const cartQuantityField = joi.number().integer().min(1).max(999);
+
+// PUT /carts/sync — FE gửi toàn bộ giỏ (localStorage), BE thay thế items.
+// items rỗng = xoá giỏ.
+const syncCartSchema = joi.object({
+  items: joi
+    .array()
+    .items(
+      joi.object({
+        productId: cartProductIdField.required(),
+        quantity: cartQuantityField.required(),
+      }),
+    )
+    .max(100)
+    .required(),
+});
+
+const addToCartSchema = joi.object({
+  productId: cartProductIdField.required(),
+  quantity: cartQuantityField.default(1),
+});
+
+const updateCartSchema = joi.object({
+  productId: cartProductIdField.optional(),
+  quantity: cartQuantityField.required(),
+});
+
 const couponSchema = joi.object({
   code: joi.string().trim().uppercase().min(3).max(30).required(),
   discountType: joi.string().valid("percentage", "fixed").default("percentage"),
@@ -335,6 +363,9 @@ module.exports = {
   subscribeToTemplateSchema,
   checkoutSchema,
   sepayWebhookSchema,
+  syncCartSchema,
+  addToCartSchema,
+  updateCartSchema,
   couponSchema,
   updateCouponSchema,
 };
