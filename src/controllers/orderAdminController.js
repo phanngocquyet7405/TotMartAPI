@@ -29,6 +29,7 @@ const orderAdminController = {
       const [orders, total] = await Promise.all([
         Order.find(filter)
           .populate("userId", "name email phone")
+          .populate("products.brand", "name")
           .sort({ createdAt: -1 })
           .skip((pageNum - 1) * limitNum)
           .limit(limitNum),
@@ -53,10 +54,9 @@ const orderAdminController = {
   // ==== Admin: chi tiết 1 đơn hàng ====
   async getOrderById(req, res, next) {
     try {
-      const order = await Order.findById(req.params._id).populate(
-        "userId",
-        "name email phone",
-      );
+      const order = await Order.findById(req.params._id)
+        .populate("userId", "name email phone")
+        .populate("products.brand", "name");
       if (!order) {
         const err = new Error("Đơn hàng không tồn tại");
         err.statusCode = 404;

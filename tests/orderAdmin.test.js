@@ -37,7 +37,7 @@ async function placeOrder(user, token, paymentMethod, overrides = {}) {
     .set("Authorization", `Bearer ${token}`)
     .send({ addressId: user.addresses[0]._id.toString(), paymentMethod });
 
-  const order = await Order.findOne({ orderId: res.body.data.orders[0] });
+  const order = await Order.findOne({ _id: res.body.data.orderId });
   return { checkoutRes: res, order };
 }
 
@@ -234,9 +234,9 @@ describe("POST /api/admin/orders/:_id/status", () => {
 
     const updated = await Order.findById(order._id);
     expect(updated.status).toBe("shipped");
-    expect(
-      updated.statusHistory.some((h) => h.status === "shipped"),
-    ).toBe(true);
+    expect(updated.statusHistory.some((h) => h.status === "shipped")).toBe(
+      true,
+    );
   });
 
   test("shipped -> delivered succeeds for an ONLINE order", async () => {

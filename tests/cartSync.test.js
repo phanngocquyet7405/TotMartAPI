@@ -49,7 +49,10 @@ describe("PUT /api/carts/sync", () => {
     expect(res.body.success).toBe(true);
     expect(res.body.skipped).toEqual([]);
 
-    const cart = await Cart.findOne({ userId: user._id, isSubscribeCart: false });
+    const cart = await Cart.findOne({
+      userId: user._id,
+      isSubscribeCart: false,
+    });
     expect(cart.items).toHaveLength(1);
     expect(cart.items[0].quantity).toBe(2);
     expect(cart.totalPrice).toBe(60000);
@@ -92,7 +95,10 @@ describe("PUT /api/carts/sync", () => {
     ]);
 
     expect(res.status).toBe(200);
-    const cart = await Cart.findOne({ userId: user._id, isSubscribeCart: false });
+    const cart = await Cart.findOne({
+      userId: user._id,
+      isSubscribeCart: false,
+    });
     expect(cart.items).toHaveLength(1);
     expect(cart.items[0].quantity).toBe(3);
     expect(cart.totalPrice).toBe(270000);
@@ -112,7 +118,10 @@ describe("PUT /api/carts/sync", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.skipped).toEqual([ghostId]);
-    const cart = await Cart.findOne({ userId: user._id, isSubscribeCart: false });
+    const cart = await Cart.findOne({
+      userId: user._id,
+      isSubscribeCart: false,
+    });
     expect(cart.items).toHaveLength(1);
   });
 
@@ -189,7 +198,7 @@ describe("PUT /api/carts/sync", () => {
         paymentMethod: "cod",
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body.data.grandTotalAmount).toBe(60000); // 30k hàng + 30k ship
+    expect(res.status).toBe(201);
+    expect(res.body.data.totalAmount).toBe(60000); // 30k hàng + 30k ship
   });
 });

@@ -65,8 +65,8 @@ async function placeOnlineOrder(overrides = {}) {
   return {
     user,
     product,
-    paymentCode: res.body.data.paymentCode,
-    grandTotalAmount: res.body.data.grandTotalAmount,
+    paymentCode: res.body.data.orderCode,
+    grandTotalAmount: res.body.data.totalAmount,
   };
 }
 
@@ -159,8 +159,8 @@ describe("POST /api/checkout/sepay-webhook", () => {
         }),
       );
 
-    expect(res.status).toBe(200);
-    expect(res.body.message).toMatch(/underpaid/i);
+    expect(res.status).toBe(422);
+    expect(res.body.message).toMatch(/underpayment/i);
 
     const order = await Order.findOne({ paymentCode });
     expect(order.paymentStatus).toBe("pending");

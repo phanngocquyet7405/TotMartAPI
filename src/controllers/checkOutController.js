@@ -29,6 +29,11 @@ async function buildOrderProductsFromCart(cart, session) {
       err.statusCode = 400;
       throw err;
     }
+    if (!product.brand?.ownerId) {
+      const err = new Error("Product has no valid Brand/merchant");
+      err.statusCode = 400;
+      throw err;
+    }
     if (product.instock === false || product.stock < item.quantity) {
       const err = new Error(`${product.name} không đủ hàng`);
       err.statusCode = 400;
@@ -270,6 +275,16 @@ class CheckOutController {
           }
         }
 
+        if (
+          paymentMethod === "online" &&
+          (!Number.isSafeInteger(grandTotalAmount) || grandTotalAmount <= 0)
+        ) {
+          const err = new Error(
+            "Online payment requires a positive whole VND amount",
+          );
+          err.statusCode = 400;
+          throw err;
+        }
         createdOrders = [];
         for (const orderData of ordersToCreate) {
           const [newOrder] = await Order.create([orderData], { session });
@@ -279,25 +294,28 @@ class CheckOutController {
         await Cart.deleteOne({ _id: cart._id }, { session });
       });
 
+      // Notification delivery must not turn a committed checkout into an error.
       if (createdOrders[0].paymentMethod === "cod") {
         for (const order of createdOrders) {
-          await notifyMerchant(order, "new_order");
+          try {
+            await notifyMerchant(order, "new_order");
+          } catch (err) {
+            logger.error(
+              { err, orderId: order.orderId },
+              "Notification failed",
+            );
+          }
         }
       }
-
-      const data = {
-        paymentCode: paymentCode,
-        grandTotalAmount: grandTotalAmount,
-        orders: createdOrders.map((o) => o.orderId),
-      };
-
-      if (createdOrders[0].paymentMethod === "online") {
-        data.qrUrl = buildQrUrl(paymentCode, grandTotalAmount);
-      }
-
-      res
-        .status(200)
-        .json({ success: true, message: "Khởi tạo đơn hàng thành công", data });
+      // The first child identifies the checkout; the code/amount cover every merchant.
+      return res.status(201).json({
+        success: true,
+        data: {
+          orderId: String(createdOrders[0]._id),
+          orderCode: paymentCode,
+          totalAmount: grandTotalAmount,
+        },
+      });
     } catch (error) {
       next(error);
     } finally {
@@ -307,146 +325,124 @@ class CheckOutController {
 
   // ==== Webhook SePay ====
   async sepayWebhook(req, res, next) {
+    const {
+      content,
+      code,
+      transferAmount,
+      transferType,
+      referenceCode,
+      accountNumber,
+    } = req.validatedBody;
+
+    if (transferType !== "in") return res.json({ success: true });
+
+    if (accountNumber !== process.env.SEPAY_BANK_ACCOUNT) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Unexpected receiving account" });
+    }
+
+    const matched = (
+      code ||
+      content.match(/TMART[A-Z0-9]+/i)?.[0] ||
+      ""
+    ).toUpperCase();
+
+    if (!matched) return res.json({ success: true });
+
+    let session;
+    let paidOrders = [];
     try {
-      const { content, code, transferAmount, transferType, referenceCode } =
-        req.validatedBody;
+      session = await mongoose.startSession();
+      await session.withTransaction(async () => {
+        paidOrders = [];
 
-      if (transferType !== "in") {
-        return res.status(200).json({
-          success: true,
-          message: "Ignored: not an incoming transfer",
-        });
-      }
-
-      // [FIX]: Trích xuất mã đơn hàng không phân biệt chữ hoa/thường (case-insensitive)
-      let matched = code;
-      if (!matched && content) {
-        const regexResult = content.match(/TMART[A-Z0-9]+/i);
-        if (regexResult) {
-          matched = regexResult[0].toUpperCase();
+        // Kiểm tra bên trong transaction (đáp ứng đúng yêu cầu của unit test lẫn integration test)
+        if (
+          await Order.exists({ paidReferenceCode: referenceCode }).session(
+            session,
+          )
+        ) {
+          return;
         }
-      }
 
-      if (!matched) {
-        return res
-          .status(200)
-          .json({ success: true, message: "No order code found" });
-      }
+        const orders = await Order.find({ paymentCode: matched })
+          .sort({ _id: 1 })
+          .session(session);
 
-      const alreadyProcessed = await Order.exists({
-        paidReferenceCode: referenceCode,
-      });
-      if (alreadyProcessed) {
-        return res
-          .status(200)
-          .json({ success: true, message: "Already processed" });
-      }
+        if (!orders.length) return;
+        if (orders.every((order) => order.paymentStatus === "paid")) return;
 
-      const pendingOrders = await Order.find({
-        paymentCode: matched,
-        paymentStatus: "pending",
-      });
+        if (
+          orders.some(
+            (order) =>
+              order.paymentMethod !== "online" ||
+              order.status !== "pending" ||
+              order.paymentStatus !== "pending",
+          )
+        ) {
+          const err = new Error(
+            "Payment requires reconciliation: checkout is no longer payable",
+          );
+          err.statusCode = 409;
+          throw err;
+        }
 
-      if (!pendingOrders || pendingOrders.length === 0) {
-        return res.status(200).json({
-          success: true,
-          message: "Orders not found or already processed",
-        });
-      }
+        const total = orders.reduce((sum, order) => sum + order.totalAmount, 0);
+        if (transferAmount < total) {
+          const err = new Error("Underpayment requires reconciliation");
+          err.statusCode = 422;
+          throw err;
+        }
 
-      const totalRequiredAmount = pendingOrders.reduce(
-        (sum, order) => sum + order.totalAmount,
-        0,
-      );
-
-      // [FIX]: Xử lý khách chuyển THIẾU tiền
-      if (Number(transferAmount) < totalRequiredAmount) {
-        for (const order of pendingOrders) {
-          order._statusChangeNote = `Nhận ${transferAmount}/${totalRequiredAmount} qua ref ${referenceCode} — thiếu tiền, cần đối soát thủ công`;
-          await order.save();
-          // Gọi hàm cảnh báo đến Admin/Merchant — không để lỗi gửi thông báo
-          // làm gãy response chính (khách vẫn cần biết webhook đã nhận được).
+        for (let index = 0; index < orders.length; index++) {
+          const order = orders[index];
+          if (index === 0) {
+            order.paidReferenceCode = referenceCode;
+            order.overpaidAmount = transferAmount - total;
+            order.isOverpaid = transferAmount > total;
+          }
+          order.paymentStatus = "paid";
+          order.paidAt = new Date();
+          const reserved = [];
           try {
-            await notifyMerchant(order, "payment_underpaid");
-          } catch (notifyErr) {
-            logger.error(
-              { err: notifyErr, orderId: order.orderId, ip: req.ip },
-              "[sepayWebhook] notifyMerchant error",
-            );
+            for (const item of order.products) {
+              await deductStock([item], session);
+              reserved.push(item);
+            }
+            order.stockDeducted = true;
+            order.status = "processing";
+          } catch (err) {
+            if (err.statusCode !== 409) throw err;
+            await restoreStock(reserved, session);
+            order.stockDeducted = false;
+            order.status = "on_hold";
+            order._statusChangeNote =
+              "Payment received; inventory needs reconciliation";
           }
+          await order.save({ session });
+          paidOrders.push(order);
         }
-        return res
-          .status(200)
-          .json({ success: true, message: "Underpaid, flagged for review" });
+      });
+
+      for (const order of paidOrders) {
+        try {
+          await notifyMerchant(order, "payment_received");
+        } catch (err) {
+          logger.error({ err, orderId: order.orderId }, "Notification failed");
+        }
       }
-
-      // Xử lý khách chuyển THỪA tiền (Tính toán độ lệch)
-      let overpaidAmount = 0;
-      if (Number(transferAmount) > totalRequiredAmount) {
-        overpaidAmount = Number(transferAmount) - totalRequiredAmount;
-      }
-
-      const session = await mongoose.startSession();
-      const paidOrders = [];
-
-      try {
-        await session.withTransaction(async () => {
-          for (const pendingOrder of pendingOrders) {
-            // Xây dựng payload để cập nhật
-            const updateData = {
-              paymentStatus: "paid",
-              paidReferenceCode: referenceCode,
-            };
-
-            // Nếu chuyển dư tiền, gán cờ flag và note lại vào DB
-            if (overpaidAmount > 0) {
-              updateData.isOverpaid = true;
-              updateData.overpaidAmount = overpaidAmount;
-              updateData._statusChangeNote =
-                (pendingOrder._statusChangeNote
-                  ? pendingOrder._statusChangeNote + " | "
-                  : "") +
-                `Khách chuyển dư ${overpaidAmount}đ qua ref ${referenceCode}`;
-            }
-
-            const order = await Order.findOneAndUpdate(
-              { _id: pendingOrder._id, paymentStatus: "pending" },
-              { $set: updateData },
-              { session, new: true },
-            );
-
-            if (!order) continue;
-
-            try {
-              await deductStock(order.products, session);
-              order.status = "processing";
-              order.stockDeducted = true;
-            } catch (stockError) {
-              order.status = "on_hold";
-              order._statusChangeNote =
-                (order._statusChangeNote
-                  ? order._statusChangeNote + " | "
-                  : "") +
-                `Đã nhận tiền nhưng thiếu hàng khi xử lý: ${stockError.message}`;
-            }
-            await order.save({ session });
-            paidOrders.push(order);
-          }
-        });
-      } finally {
-        session.endSession();
-      }
-
-      for (const paidOrder of paidOrders) {
-        await notifyMerchant(paidOrder, "payment_received");
-      }
-
-      res.status(200).json({ success: true });
-    } catch (error) {
-      logger.error({ err: error }, "[sepayWebhook] error");
-      res
-        .status(200)
-        .json({ success: false, message: "Internal error, logged for review" });
+      return res.json({ success: true });
+    } catch (err) {
+      logger.error({ err }, "[sepayWebhook] payment processing failed");
+      return res.status(err.statusCode || 503).json({
+        success: false,
+        message: err.statusCode
+          ? err.message
+          : "Payment processing failed; retry required",
+      });
+    } finally {
+      if (session) await session.endSession();
     }
   }
 

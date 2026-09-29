@@ -2,7 +2,7 @@ const Order = require("../models/Order");
 
 // Explicit customer fields exclude merchant and internal reconciliation data.
 const fields =
-  "orderId products.name products.quantity products.unitPrice products.totalPrice status totalAmount shippingFee discountAmount shippingAddress paymentMethod paymentStatus createdAt deliveredAt cancelReason refundStatus";
+  "orderId paymentCode products.name products.quantity products.unitPrice products.totalPrice status totalAmount shippingFee discountAmount shippingAddress paymentMethod paymentStatus createdAt deliveredAt cancelReason refundStatus";
 
 exports.list = async (req, res, next) => {
   try {
@@ -43,7 +43,37 @@ exports.detail = async (req, res, next) => {
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });
-    res.json({ success: true, data });
+    const siblings = await Order.find({
+      paymentCode: data.paymentCode,
+      userId: req.userId,
+    })
+      .select("totalAmount paymentStatus status")
+      .lean();
+    const status =
+      siblings.length &&
+      siblings.every((order) => order.paymentStatus === "paid")
+        ? "paid"
+        : siblings.some((order) =>
+              ["cancelled", "returned"].includes(order.status),
+            )
+          ? "cancelled"
+          : "pending";
+    // Top-level status is payment status. data.status remains the shipping lifecycle.
+    res.json({
+      success: true,
+      status,
+      data: {
+        ...data,
+        checkout: {
+          orderId: String(data._id),
+          orderCode: data.paymentCode,
+          totalAmount: siblings.reduce(
+            (sum, order) => sum + order.totalAmount,
+            0,
+          ),
+        },
+      },
+    });
   } catch (error) {
     next(error);
   }

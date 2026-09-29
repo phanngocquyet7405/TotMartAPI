@@ -60,10 +60,12 @@ describe("POST /api/checkout/check-out", () => {
         paymentMethod: "cod",
       });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(201);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.orders).toHaveLength(1);
-    expect(res.body.data.grandTotalAmount).toBe(100000);
+    expect(
+      await Order.countDocuments({ paymentCode: res.body.data.orderCode }),
+    ).toBe(1);
+    expect(res.body.data.totalAmount).toBe(130000);
 
     const updatedProduct = await Product.findById(product._id);
     expect(updatedProduct.stock).toBe(3);
@@ -97,8 +99,8 @@ describe("POST /api/checkout/check-out", () => {
         paymentMethod: "online",
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body.data.qrUrl).toBeDefined();
+    expect(res.status).toBe(201);
+    expect(res.body.data.orderCode).toMatch(/^TMART/);
 
     const updatedProduct = await Product.findById(product._id);
     expect(updatedProduct.stock).toBe(5);
@@ -169,9 +171,11 @@ describe("POST /api/checkout/check-out", () => {
         paymentMethod: "cod",
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body.data.orders).toHaveLength(2);
-    expect(res.body.data.grandTotalAmount).toBe(300000);
+    expect(res.status).toBe(201);
+    expect(
+      await Order.countDocuments({ paymentCode: res.body.data.orderCode }),
+    ).toBe(2);
+    expect(res.body.data.totalAmount).toBe(330000);
 
     const orders = await Order.find({ userId: user._id });
     const merchantIds = new Set(orders.map((o) => o.merchantId.toString()));
@@ -200,8 +204,8 @@ describe("POST /api/checkout/check-out", () => {
         couponCode: coupon.code,
       });
 
-    expect(res.status).toBe(200);
-    expect(res.body.data.grandTotalAmount).toBe(90000);
+    expect(res.status).toBe(201);
+    expect(res.body.data.totalAmount).toBe(120000);
 
     const updatedCoupon = await Coupon.findById(coupon._id);
     expect(updatedCoupon.usedCount).toBe(1);
@@ -255,7 +259,7 @@ describe("POST /api/checkout/check-out", () => {
         paymentMethod: "cod",
         couponCode: coupon.code,
       });
-    expect(first.status).toBe(200);
+    expect(first.status).toBe(201);
 
     await createCartWithItems(user._id, [
       { productId: product._id, quantity: 1 },
@@ -291,7 +295,7 @@ describe("POST /api/checkout/cancel/:_id", () => {
       });
 
     const order = await Order.findOne({
-      orderId: checkoutRes.body.data.orders[0],
+      _id: checkoutRes.body.data.orderId,
     });
     expect((await Product.findById(product._id)).stock).toBe(3);
 
@@ -323,7 +327,7 @@ describe("POST /api/checkout/cancel/:_id", () => {
         paymentMethod: "cod",
       });
     const order = await Order.findOne({
-      orderId: checkoutRes.body.data.orders[0],
+      _id: checkoutRes.body.data.orderId,
     });
 
     const res = await request(app)
