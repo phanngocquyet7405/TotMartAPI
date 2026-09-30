@@ -27,6 +27,7 @@ class SubscriptionTemplateController {
 
       const template = new SubscriptionTemplate({
         name: validated.name,
+        isActive: validated.isActive,
         description: validated.description || "",
         boxId: validated.boxId,
         planType: validated.planType,

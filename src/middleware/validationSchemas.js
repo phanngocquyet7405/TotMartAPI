@@ -123,7 +123,8 @@ const updateCategorySchema = joi
 
 const createBoxSchema = joi.object({
   name: joi.string().min(3).max(100).required(),
-  description: joi.string().max(500).required(),
+  // Tên field khớp model Box (`descriptions`). Cho phép HTML từ rich-text editor.
+  descriptions: joi.string().max(5000).required(),
   products: joi
     .array()
     .items(
@@ -138,13 +139,24 @@ const createBoxSchema = joi.object({
   isGift: joi.boolean().default(false),
   // 0 = không giảm giá (FE luôn gửi discountPercent, kể cả khi bằng 0)
   discountPercent: joi.number().min(0).max(100).default(0),
-  validTo: joi.date().greater("now").required(),
+  validFrom: joi.date().optional(),
+  validTo: joi.date().greater("now").greater(joi.ref("validFrom", { adjust: (v) => v || new Date(0) })).required(),
+});
+
+const retainedImagesSchema = joi.string().custom((value, helpers) => {
+  try {
+    const images = JSON.parse(value);
+    if (!Array.isArray(images) || images.some((image) =>
+      !image || typeof image.public_id !== "string")) return helpers.error("any.invalid");
+    return images;
+  } catch { return helpers.error("any.invalid"); }
 });
 
 const updateBoxSchema = joi
   .object({
+    existingImages: retainedImagesSchema.optional(),
     name: joi.string().min(3).max(100).optional(),
-    description: joi.string().max(500).optional(),
+    descriptions: joi.string().max(5000).optional(),
     products: joi
       .array()
       .items(
@@ -160,6 +172,7 @@ const updateBoxSchema = joi
     // không bị reset về false/0 (default còn làm .min(1) luôn thoả).
     isGift: joi.boolean().optional(),
     discountPercent: joi.number().min(0).max(100).optional(),
+    validFrom: joi.date().optional(),
     validTo: joi.date().greater("now").optional(),
   })
   .min(1);
@@ -202,6 +215,7 @@ const createSubcribePlanSchema = joi.object({
 // Subscription Template Schema (Admin creates)
 // totalDeliveries tính tự động: 1_month=1, 3_month=3, 6_month=6, 12_month=12
 const createSubscriptionTemplateSchema = joi.object({
+  isActive: joi.boolean().default(true),
   name: joi.string().min(2).max(100).required(),
   description: joi.string().max(500).allow("").optional(),
   boxId: joi.string().hex().length(24).required(),

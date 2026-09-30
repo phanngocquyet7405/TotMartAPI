@@ -87,7 +87,7 @@ class BoxController {
         ...rest,
         products: builtProducts,
         result,
-        validFrom: new Date(),
+        validFrom: validated.validFrom || new Date(),
         validTo: new Date(validated.validTo),
         totalItem: builtProducts.length,
         value,
@@ -128,20 +128,11 @@ class BoxController {
   async getBoxById(req, res, next) {
     try {
       const box = await boxModel.findById(req.params._id);
-      const products = [];
-      box.products.forEach(async (product) => {
-        let prd = await productModel.findById(product.productId);
-        products.push({
-          product: prd,
-          quantity: product.quantity,
-        });
-      });
-      box.products = products;
+      if (!box) return res.status(404).json({ success: false, message: "Box not found" });
       res.status(200).json({
         success: true,
         message: "Box retrieved successfully",
         data: box,
-        products: products,
       });
     } catch (error) {
       next(error);
@@ -189,14 +180,22 @@ class BoxController {
           }),
         );
 
-        for (let i = 0; i < req.files.length; i++) {
-          const match = req.files[i].fieldname.match(/\d+/);
-          if (match && box.images[match[0]]) {
-            await cloudinary.uploader.destroy(box.images[match[0]].public_id);
-            box.images[match[0]].url = uploadResults[i].url;
-            box.images[match[0]].public_id = uploadResults[i].public_id;
-          }
-        }
+        box.images.push(...uploadResults);
+      }
+
+      // Retain only existing server-owned images; never trust submitted URLs.
+      if (validated.existingImages !== undefined) {
+        const retained = new Set(validated.existingImages.map((image) => image.public_id));
+        const uploadedCount = req.files?.length || 0;
+        const originalCount = box.images.length - uploadedCount;
+        box.images = box.images.filter((image, index) =>
+          index >= originalCount || retained.has(image.public_id));
+      }
+      if (validated.validFrom) box.validFrom = validated.validFrom;
+      const nextFrom = validated.validFrom || box.validFrom;
+      const nextTo = validated.validTo || box.validTo;
+      if (new Date(nextFrom) > new Date(nextTo)) {
+        return res.status(400).json({ success: false, message: "End date must follow start date" });
       }
 
       box.name = validated.name ?? box.name;

@@ -12,7 +12,7 @@ router.post(
   "/create-box",
   authMiddleware.authMiddleware,
   authMiddleware.adminMiddleware,
-  upload.array("images", 10),
+  upload.boxUpload.array("images", 10),
   validateHandler.validate(validationSchemas.createBoxSchema),
   boxController.createBox,
 );
@@ -30,7 +30,7 @@ router.put(
   "/update-box/:_id",
   authMiddleware.authMiddleware,
   authMiddleware.adminMiddleware,
-  upload.array("images", 10),
+  upload.boxUpload.array("images", 10),
   validateHandler.validate(validationSchemas.updateBoxSchema),
   boxController.updateBox,
 );

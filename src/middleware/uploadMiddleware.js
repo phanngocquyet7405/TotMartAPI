@@ -39,3 +39,9 @@ const upload = multer({
 });
 
 module.exports = upload;
+// Box forms allow up to ten images, each at most 5 MB.
+module.exports.boxUpload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024, files: 10 },
+  fileFilter,
+});
