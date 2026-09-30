@@ -123,7 +123,8 @@ const updateCategorySchema = joi
 
 const createBoxSchema = joi.object({
   name: joi.string().min(3).max(100).required(),
-  description: joi.string().max(500).required(),
+  // Tên field khớp model Box (`descriptions`). Cho phép HTML từ rich-text editor.
+  descriptions: joi.string().max(5000).required(),
   products: joi
     .array()
     .items(
@@ -144,7 +145,7 @@ const createBoxSchema = joi.object({
 const updateBoxSchema = joi
   .object({
     name: joi.string().min(3).max(100).optional(),
-    description: joi.string().max(500).optional(),
+    descriptions: joi.string().max(5000).optional(),
     products: joi
       .array()
       .items(
