@@ -136,7 +136,8 @@ const createBoxSchema = joi.object({
     .required(),
   stock: joi.number().integer().min(0).required(),
   isGift: joi.boolean().default(false),
-  discountPercent: joi.number().positive().max(100).default(0),
+  // 0 = không giảm giá (FE luôn gửi discountPercent, kể cả khi bằng 0)
+  discountPercent: joi.number().min(0).max(100).default(0),
   validTo: joi.date().greater("now").required(),
 });
 
@@ -155,8 +156,10 @@ const updateBoxSchema = joi
       .min(1)
       .optional(),
     stock: joi.number().integer().min(0).optional(),
-    isGift: joi.boolean().default(false),
-    discountPercent: joi.number().positive().max(100).default(0),
+    // Không đặt default ở update: gửi thiếu trường thì giữ nguyên giá trị cũ,
+    // không bị reset về false/0 (default còn làm .min(1) luôn thoả).
+    isGift: joi.boolean().optional(),
+    discountPercent: joi.number().min(0).max(100).optional(),
     validTo: joi.date().greater("now").optional(),
   })
   .min(1);
@@ -200,7 +203,7 @@ const createSubcribePlanSchema = joi.object({
 // totalDeliveries tính tự động: 1_month=1, 3_month=3, 6_month=6, 12_month=12
 const createSubscriptionTemplateSchema = joi.object({
   name: joi.string().min(2).max(100).required(),
-  description: joi.string().max(500).optional(),
+  description: joi.string().max(500).allow("").optional(),
   boxId: joi.string().hex().length(24).required(),
   planType: joi
     .string()
@@ -222,7 +225,7 @@ const createSubscriptionTemplateSchema = joi.object({
 const updateSubscriptionTemplateSchema = joi
   .object({
     name: joi.string().min(2).max(100).optional(),
-    description: joi.string().max(500).optional(),
+    description: joi.string().max(500).allow("").optional(),
     boxId: joi.string().hex().length(24).optional(),
     planType: joi
       .string()
@@ -251,7 +254,7 @@ const subscribeToTemplateSchema = joi.object({
       district: joi.string().max(100).required(),
       city: joi.string().max(100).required(),
       country: joi.string().max(100).required(),
-      zipCode: joi.string().max(10).required(),
+      zipCode: joi.string().max(10).allow("").default(""),
       phone: joi
         .string()
         .pattern(/^[0-9()+\s-]{7,20}$/)
