@@ -1,4 +1,3 @@
-const jwt = require("jsonwebtoken");
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const crypto = require("crypto");
@@ -9,108 +8,38 @@ const { terminateUserStreams } = require("./notificationController");
 class AuthController {
   async login(req, res, next) {
     try {
-      const { email, password } = req.body;
+      const { email, password, rememberMe } = req.validatedBody;
       const user = await User.findOne({ email });
-      if (!user) {
-        return res.status(404).json({
-          success: false,
-          message: "User not found",
-        });
-      }
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        return res.status(401).json({
-          success: false,
-          message: "Invalid password",
-        });
-      }
-      // Verify credentials first, but never issue tokens or cookies to locked users.
-      if (user.isActive === false) {
-        return res.status(403).json({
-          success: false,
-          message: "Account is locked. Please contact Admin to support.",
-        });
-      }
-      const token = jwt.sign(
-        {
-          userId: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          tokenVersion: user.tokenVersion,
-          avatar: user.avatar,
-        },
-        config.jwt.secret,
-        { expiresIn: config.jwt.expiresIn },
-      );
-
-      const refreshToken = jwt.sign(
-        {
-          userId: user._id,
-          name: user.name,
-          email: user.email,
-          role: user.role,
-          tokenVersion: user.tokenVersion,
-          avatar: user.avatar,
-        },
-        config.jwt.refreshSecret,
-        { expiresIn: config.jwt.refreshExpiresIn },
-      );
-
-      res.cookie("token", token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 1000 * 60 * 60 * 24 * 7,
-      });
-      res.cookie("refreshToken", refreshToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "strict",
-        maxAge: 1000 * 60 * 60 * 24 * 30,
-      });
-      user.refreshToken.push(refreshToken);
-      await user.save();
-      res.status(200).json({
-        success: true,
-        message: "Login successful",
-        token,
-        refreshToken,
-      });
-    } catch (error) {
-      next(error);
-    }
+      if (!user || !await bcrypt.compare(password, user.password)) return res.status(401).json({ success: false, message: 'Email hoặc mật khẩu không đúng' });
+      if (user.isActive === false) return res.status(403).json({ success: false, message: 'Account is locked' });
+      const token = await require('../services/sessionService').createSession(user, res, rememberMe);
+      res.json({ success: true, message: 'Login successful', token });
+    } catch (err) { next(err); }
   }
-
+  async refresh(req, res, next) {
+    try {
+      const Session = require('../models/AuthSession');
+      const { hash, accessToken, setCookies, clearCookies } = require('../services/sessionService');
+      const refresh = req.cookies.refreshToken;
+      if (typeof refresh !== 'string' || !/^[a-f0-9]{96}$/.test(refresh)) { clearCookies(res); return res.status(401).json({ success: false, message: 'Phiên đã hết hạn' }); }
+      const current = await Session.findOne({ refreshHash: hash(refresh), expiresAt: { $gt: new Date() } });
+      const user = current && await User.findById(current.userId);
+      if (!user || !user.isActive || current.tokenVersion !== user.tokenVersion) { clearCookies(res); return res.status(401).json({ success: false, message: 'Phiên đã bị thu hồi' }); }
+      const rotated = crypto.randomBytes(48).toString('hex');
+      const updated = await Session.findOneAndUpdate({ _id: current._id, refreshHash: hash(refresh) }, { refreshHash: hash(rotated) }, { new: true });
+      if (!updated) return res.status(401).json({ success: false, message: 'Refresh token đã được sử dụng' });
+      const token = accessToken(user, updated.sessionId); setCookies(res, token, rotated, updated.persistent);
+      res.json({ success: true, token });
+    } catch (err) { next(err); }
+  }
   async logout(req, res, next) {
     try {
-      const refreshToken = req.cookies.refreshToken;
-      if (!refreshToken) {
-        return res.status(400).json({
-          success: false,
-          message: "Refresh token not found",
-        });
-      }
-      const user = await User.findOne({ refreshToken: refreshToken });
-      if (!user) {
-        return res.status(400).json({
-          success: false,
-          message: "Invalid refresh token",
-        });
-      }
-      user.refreshToken = user.refreshToken.filter(
-        (token) => token !== refreshToken,
-      );
-      await user.save();
-      res.clearCookie("token");
-      res.clearCookie("refreshToken");
-      res.status(200).json({
-        success: true,
-        message: "Logout successful",
-      });
-    } catch (error) {
-      next(error);
-    }
+      const Session = require('../models/AuthSession');
+      if (req.user.sid) await Session.deleteOne({ sessionId: req.user.sid, userId: req.userId });
+      else { await User.updateOne({ _id: req.userId }, { $inc: { tokenVersion: 1 }, $set: { refreshToken: [] } }); await Session.deleteMany({ userId: req.userId }); }
+      require('../services/sessionService').clearCookies(res); terminateUserStreams(req.userId);
+      res.json({ success: true, message: 'Logout successful' });
+    } catch (err) { next(err); }
   }
 
   async forgotPassword(req, res, next) {
@@ -216,6 +145,7 @@ class AuthController {
         });
       }
 
+      await require("../models/AuthSession").deleteMany({ userId: user._id });
       terminateUserStreams(user._id);
       res.clearCookie("token");
       res.clearCookie("refreshToken");

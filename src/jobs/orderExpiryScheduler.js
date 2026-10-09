@@ -1,81 +1,32 @@
-const cron = require("node-cron");
-const Order = require("../models/Order");
-const Coupon = require("../models/Coupon");
-const config = require("../config/environment");
-const logger = require("../utils/logger");
-
-const EXPIRY_HOURS = config.orderExpiryHours;
-
-let isProcessingExpiry = false;
-
-async function expireStaleOrders() {
-  if (isProcessingExpiry) return;
-  isProcessingExpiry = true;
-
+const mongoose = require('mongoose');
+const cron = require('node-cron');
+const Checkout = require('../models/Checkout');
+const Order = require('../models/Order');
+const Subscription = require('../models/UserSubscription');
+const { lockCheckout, releaseCoupon } = require('../services/checkoutLifecycle');
+const { enqueue } = require('./notificationOutboxScheduler');
+const logger = require('../utils/logger');
+async function expireCheckout(code, now) {
+  const session = await mongoose.startSession();
   try {
-    const cutoff = new Date(Date.now() - EXPIRY_HOURS * 60 * 60 * 1000);
-
-    const staleOrders = await Order.find({
-      paymentMethod: "online",
-      paymentStatus: "pending",
-      status: "pending",
-      createdAt: { $lt: cutoff },
-    });
-
-    if (staleOrders.length === 0) return;
-
-    logger.info(
-      { count: staleOrders.length },
-      "[OrderExpiryScheduler] Tìm thấy đơn online quá hạn thanh toán",
-    );
-
-    for (const order of staleOrders) {
-      try {
-        if (order.couponCode) {
-          const restored = await Coupon.findOneAndUpdate(
-            { code: order.couponCode, usedCount: { $gt: 0 } },
-            { $inc: { usedCount: -1 } },
-            { new: true },
-          );
-          if (restored) {
-            logger.info(
-              { couponCode: order.couponCode },
-              "[OrderExpiryScheduler] Đã hoàn lại 1 lượt dùng cho coupon",
-            );
-          }
-        }
-
-        order.status = "cancelled";
-        order.cancelReason = `Tự động huỷ - quá ${EXPIRY_HOURS}h không thanh toán`;
-        order.cancelledBy = null;
-        order._statusChangeNote = "Huỷ tự động bởi orderExpiryScheduler";
-        await order.save();
-      } catch (err) {
-        logger.error(
-          { err, orderId: order.orderId },
-          "[OrderExpiryScheduler] Lỗi huỷ đơn",
-        );
+    await session.withTransaction(async () => {
+      const checkout = await lockCheckout(code, session);
+      if (!checkout || checkout.state !== 'pending' || checkout.paymentMethod !== 'online' || checkout.expiresAt > now) return;
+      const orders = await Order.find({ paymentCode: code }).session(session);
+      if (orders.some(o => o.paymentStatus === 'paid')) return;
+      for (const order of orders) {
+        if (order.status !== 'pending') continue;
+        order.status = 'cancelled'; order.cancelReason = 'Hết hạn thanh toán'; order._statusChangeNote = 'Hủy tự động khi quá hạn';
+        await order.save({ session }); await enqueue(order, 'order_cancelled', session);
       }
-    }
-  } catch (error) {
-    logger.error({ err: error }, "[OrderExpiryScheduler] Lỗi");
-  } finally {
-    isProcessingExpiry = false;
-  }
+      if (checkout.subscriptionId) await Subscription.updateOne({ _id: checkout.subscriptionId, status: 'pending_payment' }, { status: 'cancelled', nextDeliveries: null }, { session });
+      await releaseCoupon(checkout, session); checkout.state = 'cancelled'; await checkout.save({ session });
+    });
+  } finally { await session.endSession(); }
 }
-
-function startOrderExpiryScheduler() {
-  logger.info(
-    { expiryHours: EXPIRY_HOURS },
-    "[OrderExpiryScheduler] Đã khởi động - chạy mỗi giờ",
-  );
-
-  expireStaleOrders();
-
-  cron.schedule("0 * * * *", () => {
-    logger.debug("[OrderExpiryScheduler] Đang kiểm tra đơn quá hạn...");
-    expireStaleOrders();
-  });
+async function expireStaleOrders(now = new Date()) {
+  const due = await Checkout.find({ state: 'pending', paymentMethod: 'online', expiresAt: { $lte: now } }).select('paymentCode').limit(200);
+  for (const checkout of due) { try { await expireCheckout(checkout.paymentCode, now); } catch (err) { logger.error({ err, paymentCode: checkout.paymentCode }, 'Expiry failed; retry next run'); } }
 }
-
-module.exports = { startOrderExpiryScheduler, expireStaleOrders };
+function startOrderExpiryScheduler() { const run = () => expireStaleOrders().catch(err => logger.error({ err }, 'Expiry job failed')); void run(); return cron.schedule('* * * * *', run); }
+module.exports = { expireStaleOrders, expireCheckout, startOrderExpiryScheduler };

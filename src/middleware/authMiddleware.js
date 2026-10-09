@@ -4,7 +4,7 @@ const User = require("../models/User");
 class authMiddleware {
   async authMiddleware(req, res, next) {
     try {
-      const token = req.headers.authorization?.split(" ")[1];
+      const token = req.headers.authorization?.split(" ")[1] || req.cookies?.token;
 
       if (!token) {
         return res
@@ -35,6 +35,7 @@ class authMiddleware {
         });
       }
 
+      if (decoded.sid && !await require("../models/AuthSession").exists({ sessionId: decoded.sid, userId: user._id, tokenVersion: user.tokenVersion, expiresAt: { $gt: new Date() } })) return res.status(401).json({ success: false, message: "Session revoked" });
       // Authorization must use the current database role, not a stale JWT claim.
       req.user = { ...decoded, role: user.role };
       req.userId = String(user._id);
@@ -46,7 +47,7 @@ class authMiddleware {
 
   async adminMiddleware(req, res, next) {
     try {
-      const token = req.headers.authorization?.split(" ")[1];
+      const token = req.headers.authorization?.split(" ")[1] || req.cookies?.token;
 
       if (!token) {
         return res
@@ -76,6 +77,7 @@ class authMiddleware {
           .json({ success: false, message: "Token has been revoked." });
       }
 
+      if (decoded.sid && !await require("../models/AuthSession").exists({ sessionId: decoded.sid, userId: user._id, tokenVersion: user.tokenVersion, expiresAt: { $gt: new Date() } })) return res.status(401).json({ success: false, message: "Session revoked" });
       if (user.role !== "admin") {
         return res
           .status(403)

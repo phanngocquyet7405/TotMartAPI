@@ -1,3 +1,4 @@
+jest.mock('../src/models/AuthSession', () => ({create:jest.fn()}));
 // Exercise real routes, validation, controllers, and JWT verification.
 // Persistence is mocked so these regressions run without a MongoDB process.
 jest.mock("../src/models/User", () => ({
@@ -18,7 +19,7 @@ const app = express();
 app.use(express.json());
 app.use("/users", require("../src/routes/userRouter"));
 app.get("/admin-only", middleware.adminMiddleware, (req, res) => res.json({ success: true }));
-app.post("/login", authController.login);
+app.post("/login", require("../src/middleware/validationHandler").validate(require("../src/middleware/validationSchemas").loginSchema), authController.login);
 app.use((error, req, res, next) => res.status(500).json({ message: error.message }));
 
 const actorId = "507f1f77bcf86cd799439011";
@@ -30,6 +31,7 @@ let passwordHash;
 beforeAll(async () => { passwordHash = await bcrypt.hash("Password123!", 4); });
 beforeEach(() => {
   jest.resetAllMocks();
+  require("../src/models/AuthSession").create.mockResolvedValue({});
   const fixture = (_id) => ({
     _id, role: "user", isActive: true, tokenVersion: 0,
     name: "Test User", email: "test@example.com", password: passwordHash,
@@ -140,7 +142,8 @@ test("active accounts can still log in", async () => {
   expect(response.status).toBe(200);
   expect(response.body.token).toEqual(expect.any(String));
   expect(response.headers["set-cookie"]).toHaveLength(2);
-  expect(actor.save).toHaveBeenCalledTimes(1);
+  expect(require("../src/models/AuthSession").create).toHaveBeenCalledTimes(1);
+  expect(actor.save).not.toHaveBeenCalled();
 });
 
 test("locked accounts with incorrect passwords retain the invalid-password response", async () => {

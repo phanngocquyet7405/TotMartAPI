@@ -7,15 +7,25 @@ const { MongoMemoryReplSet } = require("mongodb-memory-server");
 let replSet;
 
 async function connect() {
+  if (process.env.TEST_MONGODB_URI) {
+    const uri = process.env.TEST_MONGODB_URI;
+    if (!/^mongodb:\/\/(127\.0\.0\.1|localhost):\d+\/totmart_test(?:\?|$)/.test(uri)) throw new Error('External tests require a local database named totmart_test');
+    await mongoose.connect(uri);
+    await Promise.all(Object.values(mongoose.models).map(model => model.init()));
+    return;
+  }
   replSet = await MongoMemoryReplSet.create({
     replSet: { count: 1, storageEngine: "wiredTiger" },
     binary: { version: process.env.MONGOMS_VERSION || "7.0.14" },
   });
   const uri = replSet.getUri();
   await mongoose.connect(uri);
+  await Promise.all(Object.values(mongoose.models).map(model => model.init()));
 }
 
 async function closeDatabase() {
+  if (mongoose.connection.readyState !== 1) { if (replSet) await replSet.stop(); return; }
+  if (process.env.TEST_MONGODB_URI) { await clearDatabase(); await mongoose.connection.close(); return; }
   await mongoose.connection.dropDatabase();
   await mongoose.connection.close();
   if (replSet) {

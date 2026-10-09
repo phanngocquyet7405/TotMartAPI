@@ -48,11 +48,13 @@ router.delete(
 router.post(
   "/add-subscribe-plan-to-cart",
   authMiddleware.authMiddleware,
+  validationHandler.validate(require("../middleware/validationSchemas").subscriptionCartSchema),
   cartController.addSubscribeCart,
 );
 router.put(
   "/update-subscribe-cart",
   authMiddleware.authMiddleware,
+  validationHandler.validate(require("../middleware/validationSchemas").subscriptionCartSchema),
   cartController.updateSubscribeCart,
 );
 router.delete(

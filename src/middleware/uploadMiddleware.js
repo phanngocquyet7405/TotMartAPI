@@ -10,7 +10,7 @@ const ALLOWED_MIME_TYPES = [
   "image/webp",
   "image/jpg",
 ];
-const ALLOWED_EXTENSIONS = /jpeg|jpg|png|webp/;
+const ALLOWED_EXTENSIONS = /^\.(jpeg|jpg|png|webp)$/;
 
 const fileFilter = (req, file, cb) => {
   const mimeValid = ALLOWED_MIME_TYPES.includes(file.mimetype);
@@ -33,7 +33,7 @@ const upload = multer({
   storage,
   limits: {
     fileSize: 2 * 1024 * 1024,
-    files: 5,
+    files: 10,
   },
   fileFilter,
 });

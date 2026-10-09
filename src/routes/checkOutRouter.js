@@ -4,6 +4,7 @@ const checkOutController = require("../controllers/checkOutController");
 const authMiddleware = require("../middleware/authMiddleware");
 const sepayAuth = require("../middleware/sepayAuth");
 const validationHandler = require("../middleware/validationHandler");
+const { quoteSchema, refundSchema, cancelSchema } = require("../middleware/validationSchemas");
 const {
   checkoutLimiter,
   webhookLimiter,
@@ -14,6 +15,10 @@ const {
   idParamSchema,
   paymentCodeParamSchema,
 } = require("../middleware/validationSchemas");
+
+router.post("/quote", authMiddleware.authMiddleware, validationHandler.validate(quoteSchema), checkOutController.quote);
+router.post("/resolve-inventory/:_id", authMiddleware.authMiddleware, authMiddleware.adminMiddleware, validationHandler.validate(idParamSchema, "params"), checkOutController.resolveInventoryHold);
+router.get("/payment-events", authMiddleware.authMiddleware, authMiddleware.adminMiddleware, checkOutController.listPaymentEvents);
 
 // ==== User đặt hàng (COD hoặc online) ====
 router.post(
@@ -45,6 +50,7 @@ router.post(
   "/cancel/:_id",
   authMiddleware.authMiddleware,
   validationHandler.validate(idParamSchema, "params"),
+  validationHandler.validate(cancelSchema),
   checkOutController.cancelOrder,
 );
 
@@ -80,6 +86,7 @@ router.post(
   authMiddleware.authMiddleware,
   authMiddleware.adminMiddleware,
   validationHandler.validate(idParamSchema, "params"),
+  validationHandler.validate(refundSchema),
   checkOutController.completeRefund,
 );
 

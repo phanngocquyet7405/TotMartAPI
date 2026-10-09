@@ -7,6 +7,7 @@ const validationHandler = require("../middleware/validationHandler");
 const validationSchemas = require("../middleware/validationSchemas");
 const { authLimiter } = require("../middleware/rateLimiter");
 
+routers.get("/me", authMiddleware.authMiddleware, async (req, res, next) => { try { const user = await require("../models/User").findById(req.userId); res.json({ success: true, data: user }); } catch (err) { next(err); } });
 routers.post(
   "/register",
   authLimiter,

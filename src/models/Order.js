@@ -9,6 +9,8 @@ const orderSchema = new mongoose.Schema(
     },
     customerEmail: { type: String },
 
+    boxes: [{ boxId: { type: mongoose.Schema.Types.ObjectId, ref: "Box" }, name: String, quantity: Number }],
+    refundReference: String, refundedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     products: [
       {
         productId: {
@@ -111,10 +113,11 @@ const orderSchema = new mongoose.Schema(
     ],
   },
   {
-    timestamps: true,
+    timestamps: true, optimisticConcurrency: true,
   },
 );
 
+orderSchema.index({ paymentCode: 1 });
 orderSchema.index({ userId: 1, createdAt: -1 });
 orderSchema.index({ status: 1, paymentMethod: 1 });
 orderSchema.index({ refundStatus: 1 });

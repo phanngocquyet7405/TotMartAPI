@@ -9,6 +9,7 @@ class BrandController {
     let saved = false;
     try {
       const validated = { ...req.validatedBody };
+      if (validated.description !== undefined) validated.description = require("../utils/safeHtml")(validated.description);
       if (req.file) {
         uploaded = await uploadLogo(req.file);
         validated.logo = uploaded.url;
@@ -33,7 +34,8 @@ class BrandController {
     let uploaded;
     let saved = false;
     try {
-      const validated = req.validatedBody;
+      const validated = { ...req.validatedBody };
+      if (validated.description !== undefined) validated.description = require("../utils/safeHtml")(validated.description);
       const newData = {
         ...validated,
       };

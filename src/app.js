@@ -58,6 +58,7 @@ app.use(
   }),
 );
 app.use(cookieParser());
+app.use(require("./middleware/cookieCsrf"));
 // Routes
 routes(app);
 

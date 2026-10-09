@@ -7,7 +7,7 @@
  */
 const paginate = async (model, queryParams, filter = {}, options = {}) => {
   const page = Math.max(parseInt(queryParams.page, 10) || 1, 1);
-  const limit = Math.min(parseInt(queryParams.limit, 10) || 10, 100);
+  const limit = Math.max(1, Math.min(parseInt(queryParams.limit, 10) || 10, 100));
   const skip = (page - 1) * limit;
 
   const { sort = { createdAt: -1 }, populate = null } = options;

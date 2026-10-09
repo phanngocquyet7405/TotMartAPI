@@ -3,7 +3,7 @@ const Order = require("../models/Order");
 const GENERIC_TRANSITIONS = {
   processing: ["shipped"],
   shipped: ["delivered"],
-  on_hold: ["processing"],
+
 };
 
 const orderAdminController = {
@@ -103,6 +103,7 @@ const orderAdminController = {
       }
 
       order._statusChangedBy = req.userId;
+      if (!order.stockDeducted || (order.paymentMethod === "online" && order.paymentStatus !== "paid")) { const err = new Error("Đơn chưa đủ điều kiện tồn kho/thanh toán"); err.statusCode = 409; throw err; }
       order.status = nextStatus;
       await order.save();
 

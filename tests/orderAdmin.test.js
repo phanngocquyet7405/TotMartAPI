@@ -300,7 +300,7 @@ describe("POST /api/admin/orders/:_id/status", () => {
     expect(unchanged.paymentStatus).toBe("pending");
   });
 
-  test("on_hold -> processing succeeds", async () => {
+  test("on_hold cannot bypass inventory reservation through generic status", async () => {
     const { user } = await createUser();
     const { user: admin } = await createUser({ role: "admin" });
     const { order } = await placeOrder(user, signToken(user), "cod");
@@ -317,8 +317,8 @@ describe("POST /api/admin/orders/:_id/status", () => {
       .set("Authorization", `Bearer ${signToken(admin)}`)
       .send({ status: "processing" });
 
-    expect(res.status).toBe(200);
-    expect(res.body.data.status).toBe("processing");
+    expect(res.status).toBe(400);
+    expect((await Order.findById(order._id)).status).toBe("on_hold");
   });
 
   test("returns 404 for a well-formed id that doesn't exist", async () => {

@@ -1,13 +1,13 @@
 require("dotenv").config();
 
 const config = {
-  port: process.env.PORT || 3000,
+  port: process.env.PORT || 3001,
   mongodb: {
-    uri: process.env.MONGODB_URI || "mongodb://localhost:27017/nodejs-mvc-db",
+    uri: process.env.MONGODB_URI || "mongodb://localhost:27017/totmart?replicaSet=rs0",
   },
   jwt: {
     secret: process.env.JWT_SECRET || "your-secret-key-change-in-production",
-    expiresIn: process.env.JWT_EXPIRES_IN || "7d",
+    expiresIn: process.env.JWT_EXPIRES_IN || "15m",
     refreshSecret:
       process.env.JWT_REFRESH_SECRET ||
       "your-refresh-secret-change-in-production",

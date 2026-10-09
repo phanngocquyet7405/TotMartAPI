@@ -62,13 +62,13 @@ const NOTIFICATION_MESSAGES = {
     `Đơn ${order.orderId} nhận thiếu tiền — cần đối soát thủ công`,
 };
 
-async function notifyMerchant(order, type) {
+async function notifyMerchant(order, type, eventKey) {
   const buildMessage = NOTIFICATION_MESSAGES[type];
   if (!buildMessage) {
     throw new Error(`Unknown notification type: ${type}`);
   }
 
-  const notification = await Notification.create({
+  const payload = {
     type,
     order: order._id,
     orderCode: order.orderId,
@@ -78,7 +78,10 @@ async function notifyMerchant(order, type) {
       paymentMethod: order.paymentMethod,
       customerName: order.shippingAddress?.fullName,
     },
-  });
+  };
+  const notification = eventKey
+    ? await Notification.findOneAndUpdate({ eventKey }, { $setOnInsert: { ...payload, eventKey } }, { upsert: true, new: true })
+    : await Notification.create(payload);
 
   broadcastToAdmins({
     _id: notification._id,

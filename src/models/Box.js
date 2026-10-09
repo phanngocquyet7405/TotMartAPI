@@ -30,6 +30,7 @@ const boxSchema = new mongoose.Schema(
     discountPercent: { type: Number, default: 0 },
   },
   {
+    toJSON: { transform: (doc, ret) => { ret.descriptions = require("../utils/safeHtml")(ret.descriptions); return ret; } },
     timestamps: true,
   },
 );

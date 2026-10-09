@@ -18,8 +18,9 @@ const cartSchema = new mongoose.Schema(
     isSubscribeCart: { type: Boolean, default: false },
   },
   {
-    timestamps: true,
+    timestamps: true, optimisticConcurrency: true,
   },
 );
 
+cartSchema.index({ userId: 1, isSubscribeCart: 1 }, { unique: true });
 module.exports = mongoose.model("Cart", cartSchema);

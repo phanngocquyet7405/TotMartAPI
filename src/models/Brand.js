@@ -16,6 +16,7 @@ const brandSchema = new mongoose.Schema(
     },
   },
   {
+    toJSON: { transform: (doc, ret) => { if (ret.description !== undefined) ret.description = require("../utils/safeHtml")(ret.description); return ret; } },
     timestamps: true,
   },
 );

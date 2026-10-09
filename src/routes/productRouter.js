@@ -24,7 +24,8 @@ router.put(
   authMiddleware.authMiddleware,
   authMiddleware.adminMiddleware,
   upload.array("images", 10),
-  validationHandler.validate(validationSchemas.productUpdateSchema),
+  validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  (req, res, next) => validationHandler.validate(req.files?.length ? validationSchemas.productUpdateSchema.min(0) : validationSchemas.productUpdateSchema)(req, res, next),
   productController.updateProduct,
 );
 

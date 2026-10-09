@@ -26,14 +26,20 @@ const userSubscriptionSchema = new mongoose.Schema(
     completeDeliveries: { type: Number, default: 0 },
     remainDeliveries: { type: Number, required: true },
 
-    nextDeliveries: { type: Date, required: true },
+    nextDeliveries: { type: Date, default: null, required: function () { return this.status === "active"; } },
     lastDeliveries: { type: Date, default: null },
 
     status: {
       type: String,
-      enum: ["active", "cancelled", "expired"],
-      default: "active",
+      enum: ["pending_payment", "active", "cancelled", "expired"],
+      default: "pending_payment",
     },
+    paymentCode: { type: String, unique: true, sparse: true },
+    paymentStatus: { type: String, enum: ["pending", "paid"], default: "pending" },
+    paidAt: Date, fulfillmentRevision: { type: Number, default: 0 },
+    refundStatus: { type: String, enum: ["not_applicable", "pending", "completed"], default: "not_applicable" },
+    refundAmount: { type: Number, default: 0 }, refundReference: String, refundedAt: Date,
+    refundedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     cancelAtPeriodEnd: { type: Boolean, default: false },
 
     shippingAddress: {
@@ -63,4 +69,5 @@ const userSubscriptionSchema = new mongoose.Schema(
   },
 );
 
+userSubscriptionSchema.index({ status: 1, nextDeliveries: 1 });
 module.exports = mongoose.model("UserSubscription", userSubscriptionSchema);

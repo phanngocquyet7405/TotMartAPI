@@ -4,6 +4,7 @@ const config = require("../config/environment");
 const usePrettyTransport = config.nodeEnv === "development";
 
 const logger = pino({
+  redact: { paths: ["req.headers.authorization", "req.headers.cookie", "res.headers['set-cookie']", "password", "token", "refreshToken", "email", "phone", "shippingAddress"], censor: "[REDACTED]" },
   level:
     process.env.LOG_LEVEL ||
     (config.nodeEnv === "production" ? "info" : "debug"),

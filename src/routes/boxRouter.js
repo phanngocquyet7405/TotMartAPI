@@ -18,6 +18,7 @@ router.post(
 );
 
 router.get("/get-all-box", boxController.getAllBoxes);
+router.get("/public/:_id", validateHandler.validate(validationSchemas.idParamSchema, "params"), boxController.getPublicBox);
 
 router.get(
   "/get-box-by-id/:_id",

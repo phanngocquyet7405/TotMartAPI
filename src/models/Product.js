@@ -5,7 +5,8 @@ const productSchema = new mongoose.Schema(
   {
     productId: { type: String, unique: true, required: true },
     name: { type: String, required: true },
-    price: { type: Number, required: true },
+    sku: { type: String, default: "" },
+    price: { type: Number, required: true, min: 1, validate: Number.isSafeInteger },
     description: { type: String },
     brand: { type: mongoose.Schema.Types.ObjectId, ref: "Brand" },
     category: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
@@ -17,7 +18,7 @@ const productSchema = new mongoose.Schema(
         public_id: { type: String, required: true },
       },
     ],
-    salePercent: { type: Number, default: 0 },
+    salePercent: { type: Number, default: 0, min: 0, max: 100 },
     details: { type: String },
     rate: { type: Number, default: 0 },
     slug: { type: String, slug: "name", unique: true },
@@ -25,7 +26,8 @@ const productSchema = new mongoose.Schema(
     selledNumber: { type: Number, default: 0 },
   },
   {
-    timestamps: true,
+    toJSON: { transform: (doc, ret) => { if (ret.description !== undefined) ret.description = require("../utils/safeHtml")(ret.description); return ret; } },
+    timestamps: true, optimisticConcurrency: true,
   },
 );
 productSchema.index({ brand: 1, category: 1 });

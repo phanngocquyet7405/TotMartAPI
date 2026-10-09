@@ -1,3 +1,6 @@
+const { prepaidPrice, planMonths } = require('../services/subscriptionService');
+const safeHtml = require('../utils/safeHtml');
+function present(template) { const obj = template.toObject ? template.toObject() : template; if (obj.boxId?.value !== undefined) Object.assign(obj, prepaidPrice(obj.boxId.value, obj.planType, obj.discountPercent)); obj.description = safeHtml(obj.description); obj.totalDeliveries = planMonths(obj.planType); obj.billingMode = 'prepaid_full'; return obj; }
 const SubscriptionTemplate = require("../models/SubscriptionTemplate");
 const boxModel = require("../models/Box");
 const { paginate } = require("../utils/pagination");
@@ -31,13 +34,15 @@ class SubscriptionTemplateController {
         description: validated.description || "",
         boxId: validated.boxId,
         planType: validated.planType,
-        basePrice: box.value,
+        basePrice: Math.round(box.value) * planMonths(validated.planType),
         discountPercent: validated.discountPercent || 0,
         gift: validated.gift || [],
       });
 
-      template.discountPrice =
-        template.basePrice * (1 - template.discountPercent / 100);
+      const priceBox = await boxModel.findById(template.boxId);
+      if (!priceBox) return res.status(409).json({success:false,message:'Hộp không còn tồn tại'});
+      Object.assign(template, prepaidPrice(priceBox.value, template.planType, template.discountPercent));
+      template.description = safeHtml(template.description);
       await template.save();
 
       await template.populate("boxId", "name value");
@@ -46,7 +51,7 @@ class SubscriptionTemplateController {
       res.status(201).json({
         success: true,
         message: "Subscription template created successfully",
-        data: template,
+        data: present(template),
       });
     } catch (error) {
       next(error);
@@ -72,7 +77,7 @@ class SubscriptionTemplateController {
       res.status(200).json({
         success: true,
         count: data.length,
-        data: data,
+        data: data.map(present),
         pagination: pagination,
       });
     } catch (error) {
@@ -90,7 +95,7 @@ class SubscriptionTemplateController {
         return res
           .status(404)
           .json({ success: false, message: "Subscription template not found" });
-      res.status(200).json({ success: true, data: template });
+      res.status(200).json({ success: true, data: present(template) });
     } catch (error) {
       next(error);
     }
@@ -137,8 +142,10 @@ class SubscriptionTemplateController {
       if (validated.isActive !== undefined)
         template.isActive = validated.isActive;
 
-      template.discountPrice =
-        template.basePrice * (1 - template.discountPercent / 100);
+      const priceBox = await boxModel.findById(template.boxId);
+      if (!priceBox) return res.status(409).json({success:false,message:'Hộp không còn tồn tại'});
+      Object.assign(template, prepaidPrice(priceBox.value, template.planType, template.discountPercent));
+      template.description = safeHtml(template.description);
       await template.save();
       await template.populate("boxId", "name value");
       await template.populate("gift.boxId", "name");
@@ -181,7 +188,7 @@ class SubscriptionTemplateController {
 
       res
         .status(200)
-        .json({ success: true, count: templates.length, data: templates });
+        .json({ success: true, count: templates.length, data: templates.map(present) });
     } catch (error) {
       next(error);
     }

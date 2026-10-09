@@ -7,6 +7,7 @@ const registerSchema = joi.object({
 });
 
 const loginSchema = joi.object({
+  rememberMe: joi.boolean().default(false),
   email: joi.string().email().required(),
   password: joi.string().min(6).required(),
 });
@@ -61,18 +62,21 @@ const orderStatusUpdateSchema = joi.object({
 const productSchema = joi.object({
   name: joi.string().min(3).max(100).required(),
   description: joi.string().max(500).required(),
-  price: joi.number().positive().required(),
+  price: joi.number().integer().positive().required(),
   category: joi.string().max(100).required(),
   stock: joi.number().integer().min(0).required(),
   details: joi.string().max(1000).optional(),
+  sku: joi.string().max(100).allow("").optional(),
+  salePercent: joi.number().min(0).max(100).optional(),
   brand: joi.string().max(100).required(),
 });
 
 const productUpdateSchema = joi
   .object({
+    existingImages: joi.string().custom((value, helpers) => { try { const ids = JSON.parse(value); return Array.isArray(ids) && ids.every(id => typeof id === "string") ? ids : helpers.error("any.invalid"); } catch { return helpers.error("any.invalid"); } }).optional(),
     name: joi.string().min(3).max(100).optional(),
     description: joi.string().max(500).optional(),
-    price: joi.number().positive().optional(),
+    price: joi.number().integer().positive().optional(),
     category: joi.string().max(100).optional(),
     stock: joi.number().integer().min(0).optional(),
     details: joi.string().max(1000).optional(),
@@ -262,6 +266,7 @@ const updateSubscriptionTemplateSchema = joi
 // User Subscription Schema (User subscribes to template)
 const subscribeToTemplateSchema = joi.object({
   templateId: joi.string().hex().length(24).required(),
+  expectedTotalAmount: joi.number().integer().positive().optional(),
   shippingAddress: joi
     .object({
       address: joi.string().max(255).required(),
@@ -280,7 +285,8 @@ const subscribeToTemplateSchema = joi.object({
 const checkoutSchema = joi.object({
   addressId: joi.string().hex().length(24).required(),
   paymentMethod: joi.string().valid("cod", "online").required(),
-  note: joi.string().max(500).optional(),
+  note: joi.string().max(500).allow("").optional(),
+  quoteFingerprint: joi.string().hex().length(64).optional(),
   couponCode: joi.string().trim().uppercase().min(3).max(30).optional(),
 });
 
@@ -290,13 +296,15 @@ const cartQuantityField = joi.number().integer().min(1).max(999);
 // PUT /carts/sync — FE gửi toàn bộ giỏ (localStorage), BE thay thế items.
 // items rỗng = xoá giỏ.
 const syncCartSchema = joi.object({
+  version: joi.number().integer().min(0).optional(),
   items: joi
     .array()
     .items(
       joi.object({
-        productId: cartProductIdField.required(),
+        productId: cartProductIdField.optional(),
+        boxId: cartProductIdField.optional(),
         quantity: cartQuantityField.required(),
-      }),
+      }).xor("productId", "boxId"),
     )
     .max(100)
     .required(),
@@ -356,7 +364,11 @@ const sepayWebhookSchema = joi
   })
   .unknown(true);
 
-module.exports = {
+const quoteSchema = joi.object({ items: syncCartSchema.extract("items"), couponCode: joi.string().trim().uppercase().min(3).max(30).optional() });
+const refundSchema = joi.object({ amount: joi.number().integer().min(0).required(), reference: joi.string().trim().min(3).max(150).required() });
+const cancelSchema = joi.object({ reason: joi.string().trim().max(500).allow("").optional() });
+const subscriptionCartSchema = joi.object({ subscriptionPlanId: joi.string().hex().length(24).required(), quantity: cartQuantityField.required() });
+module.exports = { subscriptionCartSchema, quoteSchema, refundSchema, cancelSchema,
   registerSchema,
   loginSchema,
   forgotPasswordSchema,

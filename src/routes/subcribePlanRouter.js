@@ -127,4 +127,11 @@ router.get('/my-today-deliveries',
     userSubscriptionController.getMyTodayDeliveries
 );
 
+const { idParamSchema, refundSchema } = require('../middleware/validationSchemas');
+const joi = require('joi');
+const admin = [authMiddleware.authMiddleware, authMiddleware.adminMiddleware];
+router.post('/fulfillments/:_id/dispatch', ...admin, validationHandler.validate(idParamSchema, 'params'), validationHandler.validate(joi.object({ trackingReference: joi.string().trim().min(3).max(150).required() })), userSubscriptionController.dispatchFulfillment);
+router.post('/fulfillments/:_id/deliver', ...admin, validationHandler.validate(idParamSchema, 'params'), userSubscriptionController.deliverFulfillment);
+router.get('/pending-refunds', ...admin, userSubscriptionController.pendingRefunds);
+router.post('/refunds/:_id/complete', ...admin, validationHandler.validate(idParamSchema, 'params'), validationHandler.validate(refundSchema), userSubscriptionController.completeRefund);
 module.exports = router;

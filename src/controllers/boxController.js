@@ -13,6 +13,9 @@ cloudinary.config({
 });
 
 class BoxController {
+  async getPublicBox(req, res, next) {
+    try { const now = new Date(); const box = await boxModel.findOne({ _id: req.params._id, isGift: false, validFrom: { $lte: now }, validTo: { $gte: now } }).select("name stock descriptions validFrom validTo products totalItem value images discountPercent"); if (!box) return res.status(404).json({ success: false, message: "Box not available" }); const data = box.toObject(); data.descriptions = require("../utils/safeHtml")(data.descriptions); res.json({ success: true, data }); } catch (err) { next(err); }
+  }
   async createBox(req, res, next) {
     try {
       const validated = req.validatedBody;

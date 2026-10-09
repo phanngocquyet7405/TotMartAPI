@@ -25,6 +25,10 @@ const server = async () => {
   }
   try {
     await connectDB();
+    require('./models/AuthSession');
+    // Do not accept checkouts before the unique indexes and collections exist.
+    // Index errors (including legacy duplicates) must fail startup visibly.
+    await Promise.all(Object.values(require('mongoose').models).map(model => model.init()));
 
     const PORT = config.port;
     const httpServer = app.listen(PORT, () => {
@@ -33,6 +37,7 @@ const server = async () => {
 
       startDeliveryScheduler();
       startOrderExpiryScheduler();
+      require("./jobs/notificationOutboxScheduler").start();
     });
 
     return httpServer;

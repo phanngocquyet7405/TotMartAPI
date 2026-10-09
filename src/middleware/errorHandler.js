@@ -38,6 +38,8 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
+  if (err.name === "VersionError") return res.status(409).json({ success: false, message: "Dữ liệu vừa được thay đổi. Vui lòng tải lại." });
+  if (err.name === "CastError") return res.status(400).json({ success: false, message: "ID không hợp lệ" });
   // JWT errors
   if (err.name === "JsonWebTokenError") {
     return res.status(401).json({
@@ -58,7 +60,8 @@ const errorHandler = (err, req, res, next) => {
   res.status(status).json({
     success: false,
     status,
-    message,
+    message: status >= 500 && process.env.NODE_ENV === "production" ? "Lỗi hệ thống. Vui lòng thử lại." : message,
+    requestId: req.id,
   });
 };
 

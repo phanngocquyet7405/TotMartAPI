@@ -1,3 +1,6 @@
+jest.mock('../src/models/Checkout', () => ({findOne: jest.fn(), findOneAndUpdate: jest.fn(), create: jest.fn()}));
+jest.mock('../src/models/PaymentEvent', () => ({findOneAndUpdate: jest.fn(), findById: jest.fn(), updateOne: jest.fn()}));
+jest.mock('../src/jobs/notificationOutboxScheduler', () => ({enqueue: jest.fn().mockResolvedValue(undefined), drain: jest.fn().mockResolvedValue(undefined)}));
 jest.mock("../src/models/Order", () => ({
   create: jest.fn(),
   find: jest.fn(),
@@ -35,7 +38,13 @@ const response = () => ({
 });
 let session;
 beforeEach(() => {
-  jest.clearAllMocks();
+  jest.resetAllMocks();
+  const Checkout = require('../src/models/Checkout'), Event = require('../src/models/PaymentEvent');
+  Checkout.findOne.mockReturnValue(query(null)); Checkout.findOneAndUpdate.mockResolvedValue(null); Checkout.create.mockResolvedValue([]);
+  const event = {_id:'event', state:'received', payloadHash:require('../src/services/checkoutLifecycle').requestHash({code:'TMART123',amount:200,account:process.env.SEPAY_BANK_ACCOUNT}),save:jest.fn().mockResolvedValue(undefined)};
+  Event.findOneAndUpdate.mockResolvedValue(event); Event.findById.mockReturnValue(query(event)); Event.updateOne.mockResolvedValue({});
+  Order.find.mockReturnValue(query([order('default')]));
+  require('../src/jobs/notificationOutboxScheduler').drain.mockResolvedValue(undefined);
   session = { withTransaction: async (fn) => fn(), endSession: jest.fn() };
   jest.spyOn(mongoose, "startSession").mockResolvedValue(session);
 });
@@ -48,7 +57,7 @@ test("checkout returns HTTP 201 with exactly the three payment fields after crea
     stock: 3,
     brand: { _id: "brand", ownerId: "merchant" },
   };
-  Product.findById.mockReturnValue({ populate: () => query(product) });
+  Product.findById.mockReturnValue({ populate: () => query(product), session: async () => product });
   User.findById.mockReturnValue(
     query({
       name: "Customer",

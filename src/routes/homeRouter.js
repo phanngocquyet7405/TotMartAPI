@@ -12,6 +12,7 @@ router.get('/health', (req, res) => {
 });
 
 router.post('/login', authLimiter, validationHandler.validate(validationSchemas.loginSchema), authController.login);
+router.post('/refresh', authLimiter, authController.refresh);
 router.post('/logout', auth.authMiddleware, authController.logout);
 router.post('/forgot-password',
     authLimiter,
