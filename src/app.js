@@ -41,7 +41,7 @@ app.use((req, res, next) => {
 
 const allowedOrigins = (process.env.CORS_ORIGINS || config.frontendUrl)
   .split(",")
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
   .filter(Boolean);
 
 app.use(
@@ -50,8 +50,12 @@ app.use(
       if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
+      // 403 thay vì 500: đây là yêu cầu bị từ chối, không phải lỗi máy chủ.
+      // Không in lại giá trị Origin do client gửi lên.
       return callback(
-        new Error(`Origin "${origin}" không được phép truy cập bởi CORS`),
+        Object.assign(new Error("Origin không được phép truy cập"), {
+          status: 403,
+        }),
       );
     },
     credentials: true,

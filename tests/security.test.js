@@ -1,4 +1,3 @@
-
 const request = require("supertest");
 const app = require("../src/app");
 
@@ -21,7 +20,8 @@ describe("Security hardening", () => {
       const res = await request(app)
         .get("/api/home/health")
         .set("Origin", "https://evil-site.example");
-      expect(res.status).toBe(500);
+      expect(res.status).toBe(403);
+      expect(res.headers["access-control-allow-origin"]).toBeUndefined();
     });
 
     test("allows a request from an origin in CORS_ORIGINS", async () => {
