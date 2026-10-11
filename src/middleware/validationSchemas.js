@@ -366,9 +366,10 @@ const sepayWebhookSchema = joi
 
 const quoteSchema = joi.object({ items: syncCartSchema.extract("items"), couponCode: joi.string().trim().uppercase().min(3).max(30).optional() });
 const refundSchema = joi.object({ amount: joi.number().integer().min(0).required(), reference: joi.string().trim().min(3).max(150).required() });
+const adjustStockSchema = joi.object({ delta: joi.number().integer().invalid(0).min(-1000000).max(1000000).required(), reason: joi.string().trim().max(200).allow("").optional() });
 const cancelSchema = joi.object({ reason: joi.string().trim().max(500).allow("").optional() });
 const subscriptionCartSchema = joi.object({ subscriptionPlanId: joi.string().hex().length(24).required(), quantity: cartQuantityField.required() });
-module.exports = { subscriptionCartSchema, quoteSchema, refundSchema, cancelSchema,
+module.exports = { adjustStockSchema, subscriptionCartSchema, quoteSchema, refundSchema, cancelSchema,
   registerSchema,
   loginSchema,
   forgotPasswordSchema,

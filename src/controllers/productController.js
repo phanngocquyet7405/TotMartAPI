@@ -6,6 +6,7 @@ const crypto = require('crypto');
 const safeHtml = require('../utils/safeHtml');
 const { fail } = require('../services/pricingService');
 const logger = require('../utils/logger');
+const { adjustStock } = require('../services/stockAdjustment');
 cloudinary.config({ cloud_name: process.env.CLOUDINARY_CLOUD_NAME, api_key: process.env.CLOUDINARY_API_KEY, api_secret: process.env.CLOUDINARY_API_SECRET, secure: true });
 async function uploadFiles(files, uploaded) {
   // Sequential uploads allow cleanup even when a later file fails.
@@ -41,18 +42,30 @@ class ProductController {
     try {
       const product = await Product.findById(req.params._id);
       if (!product) fail('Sản phẩm không tồn tại', 404);
-      const data = cleanData(req.validatedBody); await validateReferences(data);
+      const data = cleanData(req.validatedBody);
+      // Tồn kho chỉ đổi qua adjustStock (delta nguyên tử) hoặc luồng mua hàng; bỏ qua `stock` gửi lên
+      // để form cũ không ghi đè số tồn vừa thay đổi.
+      delete data.stock;
+      await validateReferences(data);
       const original = product.images.map(image => ({ url: image.url, public_id: image.public_id }));
       const submitted = req.validatedBody.existingImages;
       const retained = submitted === undefined ? original : original.filter(image => submitted.includes(image.public_id) || submitted.includes(image.url));
       // Legacy FE sent server-owned URLs. Unknown URLs/IDs never enter the stored image list.
       if (submitted?.some(id => !original.some(image => image.public_id === id || image.url === id))) fail('Danh sách ảnh không thuộc sản phẩm');
       await uploadFiles(req.files, uploaded);
-      product.set(data); product.instock = product.stock > 0; product.images = [...retained, ...uploaded];
+      product.set(data); product.images = [...retained, ...uploaded];
       await product.save(); saved = true;
       await cleanup(original.filter(image => !retained.some(keep => keep.public_id === image.public_id)));
       res.json({ success: true, data: product });
     } catch (err) { if (!saved) await cleanup(uploaded); next(err); }
+  }
+  async adjustStock(req, res, next) {
+    try {
+      const { delta, reason } = req.validatedBody;
+      const product = await adjustStock(Product, req.params._id, delta, { withInstock: true, notFoundMessage: 'Sản phẩm không tồn tại' });
+      logger.info({ userId: req.userId, productId: String(product._id), delta, stock: product.stock, reason: reason || undefined }, 'Product stock adjusted');
+      res.json({ success: true, message: 'Điều chỉnh tồn kho thành công', data: { _id: product._id, stock: product.stock, instock: product.instock } });
+    } catch (err) { next(err); }
   }
   async getAllProducts(req, res, next) {
     try {

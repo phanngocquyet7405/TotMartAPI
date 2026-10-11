@@ -3,6 +3,8 @@ const boxModel = require("../models/Box");
 const cloudinary = require("cloudinary").v2;
 const productModel = require("../models/Product");
 const { paginate } = require("../utils/pagination");
+const logger = require("../utils/logger");
+const { adjustStock } = require("../services/stockAdjustment");
 require("dotenv").config();
 
 cloudinary.config({
@@ -203,7 +205,7 @@ class BoxController {
 
       box.name = validated.name ?? box.name;
       box.descriptions = validated.descriptions ?? box.descriptions;
-      box.stock = validated.stock ?? box.stock;
+      // `stock` gửi lên bị bỏ qua: tồn kho chỉ đổi qua adjustStock (delta nguyên tử) hoặc luồng mua hàng.
       box.isGift = validated.isGift ?? box.isGift;
       box.discountPercent = validated.discountPercent ?? box.discountPercent;
       if (validated.validTo) {
@@ -334,6 +336,32 @@ class BoxController {
       });
     } catch (error) {
       next(error);
+    }
+  }
+
+  async adjustStock(req, res, next) {
+    try {
+      const { delta, reason } = req.validatedBody;
+      const box = await adjustStock(boxModel, req.params._id, delta, {
+        notFoundMessage: "Hộp không tồn tại",
+      });
+      logger.info(
+        {
+          userId: req.userId,
+          boxId: String(box._id),
+          delta,
+          stock: box.stock,
+          reason: reason || undefined,
+        },
+        "Box stock adjusted",
+      );
+      res.json({
+        success: true,
+        message: "Điều chỉnh tồn kho thành công",
+        data: { _id: box._id, stock: box.stock },
+      });
+    } catch (err) {
+      next(err);
     }
   }
 }

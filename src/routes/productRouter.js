@@ -29,6 +29,15 @@ router.put(
   productController.updateProduct,
 );
 
+router.patch(
+  "/adjust-stock/:_id",
+  authMiddleware.authMiddleware,
+  authMiddleware.adminMiddleware,
+  validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  validationHandler.validate(validationSchemas.adjustStockSchema),
+  productController.adjustStock,
+);
+
 router.delete(
   "/delete-product/:_id",
   authMiddleware.authMiddleware,

@@ -36,6 +36,15 @@ router.put(
   boxController.updateBox,
 );
 
+router.patch(
+  "/adjust-stock/:_id",
+  authMiddleware.authMiddleware,
+  authMiddleware.adminMiddleware,
+  validateHandler.validate(validationSchemas.idParamSchema, "params"),
+  validateHandler.validate(validationSchemas.adjustStockSchema),
+  boxController.adjustStock,
+);
+
 router.delete(
   "/delete-box/:_id",
   authMiddleware.authMiddleware,
