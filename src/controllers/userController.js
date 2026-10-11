@@ -2,6 +2,8 @@ const userModel = require("../models/User");
 const bcrypt = require("bcrypt");
 const cloudinary = require("cloudinary").v2;
 const { paginate } = require("../utils/pagination");
+const AuthSession = require("../models/AuthSession");
+const notificationController = require("./notificationController");
 require("dotenv").config();
 
 cloudinary.config({
@@ -11,7 +13,7 @@ cloudinary.config({
   secure: true,
 });
 class UserController {
-  async createUser(req, res) {
+  async createUser(req, res, next) {
     try {
       const validated = req.validatedBody;
       const hashedPassword = await bcrypt.hash(validated.password, 9);
@@ -26,11 +28,16 @@ class UserController {
         data: user,
       });
     } catch (error) {
-      res.status(500).json({ message: error });
+      if (error && error.code === 11000) {
+        return res
+          .status(409)
+          .json({ success: false, message: "Email đã được đăng ký" });
+      }
+      next(error);
     }
   }
 
-  async getAllUsers(req, res) {
+  async getAllUsers(req, res, next) {
     try {
       const { data, pagination } = await paginate(userModel, req.query, {
         isActive: true,
@@ -43,10 +50,10 @@ class UserController {
         pagination: pagination,
       });
     } catch (error) {
-      res.status(500).json({ message: error.message });
+      next(error);
     }
   }
-  async getUserById(req, res) {
+  async getUserById(req, res, next) {
     try {
       const user = await userModel.findById(req.params._id);
       if (!user) {
@@ -58,7 +65,7 @@ class UserController {
         data: user,
       });
     } catch (error) {
-      res.status(500).json({ message: error });
+      next(error);
     }
   }
 
@@ -131,14 +138,22 @@ class UserController {
 
   async lockUser(req, res, next) {
     try {
+      // Khóa tài khoản phải thu hồi toàn bộ truy cập đang có: tăng tokenVersion
+      // (token cũ vô hiệu vĩnh viễn, kể cả sau khi mở khóa), xóa phiên làm mới
+      // và đóng các luồng SSE đang mở.
       const user = await userModel.findByIdAndUpdate(
         req.params._id,
-        { isActive: false },
+        {
+          $set: { isActive: false, refreshToken: [] },
+          $inc: { tokenVersion: 1 },
+        },
         { new: true },
       );
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
+      await AuthSession.deleteMany({ userId: user._id });
+      notificationController.terminateUserStreams(user._id);
       res.status(200).json({
         success: true,
         message: "User locked successfully",

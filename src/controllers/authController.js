@@ -112,7 +112,7 @@ class AuthController {
   async resetPassword(req, res, next) {
     try {
       const { password } = req.body;
-      const token = req.query.token;
+      const token = req.body.token ?? req.query.token;
       if (typeof token !== "string" || !/^[a-f0-9]{40}$/.test(token)) {
         return res
           .status(400)

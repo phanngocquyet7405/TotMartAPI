@@ -3,7 +3,7 @@ const joi = require("joi");
 const registerSchema = joi.object({
   name: joi.string().min(3).max(100).required(),
   email: joi.string().email().required(),
-  password: joi.string().min(6).required(),
+  password: joi.string().min(8).max(128).required(),
 });
 
 const loginSchema = joi.object({
@@ -16,8 +16,10 @@ const forgotPasswordSchema = joi.object({
   email: joi.string().email().required(),
 });
 
+// Token nên gửi trong body (không đi vào URL/log); query ?token= vẫn được chấp nhận để tương thích.
 const resetPasswordSchema = joi.object({
-  password: joi.string().min(6).required(),
+  password: joi.string().min(8).max(128).required(),
+  token: joi.string().pattern(/^[a-f0-9]{40}$/).optional(),
 });
 
 const updateUserSchema = joi

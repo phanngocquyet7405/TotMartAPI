@@ -1,4 +1,5 @@
 require("dotenv").config();
+const { validateProductionEnv } = require("./environmentChecks");
 
 const config = {
   port: process.env.PORT || 3001,
@@ -39,6 +40,15 @@ if (config.nodeEnv === "production") {
     throw new Error(
       `Missing required environment variables in production: ${missing.join(", ")}`,
     );
+  }
+
+  const { errors, warnings } = validateProductionEnv(process.env);
+  if (errors.length > 0) {
+    throw new Error(`Invalid production environment: ${errors.join("; ")}`);
+  }
+  for (const warning of warnings) {
+    // Logger chưa khởi tạo ở đây (logger phụ thuộc config).
+    console.warn(`[config] ${warning}`);
   }
 }
 

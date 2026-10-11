@@ -1,13 +1,14 @@
 const logger = require("../utils/logger");
+const { redactUrl } = require("../utils/logRedaction");
 
 const errorHandler = (err, req, res, next) => {
   const status = err.status || err.statusCode || 500;
   const message = err.message || "Internal Server Error";
 
   if (status >= 500) {
-    logger.error({ err, path: req.originalUrl, method: req.method }, message);
+    logger.error({ err, path: redactUrl(req.originalUrl), method: req.method }, message);
   } else {
-    logger.warn({ path: req.originalUrl, method: req.method }, message);
+    logger.warn({ path: redactUrl(req.originalUrl), method: req.method }, message);
   }
 
   if (err.name === "ValidationError") {
