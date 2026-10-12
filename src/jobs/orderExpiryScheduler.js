@@ -1,3 +1,4 @@
+const { queueUnpaidRefund } = require('../services/paymentReconciliationService');
 const mongoose = require('mongoose');
 const cron = require('node-cron');
 const Checkout = require('../models/Checkout');
@@ -20,6 +21,7 @@ async function expireCheckout(code, now) {
         await order.save({ session }); await enqueue(order, 'order_cancelled', session);
       }
       if (checkout.subscriptionId) await Subscription.updateOne({ _id: checkout.subscriptionId, status: 'pending_payment' }, { status: 'cancelled', nextDeliveries: null }, { session });
+      await queueUnpaidRefund(checkout, session, 'Hết hạn checkout đã nhận tiền thiếu');
       await releaseCoupon(checkout, session); checkout.state = 'cancelled'; await checkout.save({ session });
     });
   } finally { await session.endSession(); }

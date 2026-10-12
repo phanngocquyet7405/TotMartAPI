@@ -12,12 +12,19 @@ const couponRouter = require("./couponRouter");
 const orderRouter = require("./orderRouter");
 // Health check endpoint
 function router(app) {
+  app.use("/api/admin/reconciliation", require("./reconciliationRouter"));
   app.use("/api/orders", require("./customerOrderRouter"));
   app.use("/api/users", userRouter);
   app.use("/api/products", productRouter);
   app.use("/api/brands", brandRouter);
   app.use("/api/categories", categoryRouter);
   app.use("/api/subcribe-plans", subcribePlanRouter);
+  app.get("/api/commerce-policy", (req, res) =>
+    res.json({
+      success: true,
+      data: require("../services/commercePolicy").policy(),
+    }),
+  );
   app.use("/api/carts", cartRouter);
   app.use("/api/checkout", checkOutRouter);
   app.use("/api/boxes", boxRouter);

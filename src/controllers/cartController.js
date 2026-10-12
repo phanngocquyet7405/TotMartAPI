@@ -1,4 +1,11 @@
 const Cart = require("../models/Cart");
+const commerce = require('../services/commercePolicy');
+const { buildQuote } = require('../services/pricingService');
+function protectVariants(cart, productId) {
+  const matches = cart.items.filter(i => String(i.productId?._id || i.productId) === String(productId));
+  if (matches.length > 1 || matches.some(i => { const g = commerce.giftFor(i.gift?.toObject ? i.gift.toObject() : i.gift); return g.wrap !== 'none' || g.message; }))
+    commerce.fail('Dùng PUT /carts/sync với lineId cho cart có gift variants', 409);
+}
 const SubscriptionTemplate = require("../models/SubscriptionTemplate");
 const Product = require("../models/Product");
 
@@ -10,10 +17,26 @@ function getUnitPrice(product) {
 }
 
 async function refreshTotal(cart) {
-  await cart.populate('items.productId', 'price salePercent');
-  await cart.populate('items.subscriptionPlanId', 'discountPrice');
-  await cart.populate('items.boxId', 'value');
-  cart.totalPrice = cart.items.reduce((sum, item) => sum + item.quantity * (item.boxId ? Math.round(item.boxId.value) : item.productId ? getUnitPrice(item.productId) : Math.round(item.subscriptionPlanId?.discountPrice || 0)), 0);
+  if (!cart.isSubscribeCart) {
+    if (!cart.items.length) { cart.totalPrice = 0; return; }
+    const quote = await buildQuote(cart.items);
+    cart.totalPrice = quote.subtotal + quote.giftFee;
+    return;
+  }
+  await cart.populate("items.productId", "price salePercent");
+  await cart.populate("items.subscriptionPlanId", "discountPrice");
+  await cart.populate("items.boxId", "value");
+  cart.totalPrice = cart.items.reduce(
+    (sum, item) =>
+      sum +
+      item.quantity *
+        (item.boxId
+          ? Math.round(item.boxId.value)
+          : item.productId
+            ? getUnitPrice(item.productId)
+            : Math.round(item.subscriptionPlanId?.discountPrice || 0)),
+    0,
+  );
 }
 class CartController {
   // PUT /carts/sync — thay thế TOÀN BỘ giỏ sản phẩm của user bằng danh sách FE gửi lên.
@@ -21,24 +44,40 @@ class CartController {
   async syncCart(req, res, next) {
     try {
       const { items, version } = req.validatedBody;
-      const filter = { userId: req.userId, isSubscribeCart: false }, merged = new Map();
-      for (const item of items) { const field = item.boxId ? 'boxId' : 'productId', id = item[field], key = field + ':' + id; const prev = merged.get(key); merged.set(key, { [field]: id, quantity: Math.min((prev?.quantity || 0) + item.quantity, 999) }); }
-      const cartItems = [], skipped = []; let totalPrice = 0;
-      for (const item of merged.values()) {
-        const doc = item.boxId ? await require('../models/Box').findById(item.boxId) : await Product.findById(item.productId);
-        if (!doc) { skipped.push(item.boxId || item.productId); continue; }
-        cartItems.push(item); totalPrice += item.quantity * (item.boxId ? Math.round(doc.value) : getUnitPrice(doc));
-      }
+      const filter = { userId: req.userId, isSubscribeCart: false };
+      const cartItems = commerce.normalizeLines(items), skipped = [];
+      const quote = cartItems.length ? await buildQuote(cartItems) : null;
+      const totalPrice = quote ? quote.subtotal + quote.giftFee : 0;
       const current = await Cart.findOne(filter);
-      if (version !== undefined && version !== (current?.__v || 0)) return res.status(409).json({ success: false, message: 'Giỏ đã thay đổi ở thiết bị khác. Vui lòng tải lại.' });
-      if (!cartItems.length) { await Cart.deleteOne(current ? { _id: current._id, __v: current.__v } : filter); return res.json({ success: true, data: null, skipped, version: 0 }); }
+      if (version !== undefined && version !== (current?.__v || 0))
+        return res.status(409).json({
+          success: false,
+          message: "Giỏ đã thay đổi ở thiết bị khác. Vui lòng tải lại.",
+        });
+      if (!cartItems.length) {
+        const deleted = current ? await Cart.deleteOne({ _id: current._id, __v: current.__v }) : null;
+        if (current && deleted.deletedCount !== 1) commerce.fail('Giỏ vừa thay đổi. Vui lòng tải lại.', 409);
+        return res.json({ success: true, data: null, skipped, version: 0 });
+      }
       let cart;
       if (current) {
-        cart = await Cart.findOneAndUpdate({ _id: current._id, __v: current.__v }, { $set: { items: cartItems, totalPrice }, $inc: { __v: 1 } }, { new: true });
-        if (!cart) return res.status(409).json({ success: false, message: 'Giỏ vừa thay đổi. Vui lòng tải lại.' });
-      } else cart = await Cart.create({ ...filter, items: cartItems, totalPrice });
+        cart = await Cart.findOneAndUpdate(
+          { _id: current._id, __v: current.__v },
+          { $set: { items: cartItems, totalPrice }, $inc: { __v: 1 } },
+          { new: true },
+        );
+        if (!cart)
+          return res.status(409).json({
+            success: false,
+            message: "Giỏ vừa thay đổi. Vui lòng tải lại.",
+          });
+      } else
+        cart = await Cart.create({ ...filter, items: cartItems, totalPrice });
       res.json({ success: true, data: cart, skipped, version: cart.__v });
-    } catch (err) { if (err.code === 11000) err.statusCode = 409; next(err); }
+    } catch (err) {
+      if (err.code === 11000) err.statusCode = 409;
+      next(err);
+    }
   }
 
   async addToCart(req, res, next) {
@@ -57,9 +96,14 @@ class CartController {
         const cart = await Cart.findOne({
           userId,
           isSubscribeCart: false,
-        }).populate("items.productId", "name price images salePercent stock instock")
-        .populate("items.boxId", "name value images stock");
+        })
+          .populate(
+            "items.productId",
+            "name price images salePercent stock instock",
+          )
+          .populate("items.boxId", "name value images stock");
         if (cart) {
+          protectVariants(cart, productId);
           const item = cart.items.find(
             (item) =>
               item.productId && item.productId._id.toString() === productId,
@@ -71,7 +115,7 @@ class CartController {
           }
           cart.totalPrice += quantity * getUnitPrice(product);
           await refreshTotal(cart);
-      await cart.save();
+          await cart.save();
           res.status(200).json({
             success: true,
             message: "Item added to cart successfully",
@@ -105,7 +149,10 @@ class CartController {
     try {
       const carts = await Cart.find()
         .populate("userId", "name email")
-        .populate("items.productId", "name price images salePercent stock instock")
+        .populate(
+          "items.productId",
+          "name price images salePercent stock instock",
+        )
         .populate("items.boxId", "name value images stock");
       res.status(200).json({
         success: true,
@@ -123,7 +170,10 @@ class CartController {
       const userId = req.userId || req.params._id;
       const cart = await Cart.findOne({ userId, isSubscribeCart: false })
         .populate("userId", "name email")
-        .populate("items.productId", "name price images salePercent stock instock")
+        .populate(
+          "items.productId",
+          "name price images salePercent stock instock",
+        )
         .populate("items.boxId", "name value images stock");
       res.status(200).json({
         success: true,
@@ -142,9 +192,14 @@ class CartController {
       const cart = await Cart.findOne({
         userId,
         isSubscribeCart: false,
-      }).populate("items.productId", "name price images salePercent stock instock")
+      })
+        .populate(
+          "items.productId",
+          "name price images salePercent stock instock",
+        )
         .populate("items.boxId", "name value images stock");
       if (cart) {
+        protectVariants(cart, productId);
         const item = cart.items.find(
           (item) =>
             item.productId && item.productId._id.toString() === productId,
@@ -155,7 +210,7 @@ class CartController {
           // Prevent negative price due to floating point or data inconsistency
           if (cart.totalPrice < 0) cart.totalPrice = 0;
           await refreshTotal(cart);
-      await cart.save();
+          await cart.save();
           res.status(200).json({
             success: true,
             message: "Item deleted from cart successfully",
@@ -193,9 +248,14 @@ class CartController {
       const cart = await Cart.findOne({
         userId,
         isSubscribeCart: false,
-      }).populate("items.productId", "name price images salePercent stock instock")
+      })
+        .populate(
+          "items.productId",
+          "name price images salePercent stock instock",
+        )
         .populate("items.boxId", "name value images stock");
       if (cart) {
+        protectVariants(cart, productId);
         const item = cart.items.find(
           (item) =>
             item.productId && item.productId._id.toString() === productId,
@@ -210,7 +270,7 @@ class CartController {
 
         if (cart.totalPrice < 0) cart.totalPrice = 0;
         await refreshTotal(cart);
-      await cart.save();
+        await cart.save();
         res.status(200).json({
           success: true,
           message: "Item updated in cart successfully",
@@ -251,7 +311,10 @@ class CartController {
         userId: req.userId,
         isSubscribeCart: true,
       })
-        .populate("items.productId", "name price images salePercent stock instock")
+        .populate(
+          "items.productId",
+          "name price images salePercent stock instock",
+        )
         .populate("items.boxId", "name value images stock")
         .populate("items.subscriptionPlanId", "name basePrice discountPrice");
 
@@ -271,7 +334,7 @@ class CartController {
           cart.items.push({ subscriptionPlanId, quantity });
         }
         await refreshTotal(cart);
-      await cart.save();
+        await cart.save();
         return res.status(200).json({
           success: true,
           message: "Item added to subscribe cart successfully",
@@ -301,7 +364,10 @@ class CartController {
       const userId = req.userId || req.params._id;
       const cart = await Cart.findOne({ userId, isSubscribeCart: true })
         .populate("userId", "name email")
-        .populate("items.productId", "name price images salePercent stock instock")
+        .populate(
+          "items.productId",
+          "name price images salePercent stock instock",
+        )
         .populate("items.boxId", "name value images stock")
         .populate("items.subscriptionPlanId", "name basePrice discountPrice");
       if (!cart) {
@@ -333,7 +399,10 @@ class CartController {
         userId: req.userId,
         isSubscribeCart: true,
       })
-        .populate("items.productId", "name price images salePercent stock instock")
+        .populate(
+          "items.productId",
+          "name price images salePercent stock instock",
+        )
         .populate("items.boxId", "name value images stock")
         .populate("items.subscriptionPlanId", "name basePrice discountPrice");
       if (cart) {
@@ -345,10 +414,11 @@ class CartController {
         if (subscribeItem) {
           cart.items.pull(subscribeItem);
           cart.totalPrice -=
-            subscribeItem.quantity * Math.round(subscribeItem.subscriptionPlanId.discountPrice); // Assuming basePrice is the price for the subscription plan
+            subscribeItem.quantity *
+            Math.round(subscribeItem.subscriptionPlanId.discountPrice); // Assuming basePrice is the price for the subscription plan
           if (cart.totalPrice < 0) cart.totalPrice = 0;
           await refreshTotal(cart);
-      await cart.save();
+          await cart.save();
           res.status(200).json({
             success: true,
             message: "Item deleted from subscribe cart successfully",
@@ -387,7 +457,10 @@ class CartController {
         userId: req.userId,
         isSubscribeCart: true,
       })
-        .populate("items.productId", "name price images salePercent stock instock")
+        .populate(
+          "items.productId",
+          "name price images salePercent stock instock",
+        )
         .populate("items.boxId", "name value images stock")
         .populate("items.subscriptionPlanId", "name basePrice discountPrice");
 
@@ -409,7 +482,7 @@ class CartController {
 
         if (cart.totalPrice < 0) cart.totalPrice = 0;
         await refreshTotal(cart);
-      await cart.save();
+        await cart.save();
         res.status(200).json({
           success: true,
           message: "Item updated in subscribe cart successfully",

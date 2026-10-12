@@ -159,8 +159,8 @@ describe("POST /api/checkout/sepay-webhook", () => {
         }),
       );
 
-    expect(res.status).toBe(422);
-    expect(res.body.message).toMatch(/underpayment/i);
+    expect(res.status).toBe(200);
+    expect(res.body.data.remainingAmount).toBe(10000);
 
     const order = await Order.findOne({ paymentCode });
     expect(order.paymentStatus).toBe("pending");
@@ -242,8 +242,9 @@ describe("POST /api/checkout/sepay-webhook", () => {
 
     const order = await Order.findOne({ paymentCode });
     expect(order.paymentStatus).toBe("paid");
-    expect(order.isOverpaid).toBe(true);
-    expect(order.overpaidAmount).toBe(50000);
+    expect(order.overpaidAmount).toBe(0);
+    const refund = await require('../src/models/ReceiptRefund').findOne({ purpose: 'surplus' });
+    expect(refund.amount).toBe(50000);
   });
 
   test("extracts order code correctly even with messy transfer content (case-insensitive, extra spaces)", async () => {

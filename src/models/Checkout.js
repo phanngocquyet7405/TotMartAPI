@@ -10,6 +10,8 @@ const schema = new mongoose.Schema({
   state: { type: String, enum: ['pending', 'paid', 'cancelled'], default: 'pending' },
   expiresAt: { type: Date, required: true }, couponCode: String,
   couponReleased: { type: Boolean, default: false }, paidReferenceCode: String,
+  paymentLedgerVersion: { type: Number, enum: [1, 2], default: 2 },
+  receivedAmount: { type: Number, default: 0, min: 0, validate: Number.isSafeInteger },
   overpaidAmount: { type: Number, default: 0 }, revision: { type: Number, default: 0 },
   // Kept after completion so a network retry returns the same checkout.
   result: { type: mongoose.Schema.Types.Mixed, required: true },

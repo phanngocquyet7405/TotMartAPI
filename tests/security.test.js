@@ -51,44 +51,62 @@ describe("Security hardening", () => {
     });
   });
 
-  describe("SePay webhook API-key auth", () => {
-    const validPayload = {
-      id: 1,
-      gateway: "TestBank",
-      transactionDate: new Date().toISOString(),
-      accountNumber: "0123456789",
-      content: "test",
-      transferType: "in",
-      transferAmount: 100000,
-      referenceCode: "REF-SECURITY-TEST",
-    };
-
-    test("rejects a webhook call with no Authorization header", async () => {
-      const res = await request(app)
-        .post("/api/checkout/sepay-webhook")
-        .send(validPayload);
-      expect(res.status).toBe(401);
+  describe("SePay webhook API-key auth (isolated, no database)", () => {
+    const express = require("express");
+    const sepayAuth = require("../src/middleware/sepayAuth");
+    let webhookApp, handler, previousKey;
+    beforeEach(() => {
+      previousKey = process.env.SEPAY_API_KEY;
+      process.env.SEPAY_API_KEY = "isolated-test-key";
+      webhookApp = express();
+      webhookApp.use(express.json());
+      handler = jest.fn((req, res) => res.sendStatus(204));
+      webhookApp.post(
+        "/api/checkout/sepay-webhook",
+        sepayAuth.verifyApiKey,
+        handler,
+      );
     });
-
-    test("rejects a webhook call with the wrong API key", async () => {
-      const res = await request(app)
-        .post("/api/checkout/sepay-webhook")
-        .set("Authorization", "Apikey wrong-key")
-        .send(validPayload);
-      expect(res.status).toBe(401);
+    afterEach(() => {
+      if (previousKey === undefined) delete process.env.SEPAY_API_KEY;
+      else process.env.SEPAY_API_KEY = previousKey;
     });
-
-    test("accepts the API key header format (passes auth, may still fail later validation without DB)", async () => {
-      const res = await request(app)
+    test.each([undefined, "Apikey wrong-key", "Apikey x"])(
+      "rejects header %j before handler",
+      async (header) => {
+        const call = request(webhookApp).post("/api/checkout/sepay-webhook");
+        if (header !== undefined) call.set("Authorization", header);
+        const res = await call.send({ id: 1 });
+        expect(res.status).toBe(401);
+        expect(res.body).toEqual({ success: false, message: "Unauthorized" });
+        expect(handler).not.toHaveBeenCalled();
+      },
+    );
+    test.each(["Apikey", "Bearer"])(
+      "accepts supported %s format exactly once",
+      async (scheme) => {
+        const res = await request(webhookApp)
+          .post("/api/checkout/sepay-webhook")
+          .set("Authorization", `${scheme} isolated-test-key`)
+          .send({ id: 1 });
+        expect(res.status).toBe(204);
+        expect(handler).toHaveBeenCalledTimes(1);
+      },
+    );
+    test("missing server key returns 500 and never enters handler", async () => {
+      delete process.env.SEPAY_API_KEY;
+      const res = await request(webhookApp)
         .post("/api/checkout/sepay-webhook")
-        .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
-        .send(validPayload);
-      // Không có DB nên có thể lỗi ở bước xử lý đơn hàng, nhưng chắc chắn
-      // KHÔNG được là 401 — nghĩa là bước xác thực API key đã pass.
-      expect(res.status).not.toBe(401);
+        .set("Authorization", "Apikey isolated-test-key")
+        .send({ id: 1 });
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({
+        success: false,
+        message: "Webhook is not configured",
+      });
+      expect(handler).not.toHaveBeenCalled();
     });
   });
-
   describe("Unknown routes", () => {
     test("returns a 404 JSON payload for an unregistered route", async () => {
       const res = await request(app).get("/api/does-not-exist");

@@ -49,7 +49,7 @@ test('cancelled checkout has no QR; a late transfer remains visible for reconcil
   const placed=await request(app).post('/api/checkout/check-out').set(auth(user)).send(body(user)), order=await Order.findOne();
   await request(app).post(`/api/checkout/cancel/${order._id}`).set(auth(user)).send({});
   const status=await request(app).get(`/api/checkout/order-status/${placed.body.data.orderCode}`).set(auth(user)); expect(status.body.data.payable).toBe(false); expect(status.body.data.qrUrl).toBeUndefined();
-  expect((await pay(placed.body.data.orderCode,placed.body.data.totalAmount)).status).toBe(409); expect((await Event.findOne()).state).toBe('not_payable');
+  expect((await pay(placed.body.data.orderCode,placed.body.data.totalAmount)).status).toBe(200); expect((await Event.findOne()).state).toBe('not_payable');
 });
 test('a box split across merchants holds the entire group when one component is short',async()=>{
   const {user,admin,product}=await fixture(), second=await createProduct(await createBrand()), box=await boxFor(product,[{productId:product._id,quantity:1},{productId:second._id,quantity:1}]);

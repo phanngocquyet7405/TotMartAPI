@@ -2,7 +2,7 @@ const Order = require("../models/Order");
 
 // Explicit customer fields exclude merchant and internal reconciliation data.
 const fields =
-  "orderId paymentCode products.name products.quantity products.unitPrice products.totalPrice status totalAmount shippingFee discountAmount shippingAddress paymentMethod paymentStatus createdAt deliveredAt cancelReason refundStatus";
+  "giftFee bulkDiscountAmount pricingPolicyVersion products.gift products.giftFee products.bulkDiscountAmount products.lineId products.boxId orderId paymentCode products.name products.quantity products.unitPrice products.totalPrice status totalAmount shippingFee discountAmount shippingAddress paymentMethod paymentStatus createdAt deliveredAt cancelReason refundStatus";
 
 exports.list = async (req, res, next) => {
   try {

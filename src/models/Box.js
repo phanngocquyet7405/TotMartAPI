@@ -1,6 +1,9 @@
 const mongoose = require("mongoose");
 const boxSchema = new mongoose.Schema(
   {
+    definitionVersion: { type: Number, default: 1, min: 1 },
+    obligationRevision: { type: Number, default: 0 },
+    archivedAt: { type: Date, default: null },
     name: { type: String, required: true },
     stock: { type: Number, required: true },
     descriptions: { type: String, required: true },
@@ -30,8 +33,14 @@ const boxSchema = new mongoose.Schema(
     discountPercent: { type: Number, default: 0 },
   },
   {
-    toJSON: { transform: (doc, ret) => { ret.descriptions = require("../utils/safeHtml")(ret.descriptions); return ret; } },
+    toJSON: {
+      transform: (doc, ret) => {
+        ret.descriptions = require("../utils/safeHtml")(ret.descriptions);
+        return ret;
+      },
+    },
     timestamps: true,
   },
 );
+boxSchema.index({ archivedAt: 1, isGift: 1, validTo: 1 });
 module.exports = mongoose.model("Box", boxSchema);

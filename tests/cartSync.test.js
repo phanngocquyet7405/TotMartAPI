@@ -101,10 +101,10 @@ describe("PUT /api/carts/sync", () => {
     });
     expect(cart.items).toHaveLength(1);
     expect(cart.items[0].quantity).toBe(3);
-    expect(cart.totalPrice).toBe(270000);
+    expect(cart.totalPrice).toBe(256500); // 270000 after sale, then 5% bulk
   });
 
-  test("skips products that no longer exist and reports them", async () => {
+  test("rejects missing products without silently dropping cart lines", async () => {
     const { user } = await createUser();
     const token = signToken(user);
     const brand = await createBrand();
@@ -116,13 +116,12 @@ describe("PUT /api/carts/sync", () => {
       { productId: ghostId, quantity: 1 },
     ]);
 
-    expect(res.status).toBe(200);
-    expect(res.body.skipped).toEqual([ghostId]);
+    expect(res.status).toBe(400);
     const cart = await Cart.findOne({
       userId: user._id,
       isSubscribeCart: false,
     });
-    expect(cart.items).toHaveLength(1);
+    expect(cart).toBeNull();
   });
 
   test("empty items clears the cart", async () => {

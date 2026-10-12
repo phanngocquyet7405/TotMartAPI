@@ -6,11 +6,27 @@ const errorHandler = (err, req, res, next) => {
   const message = err.message || "Internal Server Error";
 
   if (status >= 500) {
-    logger.error({ err, path: redactUrl(req.originalUrl), method: req.method }, message);
+    logger.error(
+      { err, path: redactUrl(req.originalUrl), method: req.method },
+      message,
+    );
   } else {
-    logger.warn({ path: redactUrl(req.originalUrl), method: req.method }, message);
+    logger.warn(
+      { path: redactUrl(req.originalUrl), method: req.method },
+      message,
+    );
   }
 
+  if (err.code === "INVALID_DELIVERY_ADDRESS") {
+    return res.status(422).json({
+      success: false,
+      status: 422,
+      code: err.code,
+      message: err.message,
+      fields: err.fields,
+      requestId: req.id,
+    });
+  }
   if (err.name === "ValidationError") {
     return res.status(400).json({
       success: false,
@@ -39,8 +55,15 @@ const errorHandler = (err, req, res, next) => {
     });
   }
 
-  if (err.name === "VersionError") return res.status(409).json({ success: false, message: "Dữ liệu vừa được thay đổi. Vui lòng tải lại." });
-  if (err.name === "CastError") return res.status(400).json({ success: false, message: "ID không hợp lệ" });
+  if (err.name === "VersionError")
+    return res
+      .status(409)
+      .json({
+        success: false,
+        message: "Dữ liệu vừa được thay đổi. Vui lòng tải lại.",
+      });
+  if (err.name === "CastError")
+    return res.status(400).json({ success: false, message: "ID không hợp lệ" });
   // JWT errors
   if (err.name === "JsonWebTokenError") {
     return res.status(401).json({
@@ -61,7 +84,10 @@ const errorHandler = (err, req, res, next) => {
   res.status(status).json({
     success: false,
     status,
-    message: status >= 500 && process.env.NODE_ENV === "production" ? "Lỗi hệ thống. Vui lòng thử lại." : message,
+    message:
+      status >= 500 && process.env.NODE_ENV === "production"
+        ? "Lỗi hệ thống. Vui lòng thử lại."
+        : message,
     requestId: req.id,
   });
 };

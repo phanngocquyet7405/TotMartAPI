@@ -292,6 +292,8 @@ const checkoutSchema = joi.object({
   couponCode: joi.string().trim().uppercase().min(3).max(30).optional(),
 });
 
+const { giftSchema } = require('../services/commercePolicy');
+const cartLineIdField = joi.string().hex().length(64);
 const cartProductIdField = joi.string().hex().length(24);
 const cartQuantityField = joi.number().integer().min(1).max(999);
 
@@ -305,6 +307,8 @@ const syncCartSchema = joi.object({
       joi.object({
         productId: cartProductIdField.optional(),
         boxId: cartProductIdField.optional(),
+        gift: giftSchema.optional(),
+        lineId: cartLineIdField.optional(),
         quantity: cartQuantityField.required(),
       }).xor("productId", "boxId"),
     )
@@ -351,17 +355,17 @@ const updateCouponSchema = joi
 
 const sepayWebhookSchema = joi
   .object({
-    id: joi.number().required(),
+    id: joi.number().integer().min(0).max(Number.MAX_SAFE_INTEGER).required(),
     gateway: joi.string().required(),
     transactionDate: joi.string().required(),
     accountNumber: joi.string().required(),
     code: joi.string().allow(null).optional(),
     content: joi.string().allow("").required(),
     transferType: joi.string().valid("in", "out").required(),
-    transferAmount: joi.number().positive().required(),
+    transferAmount: joi.number().integer().min(1).max(Number.MAX_SAFE_INTEGER).required(),
     accumulated: joi.number().optional(),
     subAccount: joi.string().allow(null).optional(),
-    referenceCode: joi.string().required(),
+    referenceCode: joi.string().trim().min(1).max(150).required(),
     description: joi.string().allow("").optional(),
   })
   .unknown(true);

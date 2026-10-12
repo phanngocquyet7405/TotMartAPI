@@ -1,4 +1,4 @@
-const { get } = require("mongoose");
+const { changeDefinition } = require("../services/boxDefinitionService");
 const boxModel = require("../models/Box");
 const cloudinary = require("cloudinary").v2;
 const productModel = require("../models/Product");
@@ -16,7 +16,29 @@ cloudinary.config({
 
 class BoxController {
   async getPublicBox(req, res, next) {
-    try { const now = new Date(); const box = await boxModel.findOne({ _id: req.params._id, isGift: false, validFrom: { $lte: now }, validTo: { $gte: now } }).select("name stock descriptions validFrom validTo products totalItem value images discountPercent"); if (!box) return res.status(404).json({ success: false, message: "Box not available" }); const data = box.toObject(); data.descriptions = require("../utils/safeHtml")(data.descriptions); res.json({ success: true, data }); } catch (err) { next(err); }
+    try {
+      const now = new Date();
+      const box = await boxModel
+        .findOne({
+          _id: req.params._id,
+          archivedAt: null,
+          isGift: false,
+          validFrom: { $lte: now },
+          validTo: { $gte: now },
+        })
+        .select(
+          "name stock descriptions validFrom validTo products totalItem value images discountPercent",
+        );
+      if (!box)
+        return res
+          .status(404)
+          .json({ success: false, message: "Box not available" });
+      const data = box.toObject();
+      data.descriptions = require("../utils/safeHtml")(data.descriptions);
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
   }
   async createBox(req, res, next) {
     try {
@@ -115,7 +137,7 @@ class BoxController {
       const { data, pagination } = await paginate(
         boxModel,
         req.query,
-        {},
+        { archivedAt: null },
         { sort: { createdAt: -1 } },
       );
 
@@ -132,8 +154,14 @@ class BoxController {
 
   async getBoxById(req, res, next) {
     try {
-      const box = await boxModel.findById(req.params._id);
-      if (!box) return res.status(404).json({ success: false, message: "Box not found" });
+      const box = await boxModel.findOne({
+        _id: req.params._id,
+        archivedAt: null,
+      });
+      if (!box)
+        return res
+          .status(404)
+          .json({ success: false, message: "Box not found" });
       res.status(200).json({
         success: true,
         message: "Box retrieved successfully",
@@ -145,144 +173,65 @@ class BoxController {
   }
 
   async updateBox(req, res, next) {
+    const uploaded = [];
+    let committed = false;
     try {
-      const { _id } = req.params;
-      const validated = req.validatedBody;
-
-      const box = await boxModel.findById(_id);
-      if (!box) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Box not found" });
-      }
-
-      if (req.files && req.files.length > 0) {
-        const uploadResults = await Promise.all(
-          req.files.map((file) => {
-            return new Promise((resolve, reject) => {
-              const stream = cloudinary.uploader.upload_stream(
-                {
-                  folder: "Box Products/" + (validated.name || box.name),
-                  resource_type: "image",
-                  format: "webp",
-                  transformation: [
-                    { width: 1024, crop: "limit" },
-                    { quality: "auto" },
-                  ],
-                },
-                (error, result) => {
-                  if (error) return reject(error);
-                  resolve({
+      // Upload outside MongoDB transaction: transaction callback may run again.
+      // Sequential uploads let us track successful assets even if a later upload fails.
+      for (const file of req.files || []) {
+        const image = await new Promise((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              folder: "Box Products/" + req.params._id,
+              resource_type: "image",
+              format: "webp",
+              transformation: [
+                { width: 1024, crop: "limit" },
+                { quality: "auto" },
+              ],
+            },
+            (error, result) =>
+              error
+                ? reject(error)
+                : resolve({
                     url: result.secure_url,
                     public_id: result.public_id,
-                  });
-                },
-              );
-              stream.on("error", reject);
-              stream.write(file.buffer);
-              stream.end();
-            });
-          }),
-        );
-
-        box.images.push(...uploadResults);
-      }
-
-      // Retain only existing server-owned images; never trust submitted URLs.
-      if (validated.existingImages !== undefined) {
-        const retained = new Set(validated.existingImages.map((image) => image.public_id));
-        const uploadedCount = req.files?.length || 0;
-        const originalCount = box.images.length - uploadedCount;
-        box.images = box.images.filter((image, index) =>
-          index >= originalCount || retained.has(image.public_id));
-      }
-      if (validated.validFrom) box.validFrom = validated.validFrom;
-      const nextFrom = validated.validFrom || box.validFrom;
-      const nextTo = validated.validTo || box.validTo;
-      if (new Date(nextFrom) > new Date(nextTo)) {
-        return res.status(400).json({ success: false, message: "End date must follow start date" });
-      }
-
-      box.name = validated.name ?? box.name;
-      box.descriptions = validated.descriptions ?? box.descriptions;
-      // `stock` gửi lên bị bỏ qua: tồn kho chỉ đổi qua adjustStock (delta nguyên tử) hoặc luồng mua hàng.
-      box.isGift = validated.isGift ?? box.isGift;
-      box.discountPercent = validated.discountPercent ?? box.discountPercent;
-      if (validated.validTo) {
-        box.validTo = new Date(validated.validTo);
-      }
-
-      if (validated.products !== undefined) {
-        if (validated.products.length === 0) {
-          box.products = [];
-        } else {
-          const productIds = validated.products.map((p) => p.productId);
-          const productDocs = await productModel.find({
-            _id: { $in: productIds },
-          });
-          const productMap = new Map(
-            productDocs.map((doc) => [doc._id.toString(), doc]),
+                  }),
           );
-
-          box.products = validated.products
-            .map((item) => {
-              const product = productMap.get(item.productId.toString());
-              if (!product) return null;
-              return {
-                productId: product._id,
-                quantity: item.quantity,
-                price: product.price,
-                name: product.name,
-              };
-            })
-            .filter(Boolean);
-        }
+          stream.on("error", reject);
+          stream.end(file.buffer);
+        });
+        uploaded.push(image);
       }
-
-      box.totalItem = box.products.length;
-      const subtotal = box.products.reduce(
-        (acc, item) => acc + item.price * item.quantity,
-        0,
-      );
-      box.value =
-        box.discountPercent > 0
-          ? subtotal * (1 - box.discountPercent / 100)
-          : subtotal;
-
-      await box.save();
-      res.status(200).json({
+      const box = await changeDefinition(req.params._id, req.validatedBody, {
+        uploadedImages: uploaded,
+      });
+      committed = true;
+      res.json({
         success: true,
         message: "Box updated successfully",
         data: box,
       });
     } catch (error) {
+      for (const image of committed ? [] : uploaded) {
+        await cloudinary.uploader
+          .destroy(image.public_id)
+          .catch((err) =>
+            logger.error(
+              { err, publicId: image.public_id },
+              "New Box image cleanup failed",
+            ),
+          );
+      }
       next(error);
     }
   }
 
   async deleteBox(req, res, next) {
     try {
-      const foundBox = await boxModel.findById(req.params._id);
-      if (!foundBox) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Box not found" });
-      }
-
-      // [FIX]: Tránh xóa theo prefix Name (chống lỗi khi admin đổi tên). Xóa theo public_id.
-      if (foundBox.images && foundBox.images.length > 0) {
-        for (const img of foundBox.images) {
-          if (img.public_id) {
-            await cloudinary.uploader.destroy(img.public_id);
-          }
-        }
-      }
-
-      await boxModel.findByIdAndDelete(req.params._id);
-      return res.status(200).json({
-        success: true,
-        message: "Box deleted successfully",
-      });
+      await changeDefinition(req.params._id, {}, { archive: true });
+      // Keep existing images: historical snapshots still reference them.
+      res.json({ success: true, message: "Box archived successfully" });
     } catch (error) {
       next(error);
     }
@@ -290,7 +239,10 @@ class BoxController {
 
   async getProductsInBox(req, res, next) {
     try {
-      const box = await boxModel.findById(req.params._id);
+      const box = await boxModel.findOne({
+        _id: req.params._id,
+        archivedAt: null,
+      });
       if (!box) {
         return res.status(404).json({
           success: false,
@@ -319,12 +271,16 @@ class BoxController {
 
   async getBoxOfferDicountCoupons(req, res, next) {
     try {
-      const discountBox = await boxModel.find({ discountPercent: { $gt: 0 } });
+      const discountBox = await boxModel.find({
+        archivedAt: null,
+        discountPercent: { $gt: 0 },
+      });
       const newBox = await boxModel.find({
+        archivedAt: null,
         isGift: true,
         createdAt: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
       });
-      const giftBox = await boxModel.find({ isGift: true });
+      const giftBox = await boxModel.find({ archivedAt: null, isGift: true });
       res.status(200).json({
         success: true,
         message: "Discount boxes retrieved successfully",

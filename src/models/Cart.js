@@ -12,6 +12,8 @@ const cartSchema = new mongoose.Schema(
         },
         boxId: { type: mongoose.Schema.Types.ObjectId, ref: "Box" },
         quantity: { type: Number },
+        lineId: String,
+        gift: { wrap: { type: String, enum: ['none', 'classic', 'eco', 'premium'], default: 'none' }, message: { type: String, maxlength: 500, default: '' } },
       },
     ],
     totalPrice: { type: Number, required: true },

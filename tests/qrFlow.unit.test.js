@@ -1,6 +1,18 @@
-jest.mock('../src/models/Checkout', () => ({findOne: jest.fn(), findOneAndUpdate: jest.fn(), create: jest.fn()}));
-jest.mock('../src/models/PaymentEvent', () => ({findOneAndUpdate: jest.fn(), findById: jest.fn(), updateOne: jest.fn()}));
-jest.mock('../src/jobs/notificationOutboxScheduler', () => ({enqueue: jest.fn().mockResolvedValue(undefined), drain: jest.fn().mockResolvedValue(undefined)}));
+jest.mock('../src/services/paymentReconciliationService', () => ({ receiveWebhook: jest.fn() }));
+jest.mock("../src/models/Checkout", () => ({
+  findOne: jest.fn(),
+  findOneAndUpdate: jest.fn(),
+  create: jest.fn(),
+}));
+jest.mock("../src/models/PaymentEvent", () => ({
+  findOneAndUpdate: jest.fn(),
+  findById: jest.fn(),
+  updateOne: jest.fn(),
+}));
+jest.mock("../src/jobs/notificationOutboxScheduler", () => ({
+  enqueue: jest.fn().mockResolvedValue(undefined),
+  drain: jest.fn().mockResolvedValue(undefined),
+}));
 jest.mock("../src/models/Order", () => ({
   create: jest.fn(),
   find: jest.fn(),
@@ -12,6 +24,7 @@ jest.mock("../src/models/Cart", () => ({
 }));
 jest.mock("../src/models/User", () => ({ findById: jest.fn() }));
 jest.mock("../src/models/Product", () => ({
+  find: jest.fn(),
   findById: jest.fn(),
   findOneAndUpdate: jest.fn(),
   findByIdAndUpdate: jest.fn(),
@@ -39,12 +52,28 @@ const response = () => ({
 let session;
 beforeEach(() => {
   jest.resetAllMocks();
-  const Checkout = require('../src/models/Checkout'), Event = require('../src/models/PaymentEvent');
-  Checkout.findOne.mockReturnValue(query(null)); Checkout.findOneAndUpdate.mockResolvedValue(null); Checkout.create.mockResolvedValue([]);
-  const event = {_id:'event', state:'received', payloadHash:require('../src/services/checkoutLifecycle').requestHash({code:'TMART123',amount:200,account:process.env.SEPAY_BANK_ACCOUNT}),save:jest.fn().mockResolvedValue(undefined)};
-  Event.findOneAndUpdate.mockResolvedValue(event); Event.findById.mockReturnValue(query(event)); Event.updateOne.mockResolvedValue({});
-  Order.find.mockReturnValue(query([order('default')]));
-  require('../src/jobs/notificationOutboxScheduler').drain.mockResolvedValue(undefined);
+  const Checkout = require("../src/models/Checkout"),
+    Event = require("../src/models/PaymentEvent");
+  Checkout.findOne.mockReturnValue(query(null));
+  Checkout.findOneAndUpdate.mockResolvedValue(null);
+  Checkout.create.mockResolvedValue([]);
+  const event = {
+    _id: "event",
+    state: "received",
+    payloadHash: require("../src/services/checkoutLifecycle").requestHash({
+      code: "TMART123",
+      amount: 200,
+      account: process.env.SEPAY_BANK_ACCOUNT,
+    }),
+    save: jest.fn().mockResolvedValue(undefined),
+  };
+  Event.findOneAndUpdate.mockResolvedValue(event);
+  Event.findById.mockReturnValue(query(event));
+  Event.updateOne.mockResolvedValue({});
+  Order.find.mockReturnValue(query([order("default")]));
+  require("../src/jobs/notificationOutboxScheduler").drain.mockResolvedValue(
+    undefined,
+  );
   session = { withTransaction: async (fn) => fn(), endSession: jest.fn() };
   jest.spyOn(mongoose, "startSession").mockResolvedValue(session);
 });
@@ -57,11 +86,24 @@ test("checkout returns HTTP 201 with exactly the three payment fields after crea
     stock: 3,
     brand: { _id: "brand", ownerId: "merchant" },
   };
-  Product.findById.mockReturnValue({ populate: () => query(product), session: async () => product });
+  Product.find.mockReturnValue({ populate: () => query([product]) });
+  Product.findById.mockReturnValue({
+    populate: () => query(product),
+    session: async () => product,
+  });
   User.findById.mockReturnValue(
     query({
       name: "Customer",
-      addresses: { id: () => ({ phone: "0123", address: "Street" }) },
+      email: "customer@example.com",
+      addresses: {
+        id: () => ({
+          phone: "0912345678",
+          address: "12 Nguyen Trai",
+          district: "Quan 1",
+          city: "Ho Chi Minh",
+          country: "VN",
+        }),
+      },
     }),
   );
   Cart.findOne.mockReturnValue(
@@ -118,46 +160,6 @@ function webhook() {
     },
   };
 }
-test("multi-merchant payment stores unique reference once and marks both children paid", async () => {
-  const orders = [order("a"), order("b")];
-  Order.exists.mockReturnValue(query(null));
-  Order.find.mockReturnValue(query(orders));
-  Product.findOneAndUpdate.mockResolvedValue({ stock: 2 });
-  const res = response();
-  await controller.sepayWebhook(webhook(), res);
-  expect(res.json).toHaveBeenCalledWith({ success: true });
-  expect(orders.map((o) => o.paymentStatus)).toEqual(["paid", "paid"]);
-  expect(orders.filter((o) => o.paidReferenceCode === "REF")).toHaveLength(1);
-  expect(orders.every((o) => o.paidAt instanceof Date)).toBe(true);
-});
-test("replayed reference does not deduct inventory", async () => {
-  Order.exists.mockReturnValue(query({ _id: "a" }));
-  const res = response();
-  await controller.sepayWebhook(webhook(), res);
-  expect(Product.findOneAndUpdate).not.toHaveBeenCalled();
-  expect(res.json).toHaveBeenCalledWith({
-    success: true,
-    message: "Payment already processed",
-  });
-});
-test.each(["cancelled", "cod"])(
-  "%s cannot be paid/reserved through online webhook",
-  async (kind) => {
-    Order.exists.mockReturnValue(query(null));
-    Order.find.mockReturnValue(
-      query([
-        order(
-          "a",
-          kind === "cod" ? { paymentMethod: "cod" } : { status: "cancelled" },
-        ),
-      ]),
-    );
-    const res = response();
-    await controller.sepayWebhook(webhook(), res);
-    expect(res.status).toHaveBeenCalledWith(409);
-    expect(Product.findOneAndUpdate).not.toHaveBeenCalled();
-  },
-);
 test("partial reservation is restored before a paid order is put on hold", async () => {
   const item = order("a", {
     products: [
@@ -170,8 +172,8 @@ test("partial reservation is restored before a paid order is put on hold", async
   Product.findOneAndUpdate
     .mockResolvedValueOnce({ stock: 2 })
     .mockResolvedValueOnce(null);
-  const res = response();
-  await controller.sepayWebhook(webhook(), res);
+  item.paymentStatus = 'paid';
+  await require('../src/services/inventoryService').reserveOrder(item, session);
   expect(Product.findByIdAndUpdate).toHaveBeenCalledWith(
     "first",
     { $inc: { stock: 1 }, instock: true },
@@ -215,21 +217,22 @@ test("customer detail preserves shipping status and reports aggregate paid statu
     },
   });
 });
-test("underpayment never marks an order paid or deducts stock", async () => {
-  const pending = order("a", { totalAmount: 300 });
-  Order.exists.mockReturnValue(query(null));
-  Order.find.mockReturnValue(query([pending]));
-  const res = response();
-  await controller.sepayWebhook(webhook(), res);
-  expect(res.status).toHaveBeenCalledWith(422);
-  expect(pending.paymentStatus).toBe("pending");
-  expect(Product.findOneAndUpdate).not.toHaveBeenCalled();
+
+test('webhook delegates receipt handling and acknowledges durable result', async () => {
+  const service = require('../src/services/paymentReconciliationService');
+  service.receiveWebhook.mockResolvedValue({ eventId: 'event', state: 'underpaid' });
+  const req = webhook(), res = response(), next = jest.fn();
+  await controller.sepayWebhook(req, res, next);
+  expect(service.receiveWebhook).toHaveBeenCalledWith(req.validatedBody);
+  expect(res.status).toHaveBeenCalledWith(200);
+  expect(next).not.toHaveBeenCalled();
 });
-test("unexpected receiving account is rejected before touching orders", async () => {
-  const req = webhook();
-  req.validatedBody.accountNumber = "wrong-account";
-  const res = response();
-  await controller.sepayWebhook(req, res);
-  expect(res.status).toHaveBeenCalledWith(400);
-  expect(Order.find).not.toHaveBeenCalled();
+test('webhook errors reach centralized handler', async () => {
+  const service = require('../src/services/paymentReconciliationService');
+  const error = Object.assign(new Error('Unexpected account'), { statusCode: 400 });
+  service.receiveWebhook.mockRejectedValue(error);
+  const res = response(), next = jest.fn();
+  await controller.sepayWebhook(webhook(), res, next);
+  expect(next).toHaveBeenCalledWith(error);
+  expect(res.json).not.toHaveBeenCalled();
 });

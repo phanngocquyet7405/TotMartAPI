@@ -13,6 +13,7 @@ const server = async () => {
     "CLOUDINARY_API_KEY",
     "CLOUDINARY_API_SECRET",
     "SEPAY_API_KEY",
+    "SEPAY_BANK_ACCOUNT",
   ];
 
   const missingVars = requiredEnvVars.filter((envVar) => !process.env[envVar]);
@@ -25,16 +26,31 @@ const server = async () => {
   }
   try {
     await connectDB();
-    require('./models/AuthSession');
+    if (
+      (await require("./models/Checkout").exists({
+        paymentLedgerVersion: { $exists: false },
+      })) ||
+      (await require("./models/PaymentEvent").exists({
+        paymentLedgerVersion: { $exists: false },
+      }))
+    ) {
+      throw new Error(
+        "Run and review payment-ledger migration before accepting traffic",
+      );
+    }
+    require("./models/AuthSession");
     // Do not accept checkouts before the unique indexes and collections exist.
     // Index errors (including legacy duplicates) must fail startup visibly.
-    await Promise.all(Object.values(require('mongoose').models).map(model => model.init()));
+    await Promise.all(
+      Object.values(require("mongoose").models).map((model) => model.init()),
+    );
 
     const PORT = config.port;
     const httpServer = app.listen(PORT, () => {
       logger.info(`Server running on http://localhost:${PORT}/api/home/health`);
       logger.info(`Environment: ${config.nodeEnv}`);
 
+      require("./jobs/paymentReconciliationScheduler").start();
       startDeliveryScheduler();
       startOrderExpiryScheduler();
       require("./jobs/notificationOutboxScheduler").start();
