@@ -272,7 +272,8 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
     giftFee = commerce.sum(lines.map((l) => l.giftFee));
   const discount = await couponDiscount(couponCode, subtotal, session, claim);
   commerce.safeMoney(discount.discountAmount);
-  const shippingFee = subtotal > 0 && subtotal < 500000 ? 30000 : 0;
+  // Delivery is quoted separately; zero here does NOT promise free delivery.
+  const shippingFee = 0;
   const totalAmount = commerce.sum([
     subtotal - discount.discountAmount,
     shippingFee,
@@ -303,6 +304,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
     subtotal,
     giftFee,
     shippingFee,
+    shippingMode: "separate",
     ...discount,
     totalAmount,
     fingerprint,

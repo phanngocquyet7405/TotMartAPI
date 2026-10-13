@@ -38,9 +38,9 @@ test('retry creates one checkout, consumes coupon once, rejects key reuse with c
 test('box checkout uses box price, reserves components, and refunds stock on cancellation',async()=>{
   const {user,product}=await fixture(), box=await boxFor(product);
   const synced=await request(app).put('/api/carts/sync').set(auth(user)).send({items:[{boxId:String(box._id),quantity:2}],version:0}); expect(synced.status).toBe(200);
-  const quote=await request(app).post('/api/checkout/quote').set(auth(user)).send({items:[{boxId:String(box._id),quantity:2}]}); expect(quote.body.data.totalAmount).toBe(430000);
+  const quote=await request(app).post('/api/checkout/quote').set(auth(user)).send({items:[{boxId:String(box._id),quantity:2}]}); expect(quote.body.data.totalAmount).toBe(400000);
   const placed=await request(app).post('/api/checkout/check-out').set(auth(user)).send({...body(user),quoteFingerprint:quote.body.data.fingerprint}); expect(placed.status).toBe(201);
-  expect((await pay(placed.body.data.orderCode,430000)).status).toBe(200); expect((await Product.findById(product._id)).stock).toBe(8); expect((await Box.findById(box._id)).stock).toBe(8);
+  expect((await pay(placed.body.data.orderCode,400000)).status).toBe(200); expect((await Product.findById(product._id)).stock).toBe(8); expect((await Box.findById(box._id)).stock).toBe(8);
   const order=await Order.findOne(); expect((await request(app).post(`/api/checkout/cancel/${order._id}`).set(auth(user)).send({reason:'Test cancellation'})).status).toBe(200);
   expect((await Product.findById(product._id)).stock).toBe(10); expect((await Box.findById(box._id)).stock).toBe(10);
 });

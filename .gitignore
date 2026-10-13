@@ -34,3 +34,7 @@ Thumbs.db
 .cache/
 verification-*.log
 audit-*.json
+
+.env.*
+!.env.example
+!.env.staging.example

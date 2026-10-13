@@ -111,6 +111,7 @@ class CheckOutController {
                 totalAmount: subtotal - discounts[index] + shippingFee + giftFee,
                 giftFee, bulkDiscountAmount, pricingPolicyVersion: quote.policyVersion,
                 shippingFee,
+                shippingMode: quote.shippingMode,
                 discountAmount: discounts[index],
                 couponCode: quote.couponCode,
                 shippingAddress,
@@ -196,15 +197,15 @@ class CheckOutController {
         String(checkout?.userId || orders[0].userId) !== req.userId
       )
         fail("Không có quyền xem đơn hàng này", 403);
-      const paid =
-        checkout?.state === "paid" ||
-        (orders.length > 0 && orders.every((o) => o.paymentStatus === "paid"));
-      const invalid =
-        checkout?.state === "cancelled" ||
-        (checkout?.expiresAt <= new Date() && !paid) ||
-        orders.some((o) => ["cancelled", "returned"].includes(o.status));
-      const online =
-        (checkout?.paymentMethod || orders[0]?.paymentMethod) === "online";
+      const online = (checkout?.paymentMethod || orders[0]?.paymentMethod) === "online";
+      const activeOrders = orders.filter(o => !["cancelled", "returned"].includes(o.status));
+      const paid = online
+        ? checkout?.state === "paid" || (orders.length > 0 && orders.every(o => o.paymentStatus === "paid"))
+        : activeOrders.length > 0 && activeOrders.every(o => o.paymentStatus === "paid");
+      // Bank-transfer expiry never cancels an in-progress COD delivery.
+      const invalid = online
+        ? checkout?.state === "cancelled" || (checkout?.expiresAt <= new Date() && !paid) || orders.some(o => ["cancelled", "returned"].includes(o.status))
+        : activeOrders.length === 0;
       const payable =
         checkout?.paymentLedgerVersion === 2 &&
         online &&
@@ -216,8 +217,11 @@ class CheckOutController {
       const totalAmount =
         checkout?.totalAmount ??
         orders.reduce((sum, o) => sum + o.totalAmount, 0);
-      const receivedAmount = checkout?.paymentLedgerVersion === 2 ? checkout.receivedAmount : (paid ? totalAmount : 0);
-      const remainingAmount = Math.max(0, totalAmount - receivedAmount);
+      const receivedAmount = online
+        ? checkout?.paymentLedgerVersion === 2 ? checkout.receivedAmount : (paid ? totalAmount : 0)
+        : require('../services/commercePolicy').sum(orders.filter(o => o.paymentStatus === 'paid').map(o => o.totalAmount));
+      const remainingAmount = online ? Math.max(0, totalAmount - receivedAmount)
+        : require('../services/commercePolicy').sum(activeOrders.filter(o => o.paymentStatus !== 'paid').map(o => o.totalAmount));
       const data = {
         receivedAmount, remainingAmount,
         paymentStatus: paid ? "paid" : invalid ? "cancelled" : "pending",
@@ -438,8 +442,18 @@ async function changeCod(req, res, next, delivered) {
       await lockCheckout(result.paymentCode, session);
       result.status = delivered ? "delivered" : "processing";
       result._statusChangedBy = req.userId;
-      if (delivered) result.paymentStatus = "paid";
+      if (delivered) { result.paymentStatus = "paid"; result.paidAt = new Date(); }
       await result.save({ session });
+      if (delivered) {
+        const checkout = await Checkout.findOne({ paymentCode: result.paymentCode }).session(session);
+        if (checkout) {
+          const siblings = await Order.find({ paymentCode: result.paymentCode }).session(session);
+          checkout.receivedAmount = require('../services/commercePolicy').sum(siblings.filter(o => o.paymentStatus === 'paid').map(o => o.totalAmount));
+          const active = siblings.filter(o => !['cancelled','returned'].includes(o.status));
+          if (active.length && active.every(o => o.paymentStatus === 'paid')) checkout.state = 'paid';
+          await checkout.save({ session });
+        }
+      }
     });
     res.json({ success: true, data: result });
   } catch (err) {
