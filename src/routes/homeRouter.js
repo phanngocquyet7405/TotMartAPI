@@ -7,9 +7,8 @@ const validationHandler = require("../middleware/validationHandler");
 const validationSchemas = require("../middleware/validationSchemas");
 const { authLimiter, refreshLimiter } = require("../middleware/rateLimiter");
 
-router.get("/health", (req, res) => {
-  res.send("API is healthy");
-});
+router.get('/health', require('../controllers/healthController').readiness);
+router.get('/live', require('../controllers/healthController').liveness);
 
 router.post(
   "/login",

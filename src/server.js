@@ -38,24 +38,34 @@ const server = async () => {
         "Run and review payment-ledger migration before accepting traffic",
       );
     }
+    if (config.nodeEnv === 'production') {
+      const legacyOpen = await require('./models/Checkout').exists({paymentLedgerVersion:1,state:'pending'});
+      const legacyReceipts = await require('./models/PaymentEvent').exists({paymentLedgerVersion:1,state:{$ne:'processed'}});
+      if (legacyOpen || legacyReceipts) throw new Error('Unresolved legacy money requires reviewed bank reconciliation before production');
+    }
     require("./models/AuthSession");
+    require("./models/SecurityOutbox");
     // Do not accept checkouts before the unique indexes and collections exist.
     // Index errors (including legacy duplicates) must fail startup visibly.
     await Promise.all(
       Object.values(require("mongoose").models).map((model) => model.init()),
     );
 
+    // Explicit createIndexes is additive; never drop indexes during startup.
+    for (const model of Object.values(require('mongoose').models)) await model.createIndexes();
+    const topology = await require('mongoose').connection.db.admin().command({hello:1});
+    if (!topology.setName && topology.msg !== 'isdbgrid') throw new Error('MongoDB transactions require replica set or sharded topology');
+    await require('./config/redis').startRedis();
+    const workers = [];
     const PORT = config.port;
     const httpServer = app.listen(PORT, () => {
       logger.info(`Server running on http://localhost:${PORT}/api/home/health`);
       logger.info(`Environment: ${config.nodeEnv}`);
 
-      require("./jobs/paymentReconciliationScheduler").start();
-      startDeliveryScheduler();
-      startOrderExpiryScheduler();
-      require("./jobs/notificationOutboxScheduler").start();
+      workers.push(require('./jobs/paymentReconciliationScheduler').start(), startDeliveryScheduler(), startOrderExpiryScheduler(), require('./jobs/notificationOutboxScheduler').start(), require('./jobs/securityOutboxScheduler').start());
     });
 
+    httpServer.workers = workers;
     return httpServer;
   } catch (error) {
     logger.error({ err: error }, "Failed to start server");
@@ -64,7 +74,10 @@ const server = async () => {
 };
 
 function gracefulShutdown(httpServer, reason, error) {
-  const exitCode = reason === "SIGTERM" ? 0 : 1;
+  const exitCode = ['SIGTERM','SIGINT'].includes(reason) ? 0 : 1;
+  require('./controllers/healthController').setStopping(true);
+  require('./controllers/notificationController').terminateAllStreams();
+  for (const worker of httpServer?.workers || []) { if (worker?.stop) worker.stop(); else clearInterval(worker); }
   logger.error({ err: error }, `[${reason}] Server đang tắt...`);
   if (!httpServer) {
     process.exit(exitCode);
@@ -80,6 +93,7 @@ function gracefulShutdown(httpServer, reason, error) {
   httpServer.close(async () => {
     try {
       const { disconnectDB } = require("./config/database");
+      await require("./config/redis").stopRedis();
       await disconnectDB();
     } catch (closeErr) {
       logger.error({ err: closeErr }, "Lỗi khi đóng kết nối DB");
@@ -99,6 +113,7 @@ server().then((httpServer) => {
     gracefulShutdown(httpServer, "Uncaught Exception", error);
   });
 
+  process.on("SIGINT", () => gracefulShutdown(httpServer, "SIGINT"));
   process.on("SIGTERM", () => {
     logger.info("Nhận SIGTERM, đang tắt server...");
     gracefulShutdown(httpServer, "SIGTERM");

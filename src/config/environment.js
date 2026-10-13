@@ -33,6 +33,9 @@ if (config.nodeEnv === "production") {
     "SEPAY_API_KEY",
     "SEPAY_BANK_ACCOUNT",
     "SEPAY_BANK_NAME",
+    "REDIS_URL",
+    "REDIS_NAMESPACE",
+    "TRUST_PROXY",
   ];
 
   const missing = requiredInProduction.filter((key) => !process.env[key]);

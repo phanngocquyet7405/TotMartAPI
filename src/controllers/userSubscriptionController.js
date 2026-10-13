@@ -34,9 +34,7 @@ class UserSubscriptionController {
   async subscribeToTemplate(req, res, next) {
     let session, key, hash, result;
     try {
-      key = req.get("Idempotency-Key") || crypto.randomUUID();
-      if (!/^[A-Za-z0-9_-]{16,128}$/.test(key))
-        fail("Idempotency-Key không hợp lệ");
+      key = require("../utils/idempotencyKey")(req);
       hash = requestHash(req.validatedBody);
       const previous = await replay(req.userId, key, hash);
       if (previous)

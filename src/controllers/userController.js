@@ -39,9 +39,7 @@ class UserController {
 
   async getAllUsers(req, res, next) {
     try {
-      const { data, pagination } = await paginate(userModel, req.query, {
-        isActive: true,
-      });
+      const { data, pagination } = await paginate(userModel, req.query, {});
 
       res.status(200).json({
         success: true,
@@ -73,11 +71,9 @@ class UserController {
     try {
       const validated = req.validatedBody;
       const getUserAvatar = await userModel.findById(req.params._id);
+      if (!getUserAvatar) return res.status(404).json({success:false,message:'User not found'});
       let result = getUserAvatar.avatar;
       if (req.file) {
-        if (result?.public_id) {
-          await cloudinary.uploader.destroy(result.public_id);
-        }
         const uploadResult = await new Promise((resolve, reject) => {
           const stream = cloudinary.uploader.upload_stream(
             { folder: "avatar_users", resource_type: "image" },
@@ -104,6 +100,10 @@ class UserController {
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
+      if (req.file && getUserAvatar.avatar?.public_id) {
+        try { await cloudinary.uploader.destroy(getUserAvatar.avatar.public_id); }
+        catch { require("../utils/logger").warn("Old avatar cleanup requires retry"); }
+      }
       res.status(200).json({
         success: true,
         message: "User updated successfully",
@@ -116,21 +116,10 @@ class UserController {
 
   async deleteUser(req, res, next) {
     try {
-      const foundUser = await userModel.findById(req.params._id);
-      if (!foundUser) {
-        return res
-          .status(404)
-          .json({ success: false, message: "User not found" });
-      }
-      
-      if (foundUser.avatar && foundUser.avatar.public_id) {
-        await cloudinary.uploader.destroy(foundUser.avatar.public_id);
-      }
-
-      await userModel.findByIdAndDelete(req.params._id);
-      res
-        .status(200)
-        .json({ success: true, message: "User deleted successfully" });
+      const user = await require('../services/securityRevocationService').revoke({ userId: req.params._id,
+        set: { isActive: false }, actorId: req.userId, reason: 'account_deactivated' });
+      if (!user) return res.status(404).json({success:false,message:'User not found'});
+      res.json({ success: true, message: 'User deactivated; historical records retained' });
     } catch (error) {
       next(error);
     }
@@ -141,19 +130,12 @@ class UserController {
       // Khóa tài khoản phải thu hồi toàn bộ truy cập đang có: tăng tokenVersion
       // (token cũ vô hiệu vĩnh viễn, kể cả sau khi mở khóa), xóa phiên làm mới
       // và đóng các luồng SSE đang mở.
-      const user = await userModel.findByIdAndUpdate(
-        req.params._id,
-        {
-          $set: { isActive: false, refreshToken: [] },
-          $inc: { tokenVersion: 1 },
-        },
-        { new: true },
-      );
+      const user = await require('../services/securityRevocationService').revoke({ userId: req.params._id,
+        set: { isActive: false }, actorId: req.userId, reason: 'account_locked' });
       if (!user) {
         return res.status(404).json({ message: "User not found" });
       }
-      await AuthSession.deleteMany({ userId: user._id });
-      notificationController.terminateUserStreams(user._id);
+
       res.status(200).json({
         success: true,
         message: "User locked successfully",
@@ -187,11 +169,11 @@ class UserController {
   async updateAddress(req, res, next) {
     try {
       const newAddress = {
-        country: req.body.country,
-        city: req.body.city,
-        district: req.body.district,
-        address: req.body.address,
-        phone: req.body.phone,
+        country: req.validatedBody.country,
+        city: req.validatedBody.city,
+        district: req.validatedBody.district,
+        address: req.validatedBody.address,
+        phone: req.validatedBody.phone,
       };
       const user = await userModel.findByIdAndUpdate(
         req.params._id,
@@ -224,15 +206,15 @@ class UserController {
         return res.status(404).json({ message: "Address not found" });
       }
       user.addresses[addressIndex].country =
-        req.body.country || user.addresses[addressIndex].country;
+        req.validatedBody.country || user.addresses[addressIndex].country;
       user.addresses[addressIndex].city =
-        req.body.city || user.addresses[addressIndex].city;
+        req.validatedBody.city || user.addresses[addressIndex].city;
       user.addresses[addressIndex].district =
-        req.body.district || user.addresses[addressIndex].district;
+        req.validatedBody.district || user.addresses[addressIndex].district;
       user.addresses[addressIndex].address =
-        req.body.address || user.addresses[addressIndex].address;
+        req.validatedBody.address || user.addresses[addressIndex].address;
       user.addresses[addressIndex].phone =
-        req.body.phone || user.addresses[addressIndex].phone;
+        req.validatedBody.phone || user.addresses[addressIndex].phone;
       await user.save();
       res.status(200).json({
         success: true,

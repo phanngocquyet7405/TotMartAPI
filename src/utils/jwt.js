@@ -35,7 +35,7 @@ const verifyToken = (token, isRefresh = false) => {
     const secret = isRefresh
       ? process.env.JWT_REFRESH_SECRET || config.jwt.secret
       : config.jwt.secret;
-    const decoded = jwt.verify(token, secret);
+    const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] });
     return decoded;
   } catch (error) {
     throw error;

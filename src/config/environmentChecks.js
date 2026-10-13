@@ -1,5 +1,4 @@
-// Kiểm tra cấu hình production: giá trị mẫu/không an toàn là lỗi, các điểm yếu
-// khác chỉ cảnh báo (tránh làm sập dịch vụ đang chạy chỉ vì một giá trị cũ).
+// Fail startup for unsafe production configuration; never print secret values.
 const PLACEHOLDER_PATTERNS = [
   /your[-_ ]/i,
   /change[-_ ]?(me|in)/i,
@@ -18,7 +17,9 @@ const looksLikePlaceholder = (value) =>
 function isHttpsUrl(value) {
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && !/^(localhost|127\.|0\.0\.0\.0)/.test(url.hostname);
+    return url.protocol === 'https:' && !url.username && !url.password &&
+      !url.search && !url.hash && (url.pathname === '/' || url.pathname === '') &&
+      !/^(localhost(?:\.|$)|127\.|0\.0\.0\.0$|\[::1\]$)/.test(url.hostname);
   } catch {
     return false;
   }
@@ -49,13 +50,17 @@ function validateProductionEnv(env) {
 
   for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET']) {
     if (env[key] && !looksLikePlaceholder(env[key]) && String(env[key]).length < 32) {
-      warnings.push(`${key} ngắn hơn 32 ký tự, nên đổi sang chuỗi ngẫu nhiên dài hơn`);
+      errors.push(`${key} phải có ít nhất 32 ký tự ngẫu nhiên`);
     }
   }
   if (env.JWT_SECRET && env.JWT_SECRET === env.JWT_REFRESH_SECRET) {
-    warnings.push('JWT_SECRET và JWT_REFRESH_SECRET đang trùng nhau, nên dùng hai giá trị khác nhau');
+    errors.push('JWT_SECRET và JWT_REFRESH_SECRET phải khác nhau');
   }
 
+  if (env.REDIS_URL && !/^rediss:\/\//.test(env.REDIS_URL)) errors.push('REDIS_URL production phải dùng TLS rediss://');
+  if (env.REDIS_NAMESPACE && !/^[a-z0-9:_-]{3,80}$/i.test(env.REDIS_NAMESPACE)) errors.push('REDIS_NAMESPACE không hợp lệ');
+  if (env.TRUST_PROXY !== undefined && !/^(0|1|loopback|linklocal|uniquelocal)$/.test(env.TRUST_PROXY)) errors.push('TRUST_PROXY phải là 0/1 hoặc loopback/linklocal/uniquelocal');
+  for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET']) if (env[key] && new Set(env[key]).size < 8) errors.push(`${key} quá dễ đoán`);
   return { errors, warnings };
 }
 

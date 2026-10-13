@@ -17,7 +17,7 @@ class SubscriptionTemplateController {
           .json({ success: false, message: "Box not found" });
       }
 
-      if (validated.gift && validated.gift.length > 0) {
+      if (validated.gift !== undefined) {
         for (const gift of validated.gift) {
           const giftBox = await boxModel.findById(gift.boxId);
           if (!giftBox)
@@ -121,7 +121,7 @@ class SubscriptionTemplateController {
         template.basePrice = box.value;
       }
 
-      if (validated.gift && validated.gift.length > 0) {
+      if (validated.gift !== undefined) {
         for (const gift of validated.gift) {
           const giftBox = await boxModel.findById(gift.boxId);
           if (!giftBox)

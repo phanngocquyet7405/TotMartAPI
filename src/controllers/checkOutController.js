@@ -27,12 +27,7 @@ const { activateSubscription } = require("../services/subscriptionService");
 const config = require("../config/environment");
 const logger = require("../utils/logger");
 
-function requestKey(req) {
-  const key = req.get?.("Idempotency-Key") || req.headers?.["idempotency-key"];
-  if (key && !/^[A-Za-z0-9_-]{16,128}$/.test(key))
-    fail("Idempotency-Key không hợp lệ");
-  return key || crypto.randomUUID();
-}
+const requestKey = require('../utils/idempotencyKey');
 const flush = () =>
   drain().catch((err) => logger.error({ err }, "Outbox delivery deferred"));
 class CheckOutController {

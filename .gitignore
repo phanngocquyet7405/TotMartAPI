@@ -30,3 +30,7 @@ build/
 .env
 .DS_Store
 Thumbs.db
+# Local verification artifacts
+.cache/
+verification-*.log
+audit-*.json

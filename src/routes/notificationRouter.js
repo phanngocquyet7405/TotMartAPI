@@ -7,6 +7,7 @@ const { idParamSchema } = require("../middleware/validationSchemas");
 
 router.get(
   "/stream-ticket",
+  require("../middleware/rateLimiter").ticketLimiter,
   authMiddleware.authMiddleware,
   authMiddleware.adminMiddleware,
   notificationController.issueStreamTicket,

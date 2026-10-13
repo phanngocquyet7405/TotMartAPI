@@ -43,14 +43,14 @@ describe("validateProductionEnv", () => {
     expect(errors).toEqual([expect.stringContaining("http://evil.vn")]);
   });
 
-  test("secret ngắn hoặc trùng nhau chỉ là cảnh báo, không chặn khởi động", () => {
+  test("secret ngắn hoặc trùng nhau chặn khởi động production", () => {
     const { errors, warnings } = validateProductionEnv({
       ...good(),
       JWT_SECRET: "short-but-real-secret",
       JWT_REFRESH_SECRET: "short-but-real-secret",
     });
-    expect(errors).toEqual([]);
-    expect(warnings.length).toBe(3);
+    expect(errors.length).toBe(3);
+    expect(warnings).toEqual([]);
   });
 
   test("looksLikePlaceholder nhận các dạng mẫu thường gặp", () => {

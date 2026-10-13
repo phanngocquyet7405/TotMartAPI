@@ -4,7 +4,7 @@ const app = require("../src/app");
 describe("Security hardening", () => {
   describe("Helmet security headers", () => {
     test("adds standard security headers and removes X-Powered-By", async () => {
-      const res = await request(app).get("/api/home/health");
+      const res = await request(app).get("/api/home/live");
       expect(res.headers["x-powered-by"]).toBeUndefined();
       expect(res.headers["x-content-type-options"]).toBe("nosniff");
     });
@@ -12,13 +12,13 @@ describe("Security hardening", () => {
 
   describe("CORS allowlist", () => {
     test("allows a request with no Origin header (server-to-server / webhook)", async () => {
-      const res = await request(app).get("/api/home/health");
+      const res = await request(app).get("/api/home/live");
       expect(res.status).toBe(200);
     });
 
     test("rejects a request from an origin not in CORS_ORIGINS", async () => {
       const res = await request(app)
-        .get("/api/home/health")
+        .get("/api/home/live")
         .set("Origin", "https://evil-site.example");
       expect(res.status).toBe(403);
       expect(res.headers["access-control-allow-origin"]).toBeUndefined();
@@ -26,7 +26,7 @@ describe("Security hardening", () => {
 
     test("allows a request from an origin in CORS_ORIGINS", async () => {
       const res = await request(app)
-        .get("/api/home/health")
+        .get("/api/home/live")
         .set("Origin", process.env.CORS_ORIGINS.split(",")[0]);
       expect(res.status).toBe(200);
       expect(res.headers["access-control-allow-origin"]).toBe(

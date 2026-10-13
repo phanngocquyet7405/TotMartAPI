@@ -70,7 +70,7 @@ class ProductController {
   async getAllProducts(req, res, next) {
     try {
       const page = Math.max(1, parseInt(req.query.page, 10) || 1), limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 10));
-      const filter = {}, keyword = String(req.query.keyword || req.query.search || '').trim().slice(0, 100);
+      const filter = { archivedAt: null }, keyword = String(req.query.keyword || req.query.search || '').trim().slice(0, 100);
       if (keyword) filter.name = { $regex: keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
       if (req.query.category) filter.category = req.query.category;
       if (req.query.brand) filter.brand = req.query.brand;
@@ -86,13 +86,13 @@ class ProductController {
     } catch (err) { next(err); }
   }
   async getProductById(req, res, next) {
-    try { const product = await Product.findById(req.params._id).populate('brand').populate('category'); if (!product) fail('Sản phẩm không tồn tại', 404); res.json({ success: true, data: product }); } catch (err) { next(err); }
+    try { const product = await Product.findById(req.params._id).populate('brand').populate('category'); if (!product || product.archivedAt) fail('Sản phẩm không tồn tại', 404); res.json({ success: true, data: product }); } catch (err) { next(err); }
   }
   async deleteProduct(req, res, next) {
     try {
       if (await require('../models/Box').exists({ 'products.productId': req.params._id })) fail('Sản phẩm đang thuộc hộp; gỡ khỏi hộp trước khi xóa', 409);
-      const product = await Product.findByIdAndDelete(req.params._id); if (!product) fail('Sản phẩm không tồn tại', 404);
-      await cleanup(product.images); res.json({ success: true, message: 'Đã xóa sản phẩm' });
+      const product = await Product.findByIdAndUpdate(req.params._id, { archivedAt: new Date() }, { new: true }); if (!product) fail('Sản phẩm không tồn tại', 404);
+      res.json({ success: true, message: 'Đã xóa sản phẩm' });
     } catch (err) { next(err); }
   }
 }

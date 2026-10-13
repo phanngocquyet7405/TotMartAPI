@@ -11,7 +11,7 @@ const DENIED = "https://evil.example";
 
 describe("CORS", () => {
   test("origin hợp lệ được phép (cấu hình có dấu / cuối vẫn khớp)", async () => {
-    const res = await request(app).get("/api/home/health").set("Origin", ALLOWED);
+    const res = await request(app).get("/api/home/live").set("Origin", ALLOWED);
     expect(res.status).toBe(200);
     expect(res.headers["access-control-allow-origin"]).toBe(ALLOWED);
     expect(res.headers["access-control-allow-credentials"]).toBe("true");
@@ -19,14 +19,14 @@ describe("CORS", () => {
 
   test("origin hợp lệ thứ hai trong danh sách cũng được phép", async () => {
     const res = await request(app)
-      .get("/api/home/health")
+      .get("/api/home/live")
       .set("Origin", OTHER_ALLOWED);
     expect(res.status).toBe(200);
     expect(res.headers["access-control-allow-origin"]).toBe(OTHER_ALLOWED);
   });
 
   test("origin lạ bị 403, không có header CORS, không in lại origin", async () => {
-    const res = await request(app).get("/api/home/health").set("Origin", DENIED);
+    const res = await request(app).get("/api/home/live").set("Origin", DENIED);
     expect(res.status).toBe(403);
     expect(res.headers["access-control-allow-origin"]).toBeUndefined();
     expect(res.body.success).toBe(false);
@@ -38,13 +38,13 @@ describe("CORS", () => {
       "http://tot-mart.vercel.app",
       "https://tot-mart.vercel.app.evil.example",
     ]) {
-      const res = await request(app).get("/api/home/health").set("Origin", origin);
+      const res = await request(app).get("/api/home/live").set("Origin", origin);
       expect(res.status).toBe(403);
     }
   });
 
   test("không có Origin (gọi từ máy chủ, curl, SePay) vẫn qua", async () => {
-    const res = await request(app).get("/api/home/health");
+    const res = await request(app).get("/api/home/live");
     expect(res.status).toBe(200);
   });
 

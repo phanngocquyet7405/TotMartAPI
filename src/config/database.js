@@ -9,15 +9,18 @@ function maskUri(uri) {
 const connectDB = async () => {
   try {
     logger.info(
-      { uri: maskUri(config.mongodb.uri) },
+      { dependency: "MongoDB" },
       "Đang kết nối tới MongoDB",
     );
-    const conn = await mongoose.connect(config.mongodb.uri);
+    const conn = await mongoose.connect(config.mongodb.uri, {
+      serverSelectionTimeoutMS: 5000, maxPoolSize: 20,
+      autoIndex: config.nodeEnv !== 'production',
+    });
     logger.info(`MongoDB Connected: ${conn.connection.host}`);
     return conn;
   } catch (error) {
     logger.error({ err: error }, "Lỗi kết nối MongoDB");
-    process.exit(1);
+    throw error;
   }
 };
 

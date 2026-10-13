@@ -34,9 +34,8 @@ class AuthController {
   }
   async logout(req, res, next) {
     try {
-      const Session = require('../models/AuthSession');
-      if (req.user.sid) await Session.deleteOne({ sessionId: req.user.sid, userId: req.userId });
-      else { await User.updateOne({ _id: req.userId }, { $inc: { tokenVersion: 1 }, $set: { refreshToken: [] } }); await Session.deleteMany({ userId: req.userId }); }
+      await require('../services/securityRevocationService').revoke({ userId: req.userId,
+        sessionId: req.user.sid, actorId: req.userId, reason: 'logout' });
       require('../services/sessionService').clearCookies(res); terminateUserStreams(req.userId);
       res.json({ success: true, message: 'Logout successful' });
     } catch (err) { next(err); }
@@ -129,14 +128,10 @@ class AuthController {
 
       // Consume the token atomically so concurrent requests cannot reuse it.
       const passwordHash = await bcrypt.hash(password, 9);
-      const user = await User.findOneAndUpdate(
-        { resetPasswordToken, resetPasswordExpires: { $gt: Date.now() } },
-        {
-          $set: { password: passwordHash, refreshToken: [] },
-          $unset: { resetPasswordToken: "", resetPasswordExpires: "" },
-          $inc: { tokenVersion: 1 },
-        },
-      );
+      const user = await require('../services/securityRevocationService').revoke({
+        filter: { resetPasswordToken, resetPasswordExpires: { $gt: Date.now() } },
+        set: { password: passwordHash }, unset: { resetPasswordToken: '', resetPasswordExpires: '' }, reason: 'password_reset',
+      });
 
       if (!user) {
         return res.status(400).json({
@@ -145,10 +140,7 @@ class AuthController {
         });
       }
 
-      await require("../models/AuthSession").deleteMany({ userId: user._id });
-      terminateUserStreams(user._id);
-      res.clearCookie("token");
-      res.clearCookie("refreshToken");
+      require('../services/sessionService').clearCookies(res);
 
       res.status(200).json({
         success: true,

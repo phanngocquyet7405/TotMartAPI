@@ -2,6 +2,11 @@
 // jest.config.js -> setupFiles). Đặt sẵn các biến môi trường bắt buộc để
 // src/config/environment.js không throw khi bị import trong lúc test.
 process.env.NODE_ENV = "test";
+// Ordinary regression tests must not connect to a real Redis from developer .env.
+// Shared store behavior is tested explicitly with mocks; real Redis needs a separate staging drill.
+process.env.REDIS_URL = "";
+process.env.REDIS_NAMESPACE = "totmart:test";
+process.env.TRUST_PROXY = "0";
 process.env.JWT_SECRET = process.env.JWT_SECRET || "test-jwt-secret";
 process.env.JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "1h";
 process.env.JWT_REFRESH_SECRET =

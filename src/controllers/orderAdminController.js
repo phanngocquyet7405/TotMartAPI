@@ -15,7 +15,8 @@ const orderAdminController = {
       if (status) filter.status = status;
       if (paymentMethod) filter.paymentMethod = paymentMethod;
       if (search) {
-        const regex = { $regex: search, $options: "i" };
+        const escaped = String(search).slice(0,100).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = { $regex: escaped, $options: 'i' };
         filter.$or = [
           { orderId: regex },
           { paymentCode: regex },

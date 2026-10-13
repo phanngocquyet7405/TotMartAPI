@@ -12,7 +12,13 @@ const { reqSerializer } = require("./utils/logRedaction");
 const config = require("./config/environment");
 const app = express();
 
-app.set("trust proxy", 1);
+const proxy = process.env.TRUST_PROXY ?? '0';
+app.set('trust proxy', /^[01]$/.test(proxy) ? Number(proxy) : proxy);
+app.use((req, res, next) => {
+  req.id = require('crypto').randomUUID();
+  res.set('X-Request-Id', req.id);
+  next();
+});
 
 // Middleware
 app.use(helmet());
@@ -30,8 +36,8 @@ if (config.nodeEnv !== "test") {
   );
 }
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "100kb" }));
+app.use(express.urlencoded({ extended: false, limit: "100kb" }));
 
 app.set("query parser", (str) =>
   mongoSanitize.sanitize(querystring.parse(str)),

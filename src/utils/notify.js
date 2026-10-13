@@ -1,3 +1,4 @@
+const redis = require('../config/redis');
 const crypto = require("crypto");
 const Notification = require("../models/Notification");
 
@@ -11,7 +12,7 @@ function removeSseClient(clientId) {
   sseClients.delete(clientId);
 }
 
-function broadcastToAdmins(payload) {
+function broadcastLocal(payload) {
   const data = `data: ${JSON.stringify(payload)}\n\n`;
   for (const [clientId, res] of sseClients.entries()) {
     try {
@@ -24,13 +25,20 @@ function broadcastToAdmins(payload) {
 
 const ssePendingTickets = new Map();
 
-function issueSseTicket(userId) {
+function issueSseTicket(userId, credentials = {}) {
   const ticket = crypto.randomUUID();
+  if (redis.enabled()) {
+    return redis.getClient().set(redis.namespace() + ':ticket:' + ticket, JSON.stringify({userId:String(userId),...credentials}), {EX:30,NX:true}).then(() => ticket);
+  }
+  for (const [key, entry] of ssePendingTickets) if (entry.expiresAt <= Date.now()) ssePendingTickets.delete(key);
+  if (ssePendingTickets.size >= 10000) throw Object.assign(new Error('Too many stream tickets'), {statusCode:429});
   ssePendingTickets.set(ticket, { userId, expiresAt: Date.now() + 30_000 });
   return ticket;
 }
 
 function consumeSseTicket(ticket) {
+  if (typeof ticket !== 'string' || !/^[a-f0-9-]{36}$/.test(ticket)) return null;
+  if (redis.enabled()) return redis.getClient().getDel(redis.namespace() + ':ticket:' + ticket).then(value => value ? JSON.parse(value) : null);
   const entry = ssePendingTickets.get(ticket);
 
   if (!entry) return null;
@@ -83,19 +91,22 @@ async function notifyMerchant(order, type, eventKey) {
     ? await Notification.findOneAndUpdate({ eventKey }, { $setOnInsert: { ...payload, eventKey } }, { upsert: true, new: true })
     : await Notification.create(payload);
 
-  broadcastToAdmins({
+  const broadcast = {
     _id: notification._id,
     type: notification.type,
     orderCode: notification.orderCode,
     message: notification.message,
     meta: notification.meta,
     createdAt: notification.createdAt,
-  });
+  };
+  if (redis.enabled()) await redis.getClient().publish(redis.namespace() + ':notifications', JSON.stringify(broadcast));
+  else broadcastLocal(broadcast);
 
   return notification;
 }
 
 module.exports = {
+  broadcastLocal,
   notifyMerchant,
   registerSseClient,
   removeSseClient,

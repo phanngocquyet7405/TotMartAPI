@@ -10,6 +10,7 @@ const productSchema = new mongoose.Schema(
     description: { type: String },
     brand: { type: mongoose.Schema.Types.ObjectId, ref: "Brand" },
     category: { type: mongoose.Schema.Types.ObjectId, ref: "Category" },
+    archivedAt: { type: Date, default: null },
     instock: { type: Boolean, default: true },
     stock: { type: Number, default: 0 },
     images: [

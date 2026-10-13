@@ -7,7 +7,6 @@ const validationHandler = require("../middleware/validationHandler");
 const validationSchemas = require("../middleware/validationSchemas");
 const { authLimiter } = require("../middleware/rateLimiter");
 
-routers.get("/me", authMiddleware.authMiddleware, async (req, res, next) => { try { const user = await require("../models/User").findById(req.userId); res.json({ success: true, data: user }); } catch (err) { next(err); } });
 routers.post(
   "/register",
   authLimiter,
@@ -39,12 +38,14 @@ routers.delete(
   "/lock-user/:_id",
   authMiddleware.adminMiddleware,
   authMiddleware.authMiddleware,
+  validationHandler.validate(validationSchemas.idParamSchema, "params"),
   userController.lockUser,
 );
 routers.patch(
   "/unlock-user/:_id",
   authMiddleware.adminMiddleware,
   authMiddleware.authMiddleware,
+  validationHandler.validate(validationSchemas.idParamSchema, "params"),
   userController.unlockUser,
 );
 routers.delete(
@@ -59,7 +60,6 @@ routers.post(
   authMiddleware.authMiddleware,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
   authMiddleware.requireOwnerOrAdmin,
-  validationHandler.validate(validationSchemas.updateUserSchema),
   validationHandler.validate(validationSchemas.updateAddressSchema),
   userController.updateAddress,
 );
@@ -78,7 +78,6 @@ routers.delete(
   authMiddleware.authMiddleware,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
   authMiddleware.requireOwnerOrAdmin,
-  validationHandler.validate(validationSchemas.updateAddressSchema),
   userController.deleteAddress,
 );
 

@@ -13,6 +13,7 @@ class authMiddleware {
       }
 
       const decoded = verifyToken(token);
+      if (process.env.NODE_ENV === 'production' && !decoded.sid) return res.status(401).json({success:false,message:'Login required for current session policy'});
 
       const user = await User.findById(decoded.userId);
       if (!user) {
@@ -56,6 +57,7 @@ class authMiddleware {
       }
 
       const decoded = verifyToken(token);
+      if (process.env.NODE_ENV === 'production' && !decoded.sid) return res.status(401).json({success:false,message:'Login required for current session policy'});
 
       const user = await User.findById(decoded.userId);
       if (!user) {

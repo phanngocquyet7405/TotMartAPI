@@ -139,7 +139,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
   const productMap = new Map(docs.map((p) => [String(p._id), p]));
   function productFor(id) {
     const p = productMap.get(String(id));
-    if (!p?.brand?.ownerId)
+    if (p?.archivedAt || !p?.brand?.ownerId)
       fail("Sản phẩm không tồn tại hoặc không có người bán hợp lệ");
     return p;
   }
