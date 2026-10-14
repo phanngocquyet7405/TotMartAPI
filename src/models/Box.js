@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const boxSchema = new mongoose.Schema(
   {
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true, immutable: true },
     definitionVersion: { type: Number, default: 1, min: 1 },
     obligationRevision: { type: Number, default: 0 },
     archivedAt: { type: Date, default: null },
@@ -29,6 +30,9 @@ const boxSchema = new mongoose.Schema(
         public_id: { type: String, required: true },
       },
     ],
+    subscriptionOnly: { type: Boolean, default: false },
+    sourceComboId: { type: mongoose.Schema.Types.ObjectId, ref: "Box", immutable: true },
+    giftPolicy: { bulkTiers: [{ minQuantity: Number, percent: Number }], amenities: [{ name: String, fee: Number }] },
     isGift: { type: Boolean, default: false },
     discountPercent: { type: Number, default: 0 },
   },

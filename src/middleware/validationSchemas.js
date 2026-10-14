@@ -98,6 +98,7 @@ const updateAddressSchema = joi.object({
 });
 
 const brandSchema = joi.object({
+  ownerId: joi.string().hex().length(24).optional(),
   name: joi.string().min(3).max(100).required(),
   description: joi.string().max(500).optional(),
   cityAddress: joi.string().max(255).optional(),
@@ -106,6 +107,7 @@ const brandSchema = joi.object({
 
 const updateBrandSchema = joi
   .object({
+    ownerId: joi.string().hex().length(24).optional(),
     name: joi.string().min(3).max(100).optional(),
     description: joi.string().max(500).optional(),
     cityAddress: joi.string().max(255).optional(),

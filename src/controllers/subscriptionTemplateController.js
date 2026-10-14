@@ -29,6 +29,7 @@ class SubscriptionTemplateController {
       }
 
       const template = new SubscriptionTemplate({
+        ...(req.user?.role === "merchant" ? { ownerId: req.userId } : {}),
         name: validated.name,
         isActive: validated.isActive,
         description: validated.description || "",

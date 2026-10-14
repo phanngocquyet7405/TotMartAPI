@@ -28,6 +28,8 @@ function definition(box) {
     products: box.products.map(p => ({ productId: p.productId,
       quantity: p.quantity, price: p.price, name: p.name || box.name })),
     value: box.value, totalItem: box.totalItem, isGift: box.isGift,
+    giftPolicy: box.giftPolicy?.toObject ? box.giftPolicy.toObject() : box.giftPolicy,
+    sourceComboId: box.sourceComboId, subscriptionOnly: box.subscriptionOnly,
     discountPercent: box.discountPercent, validFrom: box.validFrom, validTo: box.validTo,
     images: box.images.map(i => ({ url: i.url, public_id: i.public_id })),
   };
@@ -61,10 +63,12 @@ async function assertEditable(boxId, session) {
 }
 async function applyPatch(box, input, uploadedImages, session) {
   const allowed = new Set(['name', 'descriptions', 'validFrom', 'validTo',
-    'isGift', 'discountPercent', 'products', 'existingImages', 'stock']);
+    'isGift', 'discountPercent', 'products', 'existingImages', 'stock', 'giftPolicy']);
   for (const key of Object.keys(input)) if (!allowed.has(key)) fail(`Field không được phép: ${key}`, 400);
   for (const key of ['name', 'validFrom', 'validTo', 'isGift', 'discountPercent'])
     if (input[key] !== undefined) box[key] = input[key];
+  if (input.giftPolicy !== undefined) box.giftPolicy = input.giftPolicy;
+  if (box.sourceComboId && (input.products !== undefined || input.isGift === false || input.discountPercent !== undefined)) fail('Gift giữ sản phẩm từ combo nguồn; hãy tạo gift mới', 400);
   if (input.descriptions !== undefined) box.descriptions = safeHtml(input.descriptions);
   if (box.validFrom > box.validTo) fail('Ngày kết thúc phải sau ngày bắt đầu', 400);
   if (input.products !== undefined) {
@@ -73,6 +77,7 @@ async function applyPatch(box, input, uploadedImages, session) {
     const map = new Map(docs.map(p => [String(p._id), p]));
     box.products = input.products.map(p => {
       const product = map.get(String(p.productId));
+      if (box.ownerId && String(product?.ownerId) !== String(box.ownerId)) fail("Sản phẩm không thuộc merchant của combo", 403);
       if (!product) fail('Sản phẩm trong Box không tồn tại', 400);
       if (!Number.isSafeInteger(p.quantity) || p.quantity < 1) fail('Số lượng cấu phần không hợp lệ', 400);
       return { productId: product._id, quantity: p.quantity, price: product.price, name: product.name };
@@ -86,7 +91,7 @@ async function applyPatch(box, input, uploadedImages, session) {
   }
   box.images.push(...uploadedImages);
   const subtotal = box.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
-  box.value = Math.round(subtotal * (1 - box.discountPercent / 100));
+  if (!box.sourceComboId) box.value = Math.round(subtotal * (1 - box.discountPercent / 100));
   if (!Number.isSafeInteger(box.value) || box.value < 0) fail('Giá Box không hợp lệ', 400);
   box.totalItem = box.products.length;
   // stock ignored: only atomic stock adjustment/inventory services may change it.

@@ -22,12 +22,13 @@ class BoxController {
         .findOne({
           _id: req.params._id,
           archivedAt: null,
-          isGift: false,
+          $or: [{ isGift: false }, { sourceComboId: { $ne: null } }],
+          subscriptionOnly: { $ne: true },
           validFrom: { $lte: now },
           validTo: { $gte: now },
         })
         .select(
-          "name stock descriptions validFrom validTo products totalItem value images discountPercent",
+          "name stock descriptions validFrom validTo products totalItem value images discountPercent isGift sourceComboId giftPolicy",
         );
       if (!box)
         return res
@@ -46,6 +47,7 @@ class BoxController {
 
       const productIds = validated.products.map((p) => p.productId);
       const productDocs = await productModel.find({ _id: { $in: productIds } });
+      if (productDocs.length !== new Set(productIds.map(String)).size) return res.status(400).json({ success: false, message: "Sản phẩm không tồn tại" });
       const productMap = new Map(
         productDocs.map((doc) => [doc._id.toString(), doc]),
       );
@@ -112,12 +114,13 @@ class BoxController {
       const { products, ...rest } = validated;
       const newBox = new boxModel({
         ...rest,
+        ...(req.user?.role === "merchant" ? { ownerId: req.userId } : {}),
         products: builtProducts,
         result,
         validFrom: validated.validFrom || new Date(),
         validTo: new Date(validated.validTo),
         totalItem: builtProducts.length,
-        value,
+        value: Math.round(value),
       });
       newBox.images = result;
       await newBox.save();
@@ -133,11 +136,15 @@ class BoxController {
 
   async getAllBoxes(req, res, next) {
     try {
-      // [FIX]: Áp dụng tiện ích phân trang để tránh Memory Leak
+      const filter = { archivedAt: null, subscriptionOnly: { $ne: true } };
+      if (req.query.kind === 'gift') Object.assign(filter, { isGift: true, sourceComboId: { $ne: null } });
+      if (req.query.kind === 'combo') filter.isGift = false;
+      if (req.query.kind) { const now = new Date(); filter.validFrom = { $lte: now }; filter.validTo = { $gte: now }; }
+      // Paginate public catalog without exposing subscription-only bundles.
       const { data, pagination } = await paginate(
         boxModel,
         req.query,
-        { archivedAt: null },
+        filter,
         { sort: { createdAt: -1 } },
       );
 

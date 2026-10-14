@@ -33,7 +33,7 @@ class ProductController {
     try {
       const data = cleanData(req.validatedBody); await validateReferences(data);
       await uploadFiles(req.files, uploaded);
-      const product = await Product.create({ ...data, productId: crypto.randomUUID(), stock: data.stock, instock: data.stock > 0, images: uploaded });
+      const product = await Product.create({ ...data, ownerId: req.user?.role === "merchant" ? req.userId : (await Brand.findById(data.brand).select("ownerId"))?.ownerId, productId: crypto.randomUUID(), stock: data.stock, instock: data.stock > 0, images: uploaded });
       saved = true; res.status(201).json({ success: true, data: product });
     } catch (err) { if (!saved) await cleanup(uploaded); next(err); }
   }

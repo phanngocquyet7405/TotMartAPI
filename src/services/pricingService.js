@@ -121,7 +121,8 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
       !box ||
       box.validFrom > now ||
       box.validTo < now ||
-      box.isGift ||
+      (box.isGift && !box.sourceComboId) ||
+      box.subscriptionOnly ||
       !Number.isSafeInteger(box.stock) ||
       box.stock < boxDemand.get(id) ||
       !box.products.length
@@ -139,7 +140,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
   const productMap = new Map(docs.map((p) => [String(p._id), p]));
   function productFor(id) {
     const p = productMap.get(String(id));
-    if (p?.archivedAt || !p?.brand?.ownerId)
+    if (p?.archivedAt || !(p?.ownerId || p?.brand?.ownerId))
       fail("Sản phẩm không tồn tại hoặc không có người bán hợp lệ");
     return p;
   }
@@ -163,10 +164,19 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
       bulkAmounts.set(variants[index].lineId, amount),
     );
   }
+  const boxBulkAmounts = new Map();
+  for (const id of boxIds) {
+    const box = boxMap.get(id);
+    if (!box.sourceComboId) continue;
+    const variants = normalized.filter(i => String(i.boxId) === id);
+    const giftQuote = require('./giftPolicy').quoteGift(box, boxDemand.get(id));
+    allocate(giftQuote.discount, variants.map(i => commerce.safeMoney(Math.round(box.value) * i.quantity)))
+      .forEach((amount, index) => boxBulkAmounts.set(variants[index].lineId, amount));
+  }
   const products = [],
     lines = [];
   for (const item of normalized) {
-    const fee = commerce.safeMoney(
+    let fee = commerce.safeMoney(
       commerce.fees[item.gift.wrap] * item.quantity,
     );
     if (item.boxId) {
@@ -175,12 +185,18 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
         product: productFor(c.productId),
         quantity: c.quantity * item.quantity,
       }));
-      const value = commerce.safeMoney(Math.round(box.value) * item.quantity);
+      const giftQuote = box.sourceComboId ? require('./giftPolicy').quoteGift(box, boxDemand.get(String(box._id))) : null;
+      const base = commerce.safeMoney(Math.round(box.value) * item.quantity);
+      const bulkPercent = giftQuote?.percent || 0;
+      const bulkDiscount = boxBulkAmounts.get(item.lineId) || 0;
+      if (giftQuote) fee = commerce.sum([fee, commerce.safeMoney(giftQuote.amenityFee / boxDemand.get(String(box._id)) * item.quantity)]);
+      const value = commerce.safeMoney(base - bulkDiscount);
       const amounts = allocate(
         value,
         parts.map((c) => commerce.safeMoney(unitPrice(c.product) * c.quantity)),
       );
       const giftFees = allocate(fee, amounts);
+      const bulkShares = allocate(bulkDiscount, amounts);
       parts.forEach((part, index) =>
         products.push({
           productId: part.product._id,
@@ -189,12 +205,12 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
           quantity: part.quantity,
           totalPrice: amounts[index],
           brand: part.product.brand._id,
-          merchantId: part.product.brand.ownerId,
+          merchantId: part.product.ownerId || part.product.brand.ownerId,
           boxId: box._id,
           lineId: item.lineId,
           gift: item.gift,
           giftFee: giftFees[index],
-          bulkDiscountAmount: 0,
+          bulkDiscountAmount: bulkShares[index],
         }),
       );
       lines.push({
@@ -204,9 +220,9 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
         name: box.name,
         quantity: item.quantity,
         unitPrice: Math.round(box.value),
-        baseAmount: value,
-        bulkPercent: 0,
-        bulkDiscountAmount: 0,
+        baseAmount: base,
+        bulkPercent,
+        bulkDiscountAmount: bulkDiscount,
         totalPrice: value,
         gift: item.gift,
         giftFee: fee,
@@ -223,7 +239,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
         quantity: item.quantity,
         totalPrice: base - discount,
         brand: p.brand._id,
-        merchantId: p.brand.ownerId,
+        merchantId: p.ownerId || p.brand.ownerId,
         lineId: item.lineId,
         gift: item.gift,
         giftFee: fee,

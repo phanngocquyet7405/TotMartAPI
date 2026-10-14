@@ -6,6 +6,12 @@ const validationHandler = require("../middleware/validationHandler");
 const validationSchemas = require("../middleware/validationSchemas");
 const brandLogoUpload = require("../middleware/brandLogoUpload");
 
+router.get('/manage/:_id', authMiddleware.authMiddleware, authMiddleware.adminMiddleware, validationHandler.validate(validationSchemas.idParamSchema, 'params'), async (req, res, next) => {
+  try { const data = await require('../models/Brand').findById(req.params._id); if (!data) return res.status(404).json({ success: false, message: 'Brand not found' }); res.json({ success: true, data }); } catch (error) { next(error); }
+});
+router.get('/merchant-options', authMiddleware.authMiddleware, authMiddleware.adminMiddleware, async (req, res, next) => {
+  try { const data = await require('../models/User').find({ role: 'merchant', isActive: { $ne: false } }).select('_id name email').sort({ name: 1 }); res.json({ success: true, data }); } catch (error) { next(error); }
+});
 router.post(
   "/create-brand",
   authMiddleware.authMiddleware,

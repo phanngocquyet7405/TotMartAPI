@@ -14,6 +14,8 @@ const schema = new mongoose.Schema({
     value: { type: Number, required: true, min: 0 },
     totalItem: Number, isGift: Boolean, discountPercent: Number,
     validFrom: Date, validTo: Date,
+    sourceComboId: mongoose.Schema.Types.ObjectId, subscriptionOnly: Boolean,
+    giftPolicy: { bulkTiers: [{ minQuantity: Number, percent: Number }], amenities: [{ name: String, fee: Number }] },
     images: [{ _id: false, url: String, public_id: String }],
   },
 }, { timestamps: { createdAt: true, updatedAt: false } });

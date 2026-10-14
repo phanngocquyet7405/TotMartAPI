@@ -38,3 +38,19 @@ test('fractional/negative legacy prices fail rather than sell incorrectly',async
   Product.find.mockReturnValue(query([product({price:100000.5})]));
   await expect(buildQuote([{productId:P,quantity:1}])).rejects.toThrow('VND');
 });
+test('gift combo aggregates tiers across variants and charges bundled amenities', async () => {
+  Box.find.mockReturnValue(query([{ _id: B, name: 'Gift', value: 200000, isGift: true, sourceComboId: 'combo', stock: 10, products: [{ productId: P, quantity: 2 }], validFrom: new Date(0), validTo: new Date(Date.now() + 60000), giftPolicy: { bulkTiers: [{ minQuantity: 3, percent: 10 }], amenities: [{ name: 'Card', fee: 5000 }] } }]));
+  const q = await buildQuote([{ boxId: B, quantity: 1 }, { boxId: B, quantity: 2, gift: { message: 'A' } }]);
+  expect(q).toMatchObject({ baseSubtotal: 600000, subtotal: 540000, bulkDiscountAmount: 60000, giftFee: 15000, totalAmount: 555000 });
+  expect(q.products.reduce((n, p) => n + p.bulkDiscountAmount, 0)).toBe(q.bulkDiscountAmount);
+  expect(q.products.reduce((n, p) => n + p.giftFee, 0)).toBe(q.giftFee);
+});
+test('retail subscription delivery box cannot be purchased directly', async () => {
+  Box.find.mockReturnValue(query([{ _id: B, name: 'Internal', subscriptionOnly: true, value: 100000, stock: 10, products: [{ productId: P, quantity: 1 }], validFrom: new Date(0), validTo: new Date(Date.now() + 60000) }]));
+  await expect(buildQuote([{ boxId: B, quantity: 1 }])).rejects.toThrow('không còn bán');
+});
+test('merchant product owner controls order allocation ahead of legacy brand owner', async () => {
+  Product.find.mockReturnValue(query([product({ ownerId: 'actual-merchant' })]));
+  const q = await buildQuote([{ productId: P, quantity: 1 }]);
+  expect(q.products[0].merchantId).toBe('actual-merchant');
+});

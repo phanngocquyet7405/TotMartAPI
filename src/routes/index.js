@@ -12,6 +12,7 @@ const couponRouter = require("./couponRouter");
 const orderRouter = require("./orderRouter");
 // Health check endpoint
 function router(app) {
+  app.use("/api/manager", require("./managerRouter"));
   app.use("/api/admin/reconciliation", require("./reconciliationRouter"));
   app.use("/api/orders", require("./customerOrderRouter"));
   app.use("/api/users", userRouter);
