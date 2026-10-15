@@ -66,28 +66,18 @@ npm start
 
 ## Trạng thái xác minh
 
-- 110 kiểm thử backend trong 8 bộ không cần MongoDB đã qua. Phạm vi: manager, thay đổi ghép, quyền người dùng, quote/discount gift, box version, prepaid, commerce policy và upload logo.
-- 40 kiểm thử frontend đã qua khi chạy trong cùng tiến trình.
-- ESLint các file frontend thay đổi được kiểm tra riêng.
-- Build production frontend đã thành công trên mã cuối cùng với webpack, cấu hình CI và API_URL localhost thử nghiệm. Font đã chuyển sang nội bộ.
-- MongoDB integration vẫn bị lỗi spawn EPERM trong môi trường thực hiện. Không xác nhận giao dịch thực tế, Cloudinary/Brevo/Redis/SePay hoặc E2E trình duyệt.
+- Toàn bộ backend: 43 bộ, 334 bài qua, 0 lỗi, MongoDB 7 replica set riêng ở cổng 27018 và Redis thật ở 6380.
+- Frontend: 45 bài qua, 0 lỗi; lint các phần sửa và production build webpack thành công.
+- Đã nghiệm thu các đường đi cụ thể với hai merchant, admin và khách hàng trên trình duyệt. Giỏ gift đúng 555.000; gói hàng lẻ 270.000/3 tháng hiển thị 90.000/tháng.
+- Đã tách managerService và bốn form; có health probe, summary vận hành, script backup/restore và quy trình vận hành.
+- Chi tiết phạm vi và giới hạn trong ACCEPTANCE.md; backend có thêm OPERATIONS.md. Chưa xác nhận ngân hàng/email/upload thật hoặc chạy backup/restore drill.
 
-Lệnh kiểm thử backend đã chạy:
+Backend dùng TEST_MONGODB_URI=mongodb://127.0.0.1:27018/totmart_test?replicaSet=rs0&directConnection=true và TEST_REDIS_URL=redis://127.0.0.1:6380 rồi chạy npm test. Database test sẽ bị làm sạch; chỉ dùng môi trường test riêng.
 
-```text
-npm test -- --runTestsByPath tests/mergedMerchant.unit.test.js tests/manager.unit.test.js tests/commerceQuote.unit.test.js tests/boxDefinition.unit.test.js tests/userAuthorization.test.js tests/prepaidAndPricing.test.js tests/commercePolicy.test.js tests/brandLogoUpload.test.js
-```
-
-Lệnh kiểm thử frontend đã chạy trong môi trường hạn chế tạo tiến trình con:
-
-```text
-node --test --experimental-test-isolation=none tests/*.test.cjs
-```
-
-Trên CI có MongoDB dùng `npm test` đầy đủ trong backend, đặc biệt `manager.integration.test.js`. Cần nghiệm thu với hai merchant và một admin: gán brand, tạo/sửa sản phẩm, cập nhật combo, mua gift, đăng ký hàng lẻ, thu tiền và giao hàng.
-
+Frontend trong môi trường hạn chế tiến trình con: node --test --experimental-test-isolation=none tests/*.test.cjs.
 ## Giới hạn nghiệp vụ vẫn giữ
 
 Đăng ký giao hàng mỗi tháng nhưng thu tiền trước cho kỳ 1/3/6/12 tháng; chưa tự động trích tiền mỗi tháng. Tiện ích gift được bao gồm trong mỗi hộp, chưa phải tùy chọn tiện ích rời ở checkout. Khi đã có nghĩa vụ đơn/đăng ký, hệ thống khóa chỉnh sửa cấu phần combo theo cơ chế version hiện có. Hoàn tiền và chi trả merchant cần quy trình vận hành đã thống nhất.
 
 Hai SKILL.md của gói bổ sung được dùng làm tài liệu tham khảo, không cài vào máy và không giữ các mô tả trạng thái cũ như nguồn sự thật cho bản ghép. Không bảo đảm một kiến trúc là “tối ưu nhất” trong mọi hoàn cảnh; lựa chọn ở đây nhằm giữ tính tương thích, thống nhất quyền và sửa những lỗi đã xác minh.
+

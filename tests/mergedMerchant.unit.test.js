@@ -41,6 +41,11 @@ test('inactive or missing merchant cannot receive a brand', async () => {
   jest.spyOn(User, 'exists').mockResolvedValue(null);
   await expect(scope.assertMerchant(target)).rejects.toMatchObject({ statusCode: 400 });
 });
+test('admin rebranding cannot bypass the immutable direct product owner', async () => {
+  jest.spyOn(Brand, 'findById').mockReturnValue({ select: () => Promise.resolve({ ownerId: target }) });
+  await expect(scope.assertProductBrand({ ownerId: actor }, target)).rejects.toMatchObject({ statusCode: 409 });
+  await expect(scope.assertProductBrand({ ownerId: target }, target)).resolves.toBeUndefined();
+});
 test('customer confirms only their paid online shipped order in one atomic update', async () => {
   role = 'user';
   const update = jest.spyOn(Order, 'findOneAndUpdate').mockResolvedValue({ _id: target, status: 'delivered' });

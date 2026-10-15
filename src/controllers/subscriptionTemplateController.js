@@ -182,8 +182,8 @@ class SubscriptionTemplateController {
   async getActiveTemplates(req, res, next) {
     try {
       const templates = await SubscriptionTemplate.find({ isActive: true })
-        .populate("boxId", "name value image")
-        .populate("gift.boxId", "name image")
+        .populate("boxId", "name value images totalItem products stock descriptions")
+        .populate("gift.boxId", "name images")
         .sort({ createdAt: -1 })
         .limit(50);
 

@@ -47,6 +47,7 @@ class ProductController {
       // để form cũ không ghi đè số tồn vừa thay đổi.
       delete data.stock;
       await validateReferences(data);
+      if (data.brand !== undefined) await require('../services/merchantScope').assertProductBrand(product, data.brand);
       const original = product.images.map(image => ({ url: image.url, public_id: image.public_id }));
       const submitted = req.validatedBody.existingImages;
       const retained = submitted === undefined ? original : original.filter(image => submitted.includes(image.public_id) || submitted.includes(image.url));

@@ -12,6 +12,7 @@ const Order = require('../models/Order');
 const products = require('../controllers/productController');
 const boxes = require('../controllers/boxController');
 const templates = require('../controllers/subscriptionTemplateController');
+const manager = require('../services/managerService');
 const upload = require('../middleware/uploadMiddleware');
 const router = express.Router();
 const run = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
@@ -25,11 +26,7 @@ const own = Model => run(async (req, res, next) => {
   if (!await Model.exists({ _id: req.params._id, ...require('../services/merchantScope').ownerFilter(req) })) fail('Không tìm thấy dữ liệu của bạn', 404);
   next();
 });
-async function checkProducts(items, ownerId) {
-  const ids = [...new Set(items.map(p => String(p.productId)))];
-  if (await Product.countDocuments({ _id: { $in: ids }, ownerId, archivedAt: null }) !== ids.length)
-    fail('Chỉ được chọn sản phẩm đang bán của bạn', 403);
-}
+const { checkProducts } = manager;
 const references = run(async (req, res, next) => {
   const data = req.validatedBody;
   if (data.products) await checkProducts(data.products, req.userId);
@@ -81,18 +78,7 @@ router.post('/retail-subscriptions', validate.validate(Joi.object({
   validTo: Joi.date().greater('now').required(), planType: schemas.createSubscriptionTemplateSchema.extract('planType'),
   discountPercent: Joi.number().min(0).max(100).default(0),
 })), references, run(async (req, res) => {
-  const input = req.validatedBody;
-  let template;
-  await mongoose.connection.transaction(async session => {
-    const docs = await Product.find({ _id: { $in: input.products.map(p => p.productId) }, ownerId: req.userId, archivedAt: null }).session(session);
-    const map = new Map(docs.map(p => [String(p._id), p]));
-    const parts = input.products.map(p => { const product = map.get(p.productId); if (!product) fail('Sản phẩm không còn khả dụng', 409); return { ...p, name: product.name, price: product.price }; });
-    const value = parts.reduce((sum, p) => sum + p.price * p.quantity, 0);
-    if (!Number.isSafeInteger(value) || value < 1) fail('Giá gói không hợp lệ');
-    const [box] = await Box.create([{ ownerId: req.userId, name: input.name, descriptions: input.description || input.name, products: parts, totalItem: parts.length, value, stock: input.stock, validFrom: new Date(), validTo: input.validTo, subscriptionOnly: true }], { session });
-    const price = require('../services/subscriptionService').prepaidPrice(value, input.planType, input.discountPercent);
-    [template] = await Template.create([{ ownerId: req.userId, name: input.name, description: input.description, boxId: box._id, planType: input.planType, discountPercent: input.discountPercent, sourceType: 'retail', ...price }], { session });
-  });
+  const template = await manager.createRetailSubscription(req.validatedBody, req.userId);
   res.status(201).json({ success: true, data: template });
 }));
 router.get('/orders', run(async (req, res) => {
@@ -107,16 +93,7 @@ const giftInput = Joi.object({
   giftPolicy: require('../services/giftPolicy').schema.required(),
 });
 router.post('/gifts', validate.validate(giftInput), run(async (req, res) => {
-  let gift;
-  await mongoose.connection.transaction(async session => {
-    const combo = await require('../services/boxDefinitionService').guardBox(req.validatedBody.comboId, session);
-    if (String(combo.ownerId) !== req.userId || combo.isGift || combo.subscriptionOnly) fail('Combo không thuộc bạn', 403);
-    await checkProducts(combo.products, req.userId);
-    const { comboId, ...input } = req.validatedBody;
-    [gift] = await Box.create([{ ...input, ownerId: req.userId, sourceComboId: combo._id, isGift: true,
-      descriptions: combo.descriptions, products: combo.products.map(p => p.toObject()), value: combo.value,
-      discountPercent: combo.discountPercent, totalItem: combo.totalItem, images: combo.images.map(i => i.toObject()), validFrom: new Date() }], { session });
-  });
+  const gift = await manager.createGift(req.validatedBody, req.userId);
   res.status(201).json({ success: true, data: gift });
 }));
 router.patch('/gifts/:_id', own(Box), validate.validate(Joi.object({

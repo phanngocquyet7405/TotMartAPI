@@ -20,6 +20,12 @@ async function assertBrandAssignment(brandId, ownerId) {
   if (await Product.exists({ brand: brandId, $or: [{ ownerId: { $ne: new mongoose.Types.ObjectId(ownerId) } }, { ownerId: { $exists: false } }] }))
     fail('Thương hiệu có sản phẩm chưa thuộc merchant này. Chạy migration hoặc xử lý chuyển chủ trước khi gán.', 409);
 }
+async function assertProductBrand(product, brandId) {
+  if (!product.ownerId) return; // Legacy data must be reviewed by migration.
+  const brand = await Brand.findById(brandId).select('ownerId');
+  if (!brand || String(brand.ownerId) !== String(product.ownerId))
+    fail('Không được chuyển sản phẩm sang thương hiệu của chủ khác; chủ sản phẩm và nghĩa vụ đã bán được giữ nguyên.', 409);
+}
 function productFilters(query) {
   const filter = {}, keyword = String(query.keyword || query.search || '').trim().slice(0, 100);
   if (keyword) filter.name = { $regex: keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
@@ -37,4 +43,4 @@ function productFilters(query) {
   }
   return filter;
 }
-module.exports = { ownerFilter, assertMerchant, assertBrandAssignment, productFilters };
+module.exports = { ownerFilter, assertMerchant, assertBrandAssignment, assertProductBrand, productFilters };
