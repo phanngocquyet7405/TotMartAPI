@@ -63,7 +63,7 @@ class UserSubscriptionController {
         for (const id of [...roles.keys()].sort())
           pins.set(id, await pinBox(id, session, { kind: roles.get(id) }));
         const mainPin = pins.get(String(template.boxId));
-        const box = mainPin.box;
+        const box = mainPin.version.definition;
         if (!box || box.isGift) fail("Hộp của gói không còn hợp lệ", 409);
         const pricing = prepaidPrice(
           box.value,

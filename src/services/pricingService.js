@@ -123,6 +123,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
       box.validTo < now ||
       (box.isGift && !box.sourceComboId) ||
       box.internalSubscription ||
+      box.subscriptionOnly ||
       !Number.isSafeInteger(box.stock) ||
       box.stock < boxDemand.get(id) ||
       !box.products.length

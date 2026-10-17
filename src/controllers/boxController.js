@@ -23,7 +23,7 @@ class BoxController {
           _id: req.params._id,
           archivedAt: null,
           $or: [{ isGift: false }, { isGift: true, sourceComboId: { $ne: null } }],
-          internalSubscription: { $ne: true },
+          internalSubscription: { $ne: true }, subscriptionOnly: { $ne: true },
           validFrom: { $lte: now },
           validTo: { $gte: now },
         })
@@ -138,7 +138,7 @@ class BoxController {
       const { data, pagination } = await paginate(
         boxModel,
         req.query,
-        { archivedAt: null, internalSubscription: { $ne: true },
+        { archivedAt: null, internalSubscription: { $ne: true }, subscriptionOnly: { $ne: true },
           ...(req.query.available === 'true' ? { validFrom: { $lte: new Date() }, validTo: { $gte: new Date() }, stock: { $gt: 0 } } : {}),
           ...(['combo', 'gift'].includes(req.query.kind || req.query.type) ? { isGift: (req.query.kind || req.query.type) === 'gift' } : {}) },
         { sort: { createdAt: -1 } },
@@ -245,7 +245,7 @@ class BoxController {
       const box = await boxModel.findOne({
         _id: req.params._id,
         archivedAt: null,
-        internalSubscription: { $ne: true },
+        internalSubscription: { $ne: true }, subscriptionOnly: { $ne: true },
       });
       if (!box) {
         return res.status(404).json({
@@ -277,7 +277,7 @@ class BoxController {
     try {
       const discountBox = await boxModel.find({
         archivedAt: null,
-        internalSubscription: { $ne: true },
+        internalSubscription: { $ne: true }, subscriptionOnly: { $ne: true },
         discountPercent: { $gt: 0 },
       });
       const newBox = await boxModel.find({

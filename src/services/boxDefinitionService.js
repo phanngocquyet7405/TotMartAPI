@@ -28,6 +28,12 @@ function definition(box) {
     products: box.products.map(p => ({ productId: p.productId,
       quantity: p.quantity, price: p.price, name: p.name || box.name })),
     value: box.value, totalItem: box.totalItem, isGift: box.isGift,
+    sourceComboId: box.sourceComboId, sourceComboVersion: box.sourceComboVersion,
+    subscriptionOnly: box.subscriptionOnly, internalSubscription: box.internalSubscription,
+    giftPolicy: box.giftPolicy ? {
+      bulkTiers: (box.giftPolicy.bulkTiers || []).map(t => ({ minQuantity: t.minQuantity, percent: t.percent })),
+      amenities: (box.giftPolicy.amenities || []).map(a => ({ name: a.name, fee: a.fee })),
+    } : undefined,
     discountPercent: box.discountPercent, validFrom: box.validFrom, validTo: box.validTo,
     images: box.images.map(i => ({ url: i.url, public_id: i.public_id })),
   };
@@ -60,6 +66,9 @@ async function assertEditable(boxId, session) {
     fail('Box đang gắn với đơn hàng chưa kết thúc');
 }
 async function applyPatch(box, input, uploadedImages, session) {
+  // Validate the existing composition too: legacy mixed-owner boxes cannot be
+  // legitimized by replacing their components through an ordinary edit.
+  await assertCompositionOwner(box, box.products, session);
   const allowed = new Set(['name', 'descriptions', 'validFrom', 'validTo',
     'isGift', 'discountPercent', 'products', 'existingImages', 'stock', 'giftPolicy']);
   for (const key of Object.keys(input)) if (!allowed.has(key)) fail(`Field không được phép: ${key}`, 400);
@@ -74,6 +83,7 @@ async function applyPatch(box, input, uploadedImages, session) {
   if (input.products !== undefined) {
     if (!input.products.length) fail('Box cần ít nhất một sản phẩm', 400);
     const docs = await Product.find({ _id: { $in: input.products.map(p => p.productId) } }).session(session);
+    await assertCompositionOwner(box, input.products, session, docs);
     const map = new Map(docs.map(p => [String(p._id), p]));
     box.products = input.products.map(p => {
       const product = map.get(String(p.productId));
@@ -94,6 +104,19 @@ async function applyPatch(box, input, uploadedImages, session) {
   if (!Number.isSafeInteger(box.value) || box.value < 0) fail('Giá Box không hợp lệ', 400);
   box.totalItem = box.products.length;
   // stock ignored: only atomic stock adjustment/inventory services may change it.
+}
+async function assertCompositionOwner(box, parts, session, docs) {
+  if (!box.ownerId) fail('Combo legacy chưa xác minh merchant sở hữu; cần đối chiếu trước khi sửa', 409);
+  docs ||= await Product.find({ _id: { $in: parts.map(p => p.productId) } }).session(session);
+  const brands = await require('../models/Brand').find({ ownerId: box.ownerId }).select('_id').session(session);
+  const brandIds = new Set(brands.map(b => String(b._id)));
+  const map = new Map(docs.map(p => [String(p._id), p]));
+  for (const part of parts) {
+    const product = map.get(String(part.productId));
+    if (!product || product.archivedAt || !brandIds.has(String(product.brand)) ||
+        (product.ownerId && String(product.ownerId) !== String(box.ownerId)))
+      fail('Mọi sản phẩm combo phải thuộc cùng merchant; dữ liệu legacy cần đối chiếu ownership', 409);
+  }
 }
 async function changeDefinition(boxId, input, { archive = false, uploadedImages = [], ownerId } = {}) {
   let result;
@@ -118,4 +141,4 @@ async function loadPinnedVersion(boxId, versionId, session) {
   if (!snapshot?.definition?.products.length) fail('BoxVersion không hợp lệ');
   return snapshot.definition;
 }
-module.exports = { guardBox, pinBox, changeDefinition, loadPinnedVersion };
+module.exports = { definition, guardBox, pinBox, changeDefinition, loadPinnedVersion };

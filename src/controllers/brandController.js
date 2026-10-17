@@ -4,6 +4,14 @@ const { paginate } = require("../utils/pagination");
 const { uploadLogo, removeLogo } = require("../utils/brandLogoStorage");
 
 class BrandController {
+  async getManagedBrand(req, res, next) {
+    try {
+      const data = await brand.findById(req.params._id).select('name slug logo description cityAddress ownerId');
+      if (!data) return res.status(404).json({ success: false, message: 'Brand not found' });
+      res.set('Cache-Control', 'no-store');
+      res.json({ success: true, data });
+    } catch (error) { next(error); }
+  }
   async createBrand(req, res, next) {
     let uploaded;
     let saved = false;
@@ -38,11 +46,7 @@ class BrandController {
       const validated = { ...req.validatedBody };
       if (validated.description !== undefined) validated.description = require("../utils/safeHtml")(validated.description);
       if (validated.ownerId) {
-        const current = await brand.findById(req.params._id).select('ownerId');
-        if (!current) return res.status(404).json({ success: false, message: 'Brand not found' });
-        if (String(current.ownerId) !== String(validated.ownerId))
-          return res.status(409).json({ success: false, message: 'Không chuyển chủ thương hiệu qua sửa thông tin. Dùng quy trình migration đã xác minh.' });
-        delete validated.ownerId;
+        await require('../services/merchantScope').assertBrandAssignment(req.params._id, validated.ownerId);
       }
       const newData = {
         ...validated,
@@ -129,7 +133,7 @@ class BrandController {
         brand,
         req.query,
         {},
-        { sort: { name: 1 } },
+        { sort: { name: 1 }, select: 'name slug logo description cityAddress' },
       );
 
       res.status(200).json({

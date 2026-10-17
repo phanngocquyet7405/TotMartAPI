@@ -34,6 +34,38 @@ test('manager role is isolated from guests, customers and admin; catalog is scop
   expect((await request(app).post('/api/checkout/check-out').set(auth(merchant)).send({})).status).toBe(403);
   expect((await request(app).post('/api/subcribe-plans/user-subscribe').set(auth(merchant)).send({})).status).toBe(403);
 });
+
+test('admin and merchant edits reject foreign replacements and legacy mixed composition', async () => {
+  const created = await multipart(request(app).post('/api/manager/combos').set(auth(merchant)), comboInput());
+  expect(created.status).toBe(201);
+  const id = created.body.data._id;
+  const foreignBrand = await createBrand({ ownerId: other._id });
+  const foreign = await createProduct(foreignBrand);
+  const replacement = { products: [{ productId: String(foreign._id), quantity: 1 }] };
+  expect((await request(app).put(`/api/boxes/update-box/${id}`).set(auth(admin)).send(replacement)).status).toBe(409);
+  expect((await request(app).put(`/api/manager/combos/${id}`).set(auth(merchant)).send(replacement)).status).toBe(403);
+  expect((await request(app).put(`/api/boxes/update-box/${id}`).set(auth(admin)).send({ name: 'Valid edit' })).status).toBe(200);
+  await Box.collection.updateOne({ _id: new (require('mongoose').Types.ObjectId)(id) },
+    { $push: { products: { productId: foreign._id, quantity: 1, price: foreign.price, name: foreign.name } } });
+  for (const [path, actor] of [[`/api/boxes/update-box/${id}`, admin], [`/api/manager/combos/${id}`, merchant]]) {
+    const result = await request(app).put(path).set(auth(actor)).send({ name: 'Invalid legacy edit' });
+    expect(result.status).toBe(409);
+  }
+  expect((await Box.findById(id)).name).toBe('Valid edit');
+});
+
+test('admin brand detail and owner assignment stay private and reject conflicting product ownership', async () => {
+  const empty = await createBrand({ ownerId: merchant._id });
+  const detail = await request(app).get(`/api/brands/manage/${empty._id}`).set(auth(admin));
+  expect(detail.status).toBe(200); expect(detail.body.data.ownerId).toBe(String(merchant._id));
+  const updated = await request(app).put(`/api/brands/update-brand/${empty._id}`).set(auth(admin)).send({ ownerId: String(other._id) });
+  expect(updated.status).toBe(200);
+  expect(String((await require('../src/models/Brand').findById(empty._id)).ownerId)).toBe(String(other._id));
+  expect((await request(app).put(`/api/brands/update-brand/${brand._id}`).set(auth(admin)).send({ ownerId: String(other._id) })).status).toBe(409);
+  const publicList = await request(app).get('/api/brands/get-all-brands');
+  expect(publicList.body.data.every(b => b.ownerId === undefined)).toBe(true);
+  expect((await request(app).get(`/api/brands/manage/${empty._id}`).set(auth(merchant))).status).toBe(403);
+});
 test('multipart products, owner assignment, refs, stock delta and IDOR', async () => {
   const input = { name: 'Merchant product', description: '<p>Good product</p>', stock: 5, price: 120000, brand: String(brand._id), category: String(category._id) };
   const created = await multipart(request(app).post('/api/manager/products').set(auth(merchant)), input);

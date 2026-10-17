@@ -41,6 +41,8 @@ router.get('/merchant-options', authMiddleware.authMiddleware, authMiddleware.ad
   const data = await require('../models/User').find({role:'merchant',isActive:{$ne:false}}).select('_id name').sort({name:1}).limit(500).lean();
   res.set('Cache-Control','no-store'); res.json({success:true,data});
 });
+router.get('/manage/:_id', authMiddleware.authMiddleware, authMiddleware.adminMiddleware,
+  validationHandler.validate(validationSchemas.idParamSchema, 'params'), brandController.getManagedBrand);
 router.get("/get-all-brands", brandController.getAllBrands);
 
 module.exports = router;

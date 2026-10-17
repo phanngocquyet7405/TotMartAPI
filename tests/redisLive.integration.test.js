@@ -3,6 +3,7 @@ const {randomUUID}=require('crypto');
 const config=require('../src/config/redis');
 const {RedisRateLimitStore}=require('../src/services/redisRateLimitStore');
 const uri=process.env.TEST_REDIS_URL;
+if (process.env.CI && !uri) throw new Error('CI requires TEST_REDIS_URL; real Redis tests must run');
 (uri ? describe : describe.skip)('real Redis primitives for multiple API instances',()=>{
   let a,b,subscriber,namespace,keys=[];
   beforeAll(async()=>{

@@ -12,13 +12,13 @@ const Product = require('../src/models/Product');
 const { pinBox, changeDefinition } = require('../src/services/boxDefinitionService');
 const { transitionFulfillment } = require('../src/services/subscriptionService');
 beforeAll(connect); afterEach(clearDatabase); afterAll(closeDatabase);
-async function fixture(isGift = false) {
+async function fixture(isGift = false, overrides = {}) {
   const { user } = await createUser();
   const brand = await createBrand();
   const product = await createProduct(brand, { price: 100000, stock: 10 });
-  const box = await Box.create({ name: 'Original box', descriptions: 'Original', stock: 10,
+  const box = await Box.create({ ownerId: brand.ownerId, name: 'Original box', descriptions: 'Original', stock: 10,
     validFrom: new Date(Date.now() - 86400000), validTo: new Date(Date.now() + 86400000 * 400),
-    value: 100000, isGift,
+    value: 100000, isGift, ...overrides,
     products: [{ productId: product._id, name: product.name, price: product.price, quantity: 1 }] });
   return { user, product, box };
 }
@@ -107,4 +107,39 @@ test('concurrent pin and edit cannot produce a subscription with a mutable defin
   if (editResult.status === 'fulfilled') expect(snapshot.version).toBe(2);
   else expect(editResult.reason.statusCode).toBe(409);
   expect(snapshot.definition.name).toBe(live.name);
+});
+
+test('pinned main price and gift obligation survive live definition drift', async () => {
+  const { box, user, product } = await fixture();
+  const { box: gift, product: giftProduct } = await fixture(true, {
+    sourceComboId: box._id, sourceComboVersion: 1,
+    giftPolicy: { bulkTiers: [{ minQuantity: 2, percent: 10 }], amenities: [{ name: 'Card', fee: 5000 }] },
+  });
+  await mongoose.connection.transaction(async session => {
+    await pinBox(box._id, session);
+    await pinBox(gift._id, session, { kind: 'gift' });
+  });
+  // External legacy writer bypasses all application guards.
+  await Box.collection.updateOne({ _id: box._id }, { $set: { value: 900000, 'products.0.quantity': 9 } });
+  await Box.collection.updateOne({ _id: gift._id }, { $set: { 'products.0.quantity': 8, 'giftPolicy.amenities.0.fee': 99000 } });
+  const template = await Template.create({ name: 'Pinned plan', boxId: box._id, planType: '1_month',
+    basePrice: 100000, discountPrice: 90000, discountPercent: 10, isActive: true,
+    gift: [{ boxId: gift._id, quantity: 2 }] });
+  const res = { status: jest.fn().mockReturnThis(), json: jest.fn().mockReturnThis() }, next = jest.fn();
+  await require('../src/controllers/userSubscriptionController').subscribeToTemplate({
+    get: () => 'pinned-obligation-regression', userId: String(user._id),
+    validatedBody: { templateId: String(template._id), shippingAddress: user.addresses[0].toObject(), expectedTotalAmount: 90000 },
+  }, res, next);
+  expect(next).not.toHaveBeenCalled();
+  const sub = await Subscription.findOne({ userId: user._id });
+  expect(sub.price).toBe(90000);
+  const pinnedGift = await BoxVersion.findById(sub.gift[0].versionId);
+  expect(pinnedGift.definition.sourceComboId).toEqual(box._id);
+  expect(pinnedGift.definition.giftPolicy.amenities[0].fee).toBe(5000);
+  sub.status = 'active'; sub.paymentStatus = 'paid'; sub.nextDeliveries = new Date(); await sub.save();
+  const fulfillment = await Fulfillment.create({ subscriptionId: sub._id, userId: user._id, sequence: 1, dueAt: new Date() });
+  const result = await transitionFulfillment(fulfillment._id, user._id, false, 'PINNED');
+  expect(result.products.find(p => p.productId.equals(product._id)).quantity).toBe(1);
+  expect(result.products.find(p => p.productId.equals(giftProduct._id)).quantity).toBe(2);
+  expect((await Product.findById(giftProduct._id)).stock).toBe(8);
 });

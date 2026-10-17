@@ -3,6 +3,7 @@ const boxSchema = new mongoose.Schema(
   {
     ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", immutable: true, index: true },
     internalSubscription: { type: Boolean, default: false },
+    subscriptionOnly: { type: Boolean, default: false },
     sourceComboId: { type: mongoose.Schema.Types.ObjectId, ref: "Box", immutable: true },
     sourceComboVersion: Number,
     giftPolicy: {

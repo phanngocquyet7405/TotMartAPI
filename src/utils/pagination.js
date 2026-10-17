@@ -14,6 +14,8 @@ const paginate = async (model, queryParams, filter = {}, options = {}) => {
 
   let query = model.find(filter).sort(sort).skip(skip).limit(limit);
 
+  if (options.select) query = query.select(options.select);
+
   if (populate) {
     if (Array.isArray(populate)) {
       populate.forEach((p) => {

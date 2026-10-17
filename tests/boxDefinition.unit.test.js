@@ -1,3 +1,4 @@
+jest.mock('../src/models/Brand', () => ({ find: jest.fn() }));
 jest.mock('../src/models/Box', () => ({ findOneAndUpdate: jest.fn() }));
 jest.mock('../src/models/BoxVersion', () => ({ findOne: jest.fn(), create: jest.fn() }));
 jest.mock('../src/models/UserSubscription', () => ({ exists: jest.fn() }));
@@ -16,10 +17,12 @@ let box;
 beforeEach(() => {
   jest.resetAllMocks();
   jest.spyOn(mongoose.connection, 'transaction').mockImplementation(fn => fn(session));
-  box = { _id: id, definitionVersion: 1, stock: 10, name: 'Original', descriptions: 'Description',
+  box = { _id: id, ownerId: id, definitionVersion: 1, stock: 10, name: 'Original', descriptions: 'Description',
     validFrom: new Date(0), validTo: new Date('2099-01-01'), isGift: false,
     discountPercent: 0, products: [{ productId: id, name: 'Product', price: 100, quantity: 1 }],
     images: [], save: jest.fn().mockResolvedValue(undefined) };
+  require('../src/models/Product').find.mockReturnValue(query([{ _id: id, brand: id, ownerId: id }]));
+  require('../src/models/Brand').find.mockReturnValue({ select: () => query([{ _id: id }]) });
   Box.findOneAndUpdate.mockResolvedValue(box);
   Version.findOne.mockReturnValue(query(null));
   Version.create.mockImplementation(async ([data]) => [{ _id: 'version', ...data }]);
@@ -63,5 +66,21 @@ test('missing pinned version fails closed for legacy subscription', async () => 
 });
 test('client cannot write definitionVersion', async () => {
   await expect(changeDefinition(id, { definitionVersion: 99 })).rejects.toMatchObject({ statusCode: 400 });
+  expect(box.save).not.toHaveBeenCalled();
+});
+
+test.each([undefined, '507f1f77bcf86cd799439012'])('admin cannot edit legacy/mixed ownership (%s)', async ownerId => {
+  require('../src/models/Product').find.mockReturnValue(query([{ _id: id, brand: id, ownerId }]));
+  if (!ownerId) box.ownerId = undefined;
+  await expect(changeDefinition(id, { name: 'Changed' })).rejects.toMatchObject({ statusCode: 409 });
+  expect(box.save).not.toHaveBeenCalled();
+});
+
+test('merchant cannot replace components with another merchant product inside transaction', async () => {
+  require('../src/models/Product').find
+    .mockReturnValueOnce(query([{ _id: id, brand: id, ownerId: id }]))
+    .mockReturnValueOnce(query([{ _id: id, brand: id, ownerId: '507f1f77bcf86cd799439012' }]));
+  await expect(changeDefinition(id, { products: [{ productId: id, quantity: 1 }] }, { ownerId: id }))
+    .rejects.toMatchObject({ statusCode: 409 });
   expect(box.save).not.toHaveBeenCalled();
 });
