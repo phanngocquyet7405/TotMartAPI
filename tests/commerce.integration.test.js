@@ -14,10 +14,10 @@ test('gift survives sync -> quote -> split orders; coupon excludes gifts and shi
   const sync=await request(app).put('/api/carts/sync').set(auth(user)).send({items});expect(sync.status).toBe(200);
   expect((await Cart.findOne({userId:user._id})).items.map(i=>i.gift.message).sort()).toEqual(['For A','For B']);
   const quote=await request(app).post('/api/checkout/quote').set(auth(user)).send({items,couponCode:'SAVE'});
-  expect(quote.status).toBe(200);expect(quote.body.data).toMatchObject({subtotal:385000,bulkDiscountAmount:15000,giftFee:80000,discountAmount:38500,shippingFee:0,shippingMode:"separate",totalAmount:426500});
+  expect(quote.status).toBe(200);expect(quote.body.data).toMatchObject({subtotal:385000,bulkDiscountAmount:15000,giftFee:80000,discountAmount:38500,shippingFee:30000,totalAmount:456500});
   const placed=await request(app).post('/api/checkout/check-out').set(auth(user)).set('Idempotency-Key','commerce-integration-key').send({addressId:String(user.addresses[0]._id),paymentMethod:'cod',couponCode:'SAVE',quoteFingerprint:quote.body.data.fingerprint});
   expect(placed.status).toBe(201);const orders=await Order.find({userId:user._id});expect(orders).toHaveLength(2);
-  expect(orders.reduce((n,o)=>n+o.totalAmount,0)).toBe(426500);expect(orders.reduce((n,o)=>n+o.giftFee,0)).toBe(80000);
+  expect(orders.reduce((n,o)=>n+o.totalAmount,0)).toBe(456500);expect(orders.reduce((n,o)=>n+o.giftFee,0)).toBe(80000);
   expect(orders.flatMap(o=>o.products.map(p=>p.gift.message)).sort()).toEqual(['For A','For B']);
 });
 test('gift variants stay separate and legacy product-id mutation fails closed',async()=>{

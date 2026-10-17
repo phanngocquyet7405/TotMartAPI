@@ -198,6 +198,6 @@ describe("PUT /api/carts/sync", () => {
       });
 
     expect(res.status).toBe(201);
-    expect(res.body.data.totalAmount).toBe(30000); // Merchandise only; delivery confirmed separately
+    expect(res.body.data.totalAmount).toBe(60000); // 30k hàng + 30k ship
   });
 });

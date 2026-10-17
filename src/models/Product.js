@@ -3,7 +3,7 @@ const slug = require("mongoose-slug-updater");
 
 const productSchema = new mongoose.Schema(
   {
-    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", index: true, immutable: true },
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", immutable: true, index: true },
     productId: { type: String, unique: true, required: true },
     name: { type: String, required: true },
     sku: { type: String, default: "" },

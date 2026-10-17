@@ -33,21 +33,20 @@ class ProductController {
     try {
       const data = cleanData(req.validatedBody); await validateReferences(data);
       await uploadFiles(req.files, uploaded);
-      const product = await Product.create({ ...data, ownerId: req.user?.role === "merchant" ? req.userId : (await Brand.findById(data.brand).select("ownerId"))?.ownerId, productId: crypto.randomUUID(), stock: data.stock, instock: data.stock > 0, images: uploaded });
+      const product = await Product.create({ ...data, ...(req.managerId ? { ownerId: req.managerId } : {}), productId: crypto.randomUUID(), stock: data.stock, instock: data.stock > 0, images: uploaded });
       saved = true; res.status(201).json({ success: true, data: product });
     } catch (err) { if (!saved) await cleanup(uploaded); next(err); }
   }
   async updateProduct(req, res, next) {
     const uploaded = []; let saved = false;
     try {
-      const product = await Product.findById(req.params._id);
+      const product = await Product.findOne({ _id: req.params._id, ...(req.managerId ? await require('../services/managerCatalogService').productScope(req.managerId) : {}) });
       if (!product) fail('Sản phẩm không tồn tại', 404);
       const data = cleanData(req.validatedBody);
       // Tồn kho chỉ đổi qua adjustStock (delta nguyên tử) hoặc luồng mua hàng; bỏ qua `stock` gửi lên
       // để form cũ không ghi đè số tồn vừa thay đổi.
       delete data.stock;
       await validateReferences(data);
-      if (data.brand !== undefined) await require('../services/merchantScope').assertProductBrand(product, data.brand);
       const original = product.images.map(image => ({ url: image.url, public_id: image.public_id }));
       const submitted = req.validatedBody.existingImages;
       const retained = submitted === undefined ? original : original.filter(image => submitted.includes(image.public_id) || submitted.includes(image.url));
@@ -92,7 +91,7 @@ class ProductController {
   async deleteProduct(req, res, next) {
     try {
       if (await require('../models/Box').exists({ 'products.productId': req.params._id })) fail('Sản phẩm đang thuộc hộp; gỡ khỏi hộp trước khi xóa', 409);
-      const product = await Product.findByIdAndUpdate(req.params._id, { archivedAt: new Date() }, { new: true }); if (!product) fail('Sản phẩm không tồn tại', 404);
+      const product = await Product.findOneAndUpdate({ _id: req.params._id, ...(req.managerId ? await require('../services/managerCatalogService').productScope(req.managerId) : {}) }, { archivedAt: new Date() }, { new: true }); if (!product) fail('Sản phẩm không tồn tại', 404);
       res.json({ success: true, message: 'Đã xóa sản phẩm' });
     } catch (err) { next(err); }
   }

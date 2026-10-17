@@ -42,5 +42,5 @@ function sum(values) {
   if (amount > BigInt(Number.MAX_SAFE_INTEGER)) fail('Tổng tiền vượt giới hạn');
   return Number(amount);
 }
-function policy() { return { version: 'commerce-v2-delivery-separate', wrappingFees: fees, wrappingPer: 'unit', bulk: { appliesTo: 'standalone-product', tiers: [{ minQuantity: 3, percent: 5 }, { minQuantity: 5, percent: 10 }], aggregateBy: 'productId' }, couponBase: 'merchandise-after-bulk', shipping: { mode: 'separate', includedInCheckout: false }, shippingFee: 0 }; }
+function policy() { return { version: 'commerce-v1', wrappingFees: fees, wrappingPer: 'unit', bulk: { appliesTo: 'standalone-product', tiers: [{ minQuantity: 3, percent: 5 }, { minQuantity: 5, percent: 10 }], aggregateBy: 'productId' }, couponBase: 'merchandise-after-bulk', shippingThresholdBase: 'merchandise-after-bulk-before-coupon', shippingThreshold: 500000, shippingFee: 30000 }; }
 module.exports = { giftSchema, giftFor, lineId, normalizeLines, bulkPercent, fees, safeMoney, sum, policy, fail };

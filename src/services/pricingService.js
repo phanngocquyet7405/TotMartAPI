@@ -122,7 +122,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
       box.validFrom > now ||
       box.validTo < now ||
       (box.isGift && !box.sourceComboId) ||
-      box.subscriptionOnly ||
+      box.internalSubscription ||
       !Number.isSafeInteger(box.stock) ||
       box.stock < boxDemand.get(id) ||
       !box.products.length
@@ -140,7 +140,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
   const productMap = new Map(docs.map((p) => [String(p._id), p]));
   function productFor(id) {
     const p = productMap.get(String(id));
-    if (p?.archivedAt || !(p?.ownerId || p?.brand?.ownerId))
+    if (p?.archivedAt || !p?.brand?.ownerId)
       fail("Sản phẩm không tồn tại hoặc không có người bán hợp lệ");
     return p;
   }
@@ -164,15 +164,6 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
       bulkAmounts.set(variants[index].lineId, amount),
     );
   }
-  const boxBulkAmounts = new Map();
-  for (const id of boxIds) {
-    const box = boxMap.get(id);
-    if (!box.sourceComboId) continue;
-    const variants = normalized.filter(i => String(i.boxId) === id);
-    const giftQuote = require('./giftPolicy').quoteGift(box, boxDemand.get(id));
-    allocate(giftQuote.discount, variants.map(i => commerce.safeMoney(Math.round(box.value) * i.quantity)))
-      .forEach((amount, index) => boxBulkAmounts.set(variants[index].lineId, amount));
-  }
   const products = [],
     lines = [];
   for (const item of normalized) {
@@ -185,18 +176,19 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
         product: productFor(c.productId),
         quantity: c.quantity * item.quantity,
       }));
-      const giftQuote = box.sourceComboId ? require('./giftPolicy').quoteGift(box, boxDemand.get(String(box._id))) : null;
-      const base = commerce.safeMoney(Math.round(box.value) * item.quantity);
-      const bulkPercent = giftQuote?.percent || 0;
-      const bulkDiscount = boxBulkAmounts.get(item.lineId) || 0;
-      if (giftQuote) fee = commerce.sum([fee, commerce.safeMoney(giftQuote.amenityFee / boxDemand.get(String(box._id)) * item.quantity)]);
-      const value = commerce.safeMoney(base - bulkDiscount);
+      const baseAmount = commerce.safeMoney(Math.round(box.value) * item.quantity);
+      const percent = box.isGift ? [...(box.giftPolicy?.bulkTiers || [])]
+        .filter(t => t.minQuantity <= boxDemand.get(String(box._id))).sort((a, b) => b.minQuantity - a.minQuantity)[0]?.percent || 0 : 0;
+      const bulkAmount = Math.round(baseAmount * percent / 100);
+      const value = commerce.safeMoney(baseAmount - bulkAmount);
+      const amenitiesFee = box.isGift ? commerce.sum((box.giftPolicy?.amenities || []).map(a => commerce.safeMoney(a.fee * item.quantity))) : 0;
+      fee = commerce.sum([fee, amenitiesFee]);
       const amounts = allocate(
         value,
         parts.map((c) => commerce.safeMoney(unitPrice(c.product) * c.quantity)),
       );
       const giftFees = allocate(fee, amounts);
-      const bulkShares = allocate(bulkDiscount, amounts);
+      const bulkParts = allocate(bulkAmount, amounts);
       parts.forEach((part, index) =>
         products.push({
           productId: part.product._id,
@@ -205,12 +197,12 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
           quantity: part.quantity,
           totalPrice: amounts[index],
           brand: part.product.brand._id,
-          merchantId: part.product.ownerId || part.product.brand.ownerId,
+          merchantId: part.product.brand.ownerId,
           boxId: box._id,
           lineId: item.lineId,
           gift: item.gift,
           giftFee: giftFees[index],
-          bulkDiscountAmount: bulkShares[index],
+          bulkDiscountAmount: bulkParts[index],
         }),
       );
       lines.push({
@@ -220,9 +212,9 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
         name: box.name,
         quantity: item.quantity,
         unitPrice: Math.round(box.value),
-        baseAmount: base,
-        bulkPercent,
-        bulkDiscountAmount: bulkDiscount,
+        baseAmount,
+        bulkPercent: percent,
+        bulkDiscountAmount: bulkAmount,
         totalPrice: value,
         gift: item.gift,
         giftFee: fee,
@@ -239,7 +231,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
         quantity: item.quantity,
         totalPrice: base - discount,
         brand: p.brand._id,
-        merchantId: p.ownerId || p.brand.ownerId,
+        merchantId: p.brand.ownerId,
         lineId: item.lineId,
         gift: item.gift,
         giftFee: fee,
@@ -288,8 +280,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
     giftFee = commerce.sum(lines.map((l) => l.giftFee));
   const discount = await couponDiscount(couponCode, subtotal, session, claim);
   commerce.safeMoney(discount.discountAmount);
-  // Delivery is quoted separately; zero here does NOT promise free delivery.
-  const shippingFee = 0;
+  const shippingFee = subtotal > 0 && subtotal < 500000 ? 30000 : 0;
   const totalAmount = commerce.sum([
     subtotal - discount.discountAmount,
     shippingFee,
@@ -320,7 +311,6 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
     subtotal,
     giftFee,
     shippingFee,
-    shippingMode: "separate",
     ...discount,
     totalAmount,
     fingerprint,

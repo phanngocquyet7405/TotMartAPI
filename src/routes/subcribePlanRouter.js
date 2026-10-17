@@ -59,6 +59,7 @@ router.get('/get-active-subscribe',
 // User: Subscribe to a template
 router.post('/user-subscribe',
     authMiddleware.authMiddleware,
+    authMiddleware.customerCheckoutMiddleware,
     validationHandler.validate(subscribeToTemplateSchema),
     userSubscriptionController.subscribeToTemplate
 );

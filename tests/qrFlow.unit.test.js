@@ -129,7 +129,7 @@ test("checkout returns HTTP 201 with exactly the three payment fields after crea
     data: {
       orderId: "mongo-order-id",
       orderCode: expect.stringMatching(/^TMART/),
-      totalAmount: 100000,
+      totalAmount: 130000,
     },
   });
   expect(Order.create).toHaveBeenCalled();

@@ -22,13 +22,13 @@ class BoxController {
         .findOne({
           _id: req.params._id,
           archivedAt: null,
-          $or: [{ isGift: false }, { sourceComboId: { $ne: null } }],
-          subscriptionOnly: { $ne: true },
+          $or: [{ isGift: false }, { isGift: true, sourceComboId: { $ne: null } }],
+          internalSubscription: { $ne: true },
           validFrom: { $lte: now },
           validTo: { $gte: now },
         })
         .select(
-          "name stock descriptions validFrom validTo products totalItem value images discountPercent isGift sourceComboId giftPolicy",
+          "name stock descriptions validFrom validTo products totalItem value images discountPercent isGift giftPolicy sourceComboId",
         );
       if (!box)
         return res
@@ -47,7 +47,6 @@ class BoxController {
 
       const productIds = validated.products.map((p) => p.productId);
       const productDocs = await productModel.find({ _id: { $in: productIds } });
-      if (productDocs.length !== new Set(productIds.map(String)).size) return res.status(400).json({ success: false, message: "Sản phẩm không tồn tại" });
       const productMap = new Map(
         productDocs.map((doc) => [doc._id.toString(), doc]),
       );
@@ -114,13 +113,12 @@ class BoxController {
       const { products, ...rest } = validated;
       const newBox = new boxModel({
         ...rest,
-        ...(req.user?.role === "merchant" ? { ownerId: req.userId } : {}),
         products: builtProducts,
         result,
         validFrom: validated.validFrom || new Date(),
         validTo: new Date(validated.validTo),
         totalItem: builtProducts.length,
-        value: Math.round(value),
+        value,
       });
       newBox.images = result;
       await newBox.save();
@@ -136,15 +134,12 @@ class BoxController {
 
   async getAllBoxes(req, res, next) {
     try {
-      const filter = { archivedAt: null, subscriptionOnly: { $ne: true } };
-      if (req.query.kind === 'gift') Object.assign(filter, { isGift: true, sourceComboId: { $ne: null } });
-      if (req.query.kind === 'combo') filter.isGift = false;
-      if (req.query.kind) { const now = new Date(); filter.validFrom = { $lte: now }; filter.validTo = { $gte: now }; }
-      // Paginate public catalog without exposing subscription-only bundles.
+      // [FIX]: Áp dụng tiện ích phân trang để tránh Memory Leak
       const { data, pagination } = await paginate(
         boxModel,
         req.query,
-        filter,
+        { archivedAt: null, internalSubscription: { $ne: true },
+          ...(['combo', 'gift'].includes(req.query.kind || req.query.type) ? { isGift: (req.query.kind || req.query.type) === 'gift' } : {}) },
         { sort: { createdAt: -1 } },
       );
 
@@ -249,6 +244,7 @@ class BoxController {
       const box = await boxModel.findOne({
         _id: req.params._id,
         archivedAt: null,
+        internalSubscription: { $ne: true },
       });
       if (!box) {
         return res.status(404).json({
@@ -280,6 +276,7 @@ class BoxController {
     try {
       const discountBox = await boxModel.find({
         archivedAt: null,
+        internalSubscription: { $ne: true },
         discountPercent: { $gt: 0 },
       });
       const newBox = await boxModel.find({

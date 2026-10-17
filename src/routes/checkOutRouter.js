@@ -25,6 +25,7 @@ router.post(
   "/check-out",
   checkoutLimiter,
   authMiddleware.authMiddleware,
+  authMiddleware.customerCheckoutMiddleware,
   validationHandler.validate(checkoutSchema, "body"),
   checkOutController.checkOut,
 );

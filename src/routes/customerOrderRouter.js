@@ -5,7 +5,6 @@ const validation = require("../middleware/validationHandler");
 const { idParamSchema } = require("../middleware/validationSchemas");
 
 router.use(authMiddleware);
-router.post("/:_id/confirm-receipt", validation.validate(idParamSchema, "params"), controller.confirmReceipt);
 router.get("/", controller.list);
 router.get(
   "/:_id",

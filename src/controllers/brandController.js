@@ -1,5 +1,4 @@
 const brand = require("../models/Brand");
-const { assertMerchant, assertBrandAssignment } = require("../services/merchantScope");
 const productModel = require("../models/Product");
 const { paginate } = require("../utils/pagination");
 const { uploadLogo, removeLogo } = require("../utils/brandLogoStorage");
@@ -10,7 +9,6 @@ class BrandController {
     let saved = false;
     try {
       const validated = { ...req.validatedBody };
-      if (validated.ownerId) await assertMerchant(validated.ownerId);
       if (validated.description !== undefined) validated.description = require("../utils/safeHtml")(validated.description);
       if (req.file) {
         uploaded = await uploadLogo(req.file);
@@ -18,7 +16,7 @@ class BrandController {
         validated.logoPublicId = uploaded.publicId;
       }
       const newBrand = new brand(validated);
-      newBrand.ownerId = validated.ownerId || req.userId;
+      newBrand.ownerId = req.userId;
       await newBrand.save();
       saved = true;
       res.status(201).json({
@@ -38,7 +36,6 @@ class BrandController {
     try {
       const validated = { ...req.validatedBody };
       if (validated.description !== undefined) validated.description = require("../utils/safeHtml")(validated.description);
-      if (validated.ownerId) await assertBrandAssignment(req.params._id, validated.ownerId);
       const newData = {
         ...validated,
       };

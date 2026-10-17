@@ -50,7 +50,6 @@ const orderSchema = new mongoose.Schema(
     stockDeducted: { type: Boolean, default: false },
     totalAmount: { type: Number, required: true },
     shippingFee: { type: Number, default: 0 },
-    shippingMode: { type: String, enum: ["legacy_fixed", "separate"], default: "legacy_fixed" },
     giftFee: { type: Number, default: 0, min: 0 },
     bulkDiscountAmount: { type: Number, default: 0, min: 0 },
     pricingPolicyVersion: String,
@@ -82,6 +81,9 @@ const orderSchema = new mongoose.Schema(
     confirmedAt: { type: Date, default: null },
     paidAt: { type: Date, default: null },
     shippedAt: { type: Date, default: null },
+    trackingReference: { type: String, maxlength: 150 },
+    deliveryConfirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    codCollectionStatus: { type: String, enum: ["not_reported", "pending_review", "confirmed"], default: "not_reported" },
     deliveredAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
     returnedAt: { type: Date, default: null },
@@ -130,6 +132,7 @@ orderSchema.index({ paymentCode: 1 });
 orderSchema.index({ userId: 1, createdAt: -1 });
 orderSchema.index({ status: 1, paymentMethod: 1 });
 orderSchema.index({ refundStatus: 1 });
+orderSchema.index({ merchantId: 1, createdAt: -1 });
 
 orderSchema.pre("save", function (next) {
   const now = new Date();

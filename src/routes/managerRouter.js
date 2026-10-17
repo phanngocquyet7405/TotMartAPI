@@ -1,108 +1,68 @@
 const express = require('express');
 const Joi = require('joi');
-const mongoose = require('mongoose');
 const auth = require('../middleware/authMiddleware');
-const validate = require('../middleware/validationHandler');
-const schemas = require('../middleware/validationSchemas');
-const Product = require('../models/Product');
-const Box = require('../models/Box');
-const Template = require('../models/SubscriptionTemplate');
-const Brand = require('../models/Brand');
-const Order = require('../models/Order');
-const products = require('../controllers/productController');
-const boxes = require('../controllers/boxController');
-const templates = require('../controllers/subscriptionTemplateController');
-const manager = require('../services/managerService');
+const schemas = require('../middleware/managerSchemas');
 const upload = require('../middleware/uploadMiddleware');
+const catalog = require('../services/managerCatalogService');
+const product = require('../controllers/productController');
+const controller = require('../controllers/managerController');
 const router = express.Router();
-const run = fn => (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
-function fail(message, statusCode = 400) { throw Object.assign(new Error(message), { statusCode }); }
 router.use(auth.authMiddleware, (req, res, next) => {
-  if (req.user.role !== 'merchant') return res.status(403).json({ success: false, message: 'Chỉ merchant được truy cập manager' });
+  if (req.user.role !== 'merchant') return res.status(403).json({ success: false, message: 'Khu vực dành riêng cho merchant' });
+  req.managerId = req.userId;
   next();
 });
-const own = Model => run(async (req, res, next) => {
-  if (!mongoose.isObjectIdOrHexString(req.params._id)) fail('ID không hợp lệ');
-  if (!await Model.exists({ _id: req.params._id, ...require('../services/merchantScope').ownerFilter(req) })) fail('Không tìm thấy dữ liệu của bạn', 404);
-  next();
-});
-const { checkProducts } = manager;
-const references = run(async (req, res, next) => {
-  const data = req.validatedBody;
-  if (data.products) await checkProducts(data.products, req.userId);
-  if (data.brand && !await Brand.exists({ _id: data.brand, ownerId: req.userId })) fail('Thương hiệu không thuộc bạn', 403);
-  if (data.boxId) {
-    const combo = await Box.findOne({ _id: data.boxId, ownerId: req.userId, archivedAt: null, isGift: false });
-    if (!combo) fail('Combo không thuộc bạn', 403);
-    await checkProducts(combo.products, req.userId);
+function validate(schema, source = 'body') {
+  return (req, res, next) => {
+    const { value, error } = schema.validate(req[source], { abortEarly: false, stripUnknown: false });
+    if (error) return res.status(400).json({ success: false, message: 'Dữ liệu không hợp lệ', errors: error.details.map(d => ({ field: d.path.join('.'), message: d.message })) });
+    if (source === 'body') req.validatedBody = value;
+    next();
+  };
+}
+function parseMultipart(req, res, next) {
+  for (const key of ['products', 'giftPolicy']) if (typeof req.body?.[key] === 'string') {
+    try { req.body[key] = JSON.parse(req.body[key]); }
+    catch { return res.status(400).json({ success: false, message: `${key} cần JSON hợp lệ` }); }
   }
-  for (const gift of data.gift || []) if (!await Box.exists({ _id: gift.boxId, ownerId: req.userId, archivedAt: null, isGift: true })) fail('Gift không thuộc bạn', 403);
   next();
-});
-const parseProducts = (req, res, next) => {
-  if (typeof req.body.products === 'string') { try { req.body.products = JSON.parse(req.body.products); } catch { return res.status(400).json({ success: false, message: 'Danh sách sản phẩm không hợp lệ' }); } }
+}
+const id = validate(schemas.idParams, 'params');
+async function ownProduct(req, res, next) {
+  await catalog.requireProduct(req.userId, req.params.id);
+  req.params._id = req.params.id;
   next();
-};
-const list = Model => run(async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
-  const filter = { ...require('../services/merchantScope').ownerFilter(req), ...(Model === Product || Model === Box ? { archivedAt: null } : {}) };
-  if (Model === Box && req.query.kind === 'combo') Object.assign(filter, { isGift: false, subscriptionOnly: { $ne: true } });
-  if (Model === Box && req.query.kind === 'gift') Object.assign(filter, { isGift: true, sourceComboId: { $ne: null } });
-  if (Model === Product) Object.assign(filter, require('../services/merchantScope').productFilters(req.query));
-  const [data, total] = await Promise.all([Model.find(filter).sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit), Model.countDocuments(filter)]);
-  res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
-});
-router.get('/products', list(Product));
-router.get('/combos', list(Box));
-router.get('/subscriptions', list(Template));
-router.get('/catalog-options', run(async (req, res) => {
-  const [brands, categories] = await Promise.all([Brand.find({ ownerId: req.userId }).select('name'), require('../models/Category').find().select('name')]);
-  res.json({ success: true, data: { brands, categories } });
-}));
-router.post('/products', upload.array('images', 10), validate.validate(schemas.productSchema), references, products.createProduct);
-router.put('/products/:_id', own(Product), upload.array('images', 10), validate.validate(schemas.productUpdateSchema), references, products.updateProduct);
-router.delete('/products/:_id', own(Product), products.deleteProduct);
-router.patch('/products/:_id/stock', own(Product), validate.validate(schemas.adjustStockSchema), products.adjustStock);
-router.post('/combos', upload.boxUpload.array('images', 10), parseProducts, validate.validate(schemas.createBoxSchema.keys({ isGift: Joi.boolean().valid(false).default(false) })), references, boxes.createBox);
-router.put('/combos/:_id', own(Box), upload.boxUpload.array('images', 10), parseProducts, validate.validate(schemas.updateBoxSchema.keys({ isGift: Joi.forbidden() })), references, boxes.updateBox);
-router.delete('/combos/:_id', own(Box), boxes.deleteBox);
-router.patch('/combos/:_id/stock', own(Box), validate.validate(schemas.adjustStockSchema), boxes.adjustStock);
-router.post('/subscriptions', validate.validate(schemas.createSubscriptionTemplateSchema), references, templates.createTemplate);
-router.patch('/subscriptions/:_id', own(Template), validate.validate(schemas.updateSubscriptionTemplateSchema), references, (req, res, next) => { req.params.id = req.params._id; next(); }, templates.updateTemplate);
-router.delete('/subscriptions/:_id', own(Template), (req, res, next) => { req.params.id = req.params._id; next(); }, templates.deleteTemplate);
-// Retail subscriptions reuse the existing versioned monthly delivery engine.
-router.post('/retail-subscriptions', validate.validate(Joi.object({
-  name: Joi.string().min(3).max(100).required(), description: Joi.string().max(500).default(''),
-  products: schemas.createBoxSchema.extract('products'), stock: Joi.number().integer().min(0).required(),
-  validTo: Joi.date().greater('now').required(), planType: schemas.createSubscriptionTemplateSchema.extract('planType'),
-  discountPercent: Joi.number().min(0).max(100).default(0),
-})), references, run(async (req, res) => {
-  const template = await manager.createRetailSubscription(req.validatedBody, req.userId);
-  res.status(201).json({ success: true, data: template });
-}));
-router.get('/orders', run(async (req, res) => {
-  const page = Math.max(1, parseInt(req.query.page, 10) || 1), limit = 20;
-  const filter = { merchantId: req.userId };
-  const [data, total] = await Promise.all([Order.find(filter).select('orderId products status totalAmount shippingAddress paymentMethod paymentStatus createdAt').sort({ createdAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit), Order.countDocuments(filter)]);
-  res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
-}));
-const giftInput = Joi.object({
-  name: Joi.string().min(3).max(100).required(), comboId: Joi.string().hex().length(24).required(),
-  stock: Joi.number().integer().min(0).required(), validTo: Joi.date().greater('now').required(),
-  giftPolicy: require('../services/giftPolicy').schema.required(),
-});
-router.post('/gifts', validate.validate(giftInput), run(async (req, res) => {
-  const gift = await manager.createGift(req.validatedBody, req.userId);
-  res.status(201).json({ success: true, data: gift });
-}));
-router.patch('/gifts/:_id', own(Box), validate.validate(Joi.object({
-  name: Joi.string().min(3).max(100), giftPolicy: require('../services/giftPolicy').schema,
-  validTo: Joi.date().greater('now'),
-}).min(1)), run(async (req, res) => {
-  const box = await Box.findOne({ _id: req.params._id, ownerId: req.userId, isGift: true, sourceComboId: { $ne: null } });
-  if (!box) fail('Không tìm thấy gift', 404);
-  const data = await require('../services/boxDefinitionService').changeDefinition(box._id, req.validatedBody);
-  res.json({ success: true, data });
-}));
+}
+async function ownReferences(req, res, next) {
+  if (req.validatedBody.brand) await catalog.requireBrand(req.userId, req.validatedBody.brand);
+  if (req.validatedBody.category && !await require('../models/Category').exists({ _id: req.validatedBody.category, isActive: { $ne: false } })) catalog.fail('Danh mục không tồn tại hoặc đã ngừng sử dụng');
+  next();
+}
+router.get('/catalog-options', controller.options);
+router.post('/brands', validate(Joi.object({ name: Joi.string().trim().min(3).max(100).required() })), controller.createBrand);
+router.get('/products', controller.products);
+router.post('/products', upload.array('images', 10), validate(schemas.createProduct), ownReferences, product.createProduct);
+router.put('/products/:id', id, ownProduct, upload.array('images', 10),
+  (req, res, next) => validate(req.files?.length ? schemas.updateProduct.min(0) : schemas.updateProduct)(req, res, next), ownReferences, product.updateProduct);
+router.patch('/products/:id/stock', id, validate(schemas.stock), controller.productStock);
+router.delete('/products/:id', id, ownProduct, product.deleteProduct);
+router.get('/combos', controller.combos);
+router.post('/combos', upload.array('images', 10), parseMultipart, validate(schemas.createCombo), controller.createCombo);
+router.put('/combos/:id', id, upload.array('images', 10), parseMultipart,
+  (req, res, next) => validate(req.files?.length ? schemas.updateCombo.min(0) : schemas.updateCombo)(req, res, next), controller.updateCombo);
+router.patch('/combos/:id/stock', id, validate(schemas.stock), controller.boxStock);
+router.delete('/combos/:id', id, controller.deleteBox);
+router.get('/gifts', (req, res, next) => { req.managerKind = 'gift'; next(); }, controller.combos);
+router.post('/gifts', validate(schemas.createGift), controller.createGift);
+router.patch('/gifts/:id', id, validate(schemas.updateGift), controller.updateGift);
+router.get('/subscriptions', controller.subscriptions);
+router.post('/subscriptions', validate(schemas.createSubscription), controller.createSubscription);
+router.post('/retail-subscriptions', validate(schemas.createRetail), controller.createRetail);
+router.patch('/retail-subscriptions/:id/stock', id, validate(schemas.stock), controller.retailStock);
+router.patch('/subscriptions/:id', id, validate(schemas.updateSubscription), controller.updateSubscription);
+router.delete('/subscriptions/:id', id, controller.deleteSubscription);
+router.get('/orders', controller.orders);
+router.get('/orders/:id', id, controller.orderDetail);
+router.patch('/orders/:id/status', id, validate(schemas.orderStatus), controller.orderStatus);
+router.post('/orders/:id/status', id, validate(schemas.orderStatus), controller.orderStatus);
 module.exports = router;

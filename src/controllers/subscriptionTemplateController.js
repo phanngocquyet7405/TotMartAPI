@@ -29,7 +29,6 @@ class SubscriptionTemplateController {
       }
 
       const template = new SubscriptionTemplate({
-        ...(req.user?.role === "merchant" ? { ownerId: req.userId } : {}),
         name: validated.name,
         isActive: validated.isActive,
         description: validated.description || "",
@@ -181,9 +180,9 @@ class SubscriptionTemplateController {
 
   async getActiveTemplates(req, res, next) {
     try {
-      const templates = await SubscriptionTemplate.find({ isActive: true })
-        .populate("boxId", "name value images totalItem products stock descriptions")
-        .populate("gift.boxId", "name images")
+      const templates = await SubscriptionTemplate.find({ isActive: true, archivedAt: null })
+        .populate("boxId", "name value image")
+        .populate("gift.boxId", "name image")
         .sort({ createdAt: -1 })
         .limit(50);
 

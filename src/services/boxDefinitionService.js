@@ -11,11 +11,11 @@ function fail(message, statusCode = 409) {
 function requireTransaction(session) {
   if (!session?.inTransaction()) throw new Error('Box operation requires an active transaction');
 }
-async function guardBox(boxId, session) {
+async function guardBox(boxId, session, { ownerId } = {}) {
   requireTransaction(session);
   if (!mongoose.isObjectIdOrHexString(boxId)) fail('Box ID không hợp lệ', 400);
   // Shared write serializes pinning against edits/archive, including read predicates.
-  const box = await Box.findOneAndUpdate({ _id: boxId, archivedAt: null },
+  const box = await Box.findOneAndUpdate({ _id: boxId, archivedAt: null, ...(ownerId ? { ownerId } : {}) },
     { $inc: { obligationRevision: 1 } }, { new: true, session });
   if (!box) fail('Box không tồn tại hoặc đã lưu trữ', 404);
   if (!Number.isSafeInteger(box.definitionVersion) || box.definitionVersion < 1)
@@ -28,8 +28,6 @@ function definition(box) {
     products: box.products.map(p => ({ productId: p.productId,
       quantity: p.quantity, price: p.price, name: p.name || box.name })),
     value: box.value, totalItem: box.totalItem, isGift: box.isGift,
-    giftPolicy: box.giftPolicy?.toObject ? box.giftPolicy.toObject() : box.giftPolicy,
-    sourceComboId: box.sourceComboId, subscriptionOnly: box.subscriptionOnly,
     discountPercent: box.discountPercent, validFrom: box.validFrom, validTo: box.validTo,
     images: box.images.map(i => ({ url: i.url, public_id: i.public_id })),
   };
@@ -67,9 +65,11 @@ async function applyPatch(box, input, uploadedImages, session) {
   for (const key of Object.keys(input)) if (!allowed.has(key)) fail(`Field không được phép: ${key}`, 400);
   for (const key of ['name', 'validFrom', 'validTo', 'isGift', 'discountPercent'])
     if (input[key] !== undefined) box[key] = input[key];
-  if (input.giftPolicy !== undefined) box.giftPolicy = input.giftPolicy;
-  if (box.sourceComboId && (input.products !== undefined || input.isGift === false || input.discountPercent !== undefined)) fail('Gift giữ sản phẩm từ combo nguồn; hãy tạo gift mới', 400);
   if (input.descriptions !== undefined) box.descriptions = safeHtml(input.descriptions);
+  if (input.giftPolicy !== undefined) {
+    if (!box.isGift) fail('Chỉ gift có chính sách quà', 400);
+    box.giftPolicy = input.giftPolicy;
+  }
   if (box.validFrom > box.validTo) fail('Ngày kết thúc phải sau ngày bắt đầu', 400);
   if (input.products !== undefined) {
     if (!input.products.length) fail('Box cần ít nhất một sản phẩm', 400);
@@ -77,7 +77,6 @@ async function applyPatch(box, input, uploadedImages, session) {
     const map = new Map(docs.map(p => [String(p._id), p]));
     box.products = input.products.map(p => {
       const product = map.get(String(p.productId));
-      if (box.ownerId && String(product?.ownerId) !== String(box.ownerId)) fail("Sản phẩm không thuộc merchant của combo", 403);
       if (!product) fail('Sản phẩm trong Box không tồn tại', 400);
       if (!Number.isSafeInteger(p.quantity) || p.quantity < 1) fail('Số lượng cấu phần không hợp lệ', 400);
       return { productId: product._id, quantity: p.quantity, price: product.price, name: product.name };
@@ -91,15 +90,15 @@ async function applyPatch(box, input, uploadedImages, session) {
   }
   box.images.push(...uploadedImages);
   const subtotal = box.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
-  if (!box.sourceComboId) box.value = Math.round(subtotal * (1 - box.discountPercent / 100));
+  box.value = Math.round(subtotal * (1 - box.discountPercent / 100));
   if (!Number.isSafeInteger(box.value) || box.value < 0) fail('Giá Box không hợp lệ', 400);
   box.totalItem = box.products.length;
   // stock ignored: only atomic stock adjustment/inventory services may change it.
 }
-async function changeDefinition(boxId, input, { archive = false, uploadedImages = [] } = {}) {
+async function changeDefinition(boxId, input, { archive = false, uploadedImages = [], ownerId } = {}) {
   let result;
   await mongoose.connection.transaction(async session => {
-    const box = await guardBox(boxId, session);
+    const box = await guardBox(boxId, session, { ownerId });
     await assertEditable(box._id, session);
     await ensureVersion(box, session);
     if (archive) box.archivedAt = new Date();
