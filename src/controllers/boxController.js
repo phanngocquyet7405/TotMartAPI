@@ -139,6 +139,7 @@ class BoxController {
         boxModel,
         req.query,
         { archivedAt: null, internalSubscription: { $ne: true },
+          ...(req.query.available === 'true' ? { validFrom: { $lte: new Date() }, validTo: { $gte: new Date() }, stock: { $gt: 0 } } : {}),
           ...(['combo', 'gift'].includes(req.query.kind || req.query.type) ? { isGift: (req.query.kind || req.query.type) === 'gift' } : {}) },
         { sort: { createdAt: -1 } },
       );

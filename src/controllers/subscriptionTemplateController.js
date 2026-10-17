@@ -1,6 +1,6 @@
 const { prepaidPrice, planMonths } = require('../services/subscriptionService');
 const safeHtml = require('../utils/safeHtml');
-function present(template) { const obj = template.toObject ? template.toObject() : template; if (obj.boxId?.value !== undefined) Object.assign(obj, prepaidPrice(obj.boxId.value, obj.planType, obj.discountPercent)); obj.description = safeHtml(obj.description); obj.totalDeliveries = planMonths(obj.planType); obj.billingMode = 'prepaid_full'; return obj; }
+function present(template) { const obj = template.toObject ? template.toObject() : template; if (obj.boxId?.value !== undefined) Object.assign(obj, prepaidPrice(obj.boxId.value, obj.planType, obj.discountPercent)); obj.description = safeHtml(obj.description); obj.totalDeliveries = planMonths(obj.planType); obj.billingMode = 'prepaid_full'; obj.shippingPayment = 'customer_to_carrier'; return obj; }
 const SubscriptionTemplate = require("../models/SubscriptionTemplate");
 const boxModel = require("../models/Box");
 const { paginate } = require("../utils/pagination");

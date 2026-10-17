@@ -16,6 +16,7 @@ const userSchema = new mongoose.Schema(
     },
     addresses: [
       {
+        fullName: { type: String, maxlength: 120 },
         country: { type: String },
         city: { type: String },
         district: { type: String },

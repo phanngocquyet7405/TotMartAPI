@@ -87,6 +87,7 @@ const productUpdateSchema = joi
   .min(1);
 
 const updateAddressSchema = joi.object({
+  fullName: joi.string().trim().min(2).max(120).optional(),
   country: joi.string().max(100).optional(),
   city: joi.string().max(100).optional(),
   district: joi.string().max(100).optional(),
@@ -98,6 +99,7 @@ const updateAddressSchema = joi.object({
 });
 
 const brandSchema = joi.object({
+  ownerId: joi.string().hex().length(24).optional(),
   name: joi.string().min(3).max(100).required(),
   description: joi.string().max(500).optional(),
   cityAddress: joi.string().max(255).optional(),
@@ -106,6 +108,7 @@ const brandSchema = joi.object({
 
 const updateBrandSchema = joi
   .object({
+    ownerId: joi.string().hex().length(24).optional(),
     name: joi.string().min(3).max(100).optional(),
     description: joi.string().max(500).optional(),
     cityAddress: joi.string().max(255).optional(),
@@ -205,7 +208,7 @@ const createSubcribePlanSchema = joi.object({
         .required(),
     })
     .required(),
-  discountPercent: joi.number().min(0).max(100).optional(),
+  discountPercent: joi.number().min(0).less(100).optional(),
   gift: joi
     .array()
     .items(
@@ -229,7 +232,7 @@ const createSubscriptionTemplateSchema = joi.object({
     .string()
     .valid("1_month", "3_month", "6_month", "12_month")
     .required(),
-  discountPercent: joi.number().min(0).max(100).optional(),
+  discountPercent: joi.number().min(0).less(100).optional(),
   gift: joi
     .array()
     .items(
@@ -251,7 +254,7 @@ const updateSubscriptionTemplateSchema = joi
       .string()
       .valid("1_month", "3_month", "6_month", "12_month")
       .optional(),
-    discountPercent: joi.number().min(0).max(100).optional(),
+    discountPercent: joi.number().min(0).less(100).optional(),
     isActive: joi.boolean().optional(),
     gift: joi
       .array()

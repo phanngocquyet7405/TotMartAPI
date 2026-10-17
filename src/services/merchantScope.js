@@ -21,7 +21,11 @@ async function assertBrandAssignment(brandId, ownerId) {
     fail('Thương hiệu có sản phẩm chưa thuộc merchant này. Chạy migration hoặc xử lý chuyển chủ trước khi gán.', 409);
 }
 async function assertProductBrand(product, brandId) {
-  if (!product.ownerId) return; // Legacy data must be reviewed by migration.
+  if (!product.ownerId) {
+    const previous = await Brand.findById(product.brand).select('ownerId');
+    if (!previous?.ownerId) fail('Chủ sản phẩm legacy chưa xác minh; không được đổi brand', 409);
+    product = { ownerId: previous.ownerId };
+  }
   const brand = await Brand.findById(brandId).select('ownerId');
   if (!brand || String(brand.ownerId) !== String(product.ownerId))
     fail('Không được chuyển sản phẩm sang thương hiệu của chủ khác; chủ sản phẩm và nghĩa vụ đã bán được giữ nguyên.', 409);

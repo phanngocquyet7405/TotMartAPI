@@ -22,7 +22,7 @@ Các việc FE còn độc lập với cập nhật BE này:
 - Đổi các route công khai/menu sang /subscription, /box, /gift và thêm menu/trang admin Gift. Backend đã có API, không thể tạo route Next.js chỉ bằng thay Express.
 - Profile phải đọc addresses, chuẩn hóa trường address/city và hoàn thiện thêm địa chỉ checkout; truyền keyword tìm kiếm đúng.
 - Hoàn thiện attempt checkout khi mất phản hồi và storage/version recovery như báo cáo audit trước. Server vẫn có idempotency theo key; không thể tự nhận ra hai key khác nhau là cùng ý định mua.
-- UI phải hiển thị policy/amenities và các khoản tiền đúng quote; quyết định phí ship riêng là thay đổi nghiệp vụ cần thống nhất, chưa được đổi trong bản này.
+- UI phải hiển thị policy/amenities và các khoản tiền đúng quote; phí ship do khách trả trực tiếp cho bên giao hàng, không nằm trong tiền đơn mới; dữ liệu lịch sử không tính lại.
 - FE subscription validator hiện cho phép giảm 100%; backend từ chối vì gói trả trước cần tổng dương. Cần đồng bộ validation UI.
 - Chưa chụp/kiểm tra browser desktop/mobile hoặc thử courier/SePay/Cloudinary thật. Không coi compile/test server là nghiệm thu giao diện hay dòng tiền production.
 

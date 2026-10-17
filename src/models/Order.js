@@ -50,6 +50,8 @@ const orderSchema = new mongoose.Schema(
     stockDeducted: { type: Boolean, default: false },
     totalAmount: { type: Number, required: true },
     shippingFee: { type: Number, default: 0 },
+    shippingPayment: { type: String, enum: ['platform', 'customer_to_carrier'] },
+    shippingMode: { type: String, enum: ['separate', 'legacy_fixed'] },
     giftFee: { type: Number, default: 0, min: 0 },
     bulkDiscountAmount: { type: Number, default: 0, min: 0 },
     pricingPolicyVersion: String,

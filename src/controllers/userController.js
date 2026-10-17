@@ -169,6 +169,7 @@ class UserController {
   async updateAddress(req, res, next) {
     try {
       const newAddress = {
+        fullName: req.validatedBody.fullName,
         country: req.validatedBody.country,
         city: req.validatedBody.city,
         district: req.validatedBody.district,
@@ -205,6 +206,7 @@ class UserController {
       if (addressIndex === -1) {
         return res.status(404).json({ message: "Address not found" });
       }
+      if (req.validatedBody.fullName !== undefined) user.addresses[addressIndex].fullName = req.validatedBody.fullName;
       user.addresses[addressIndex].country =
         req.validatedBody.country || user.addresses[addressIndex].country;
       user.addresses[addressIndex].city =

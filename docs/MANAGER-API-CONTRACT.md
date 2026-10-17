@@ -63,6 +63,6 @@ Projection merchant không trả customerEmail, paymentCode, thông tin receipt/
 
 ## Giá, tồn và lịch sử
 
-Quote/check-out giữ nguồn sự thật ở server. Gift mới được tính giảm theo tổng số cùng gift trên giỏ và cộng phí amenity theo đơn vị; snapshot tổng dòng lưu vào đơn. Inventory khấu trừ/hoàn kho qua transaction cũ. Test đã kiểm tra gift 3 × 200.000, giảm 10%, tiện ích 5.000/hộp → 555.000 (không phí ship vì đạt ngưỡng theo policy hiện tại).
+Quote/check-out giữ nguồn sự thật ở server. Gift mới được tính giảm theo tổng số cùng gift trên giỏ và cộng phí amenity theo đơn vị; snapshot tổng dòng lưu vào đơn. Inventory khấu trừ/hoàn kho qua transaction cũ. Test đã kiểm tra gift 3 × 200.000, giảm 10%, tiện ích 5.000/hộp → 555.000 (không thu phí ship trong đơn theo policy mới).
 
-Không thay đổi chính sách phí ship cũ trong đợt này: dưới ngưỡng 500.000 vẫn có phí 30.000 theo pricingService. FE có đoạn chữ nói ship xác nhận riêng; cần quyết định nghiệp vụ rồi đồng bộ cả hai bên, không âm thầm thay tiền khách trả để làm chữ giao diện khớp. Không tạo alias addreses: API địa chỉ chuẩn vẫn addresses; lỗi viết sai ở profile FE cần sửa FE.
+Khách trả phí ship trực tiếp cho bên giao hàng. Quote/check-out mới không thu phí ship trong tiền COD/chuyển khoản; shippingFee=0 và shippingPayment=customer_to_carrier. Đơn cũ giữ snapshot và số tiền cũ. API addresses có fullName tùy chọn; FE đã sửa tên trường và lưu địa chỉ mới bằng API. Xem COMMERCE-FE-V2.md để biết phạm vi và giới hạn nghiệm thu.

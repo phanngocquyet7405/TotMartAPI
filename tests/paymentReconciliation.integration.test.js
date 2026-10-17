@@ -20,7 +20,7 @@ function receipt(code, amount, overrides = {}) {
 }
 async function checkout() {
   const { user } = await createUser(); const brand = await createBrand();
-  const product = await createProduct(brand, { price: 70000, stock: 5 });
+  const product = await createProduct(brand, { price: 100000, stock: 5 });
   await createCartWithItems(user._id, [{ productId: product._id, quantity: 1 }]);
   const res = await request(app).post('/api/checkout/check-out')
     .set('Authorization', `Bearer ${signToken(user)}`)

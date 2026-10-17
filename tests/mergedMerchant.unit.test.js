@@ -16,7 +16,9 @@ const authorization = () => `Bearer ${jwt.sign({ userId: actor, tokenVersion: 0 
 beforeEach(() => { role = 'merchant'; jest.spyOn(User, 'findById').mockImplementation(async () => ({ _id: actor, role, tokenVersion: 0, isActive: true })); });
 afterEach(() => { jest.restoreAllMocks(); jest.clearAllMocks(); });
 test('multipart combo update parses products and calls version service only after ownership validation', async () => {
-  jest.spyOn(Box, 'exists').mockResolvedValue(true); jest.spyOn(Product, 'countDocuments').mockResolvedValue(1);
+  jest.spyOn(Box,'findOne').mockResolvedValue({_id:target,isGift:false,internalSubscription:false});
+  jest.spyOn(Brand,'find').mockReturnValue({select:()=>({session:async()=>[{_id:target}]})});
+  jest.spyOn(Product,'find').mockReturnValue({session:async()=>[{_id:target,name:'Fixture',price:100000}]});
   definitions.changeDefinition.mockResolvedValue({ _id: target, name: 'Changed' });
   const res = await request(app).put('/manager/combos/' + target).set('Authorization', authorization()).field('name', 'Changed').field('products', JSON.stringify([{ productId: target, quantity: 2 }]));
   expect(res.status).toBe(200); expect(definitions.changeDefinition.mock.calls[0][1].products).toEqual([{ productId: target, quantity: 2 }]);

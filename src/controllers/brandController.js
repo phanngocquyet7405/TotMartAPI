@@ -16,7 +16,8 @@ class BrandController {
         validated.logoPublicId = uploaded.publicId;
       }
       const newBrand = new brand(validated);
-      newBrand.ownerId = req.userId;
+      if (validated.ownerId) await require('../services/merchantScope').assertMerchant(validated.ownerId);
+      newBrand.ownerId = validated.ownerId || req.userId;
       await newBrand.save();
       saved = true;
       res.status(201).json({
@@ -36,6 +37,13 @@ class BrandController {
     try {
       const validated = { ...req.validatedBody };
       if (validated.description !== undefined) validated.description = require("../utils/safeHtml")(validated.description);
+      if (validated.ownerId) {
+        const current = await brand.findById(req.params._id).select('ownerId');
+        if (!current) return res.status(404).json({ success: false, message: 'Brand not found' });
+        if (String(current.ownerId) !== String(validated.ownerId))
+          return res.status(409).json({ success: false, message: 'Không chuyển chủ thương hiệu qua sửa thông tin. Dùng quy trình migration đã xác minh.' });
+        delete validated.ownerId;
+      }
       const newData = {
         ...validated,
       };

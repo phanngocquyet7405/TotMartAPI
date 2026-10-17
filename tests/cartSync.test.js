@@ -198,6 +198,6 @@ describe("PUT /api/carts/sync", () => {
       });
 
     expect(res.status).toBe(201);
-    expect(res.body.data.totalAmount).toBe(60000); // 30k hàng + 30k ship
+    expect(res.body.data.totalAmount).toBe(30000); // 30k hàng; phí ship trả trực tiếp cho bên giao hàng
   });
 });

@@ -9,7 +9,8 @@
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
     "migrate:checkouts": "node scripts/migrate-checkouts.js",
     "test:manager": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand tests/manager.integration.test.js tests/merchantOrderPolicy.test.js",
-    "migrate:merchant-ownership": "node scripts/migrate-merchant-ownership.js"
+    "migrate:merchant-ownership": "node scripts/migrate-merchant-ownership.js",
+    "check:staging:commerce": "node scripts/check-staging-commerce.js"
   },
   "keywords": [
     "nodejs",

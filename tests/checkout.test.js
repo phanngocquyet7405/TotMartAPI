@@ -65,7 +65,7 @@ describe("POST /api/checkout/check-out", () => {
     expect(
       await Order.countDocuments({ paymentCode: res.body.data.orderCode }),
     ).toBe(1);
-    expect(res.body.data.totalAmount).toBe(130000);
+    expect(res.body.data.totalAmount).toBe(100000);
 
     const updatedProduct = await Product.findById(product._id);
     expect(updatedProduct.stock).toBe(3);
@@ -175,7 +175,7 @@ describe("POST /api/checkout/check-out", () => {
     expect(
       await Order.countDocuments({ paymentCode: res.body.data.orderCode }),
     ).toBe(2);
-    expect(res.body.data.totalAmount).toBe(330000);
+    expect(res.body.data.totalAmount).toBe(300000);
 
     const orders = await Order.find({ userId: user._id });
     const merchantIds = new Set(orders.map((o) => o.merchantId.toString()));
@@ -205,7 +205,7 @@ describe("POST /api/checkout/check-out", () => {
       });
 
     expect(res.status).toBe(201);
-    expect(res.body.data.totalAmount).toBe(120000);
+    expect(res.body.data.totalAmount).toBe(90000);
 
     const updatedCoupon = await Coupon.findById(coupon._id);
     expect(updatedCoupon.usedCount).toBe(1);

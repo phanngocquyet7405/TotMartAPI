@@ -142,6 +142,8 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
     const p = productMap.get(String(id));
     if (p?.archivedAt || !p?.brand?.ownerId)
       fail("Sản phẩm không tồn tại hoặc không có người bán hợp lệ");
+    if (p.ownerId && String(p.ownerId) !== String(p.brand.ownerId))
+      fail('Chủ sản phẩm và thương hiệu không khớp; cần đối chiếu ownership trước khi bán', 409);
     return p;
   }
   // Aggregate standalone SKU quantity across gift variants. Box components do not qualify for bulk.
@@ -280,7 +282,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
     giftFee = commerce.sum(lines.map((l) => l.giftFee));
   const discount = await couponDiscount(couponCode, subtotal, session, claim);
   commerce.safeMoney(discount.discountAmount);
-  const shippingFee = subtotal > 0 && subtotal < 500000 ? 30000 : 0;
+  const shippingFee = 0; // Customer pays the carrier directly; never collect this in COD/QR.
   const totalAmount = commerce.sum([
     subtotal - discount.discountAmount,
     shippingFee,
@@ -311,6 +313,9 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
     subtotal,
     giftFee,
     shippingFee,
+    shippingMode: 'separate', // Compatibility alias; shippingPayment is canonical.
+    shippingPayment: 'customer_to_carrier',
+    shippingFeeIncluded: false,
     ...discount,
     totalAmount,
     fingerprint,

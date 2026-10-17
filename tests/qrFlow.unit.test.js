@@ -78,7 +78,7 @@ beforeEach(() => {
   jest.spyOn(mongoose, "startSession").mockResolvedValue(session);
 });
 afterEach(() => jest.restoreAllMocks());
-test("checkout returns HTTP 201 with exactly the three payment fields after create", async () => {
+test("checkout returns HTTP 201 with payment fields and shipping policy after create", async () => {
   const product = {
     _id: "product",
     name: "Item",
@@ -129,7 +129,8 @@ test("checkout returns HTTP 201 with exactly the three payment fields after crea
     data: {
       orderId: "mongo-order-id",
       orderCode: expect.stringMatching(/^TMART/),
-      totalAmount: 130000,
+      totalAmount: 100000,
+      shippingPayment: 'customer_to_carrier',
     },
   });
   expect(Order.create).toHaveBeenCalled();

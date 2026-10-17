@@ -135,3 +135,7 @@ These tests also cover a regression: order placement previously used a misspelle
 - `authController.forgotPassword` hardcodes the reset-password URL host (`https://totmartapi.onrender.com/...`) instead of using `FRONTEND_URL` — worth fixing before relying on password reset emails in a different environment.
 - Subscription-box cart code (`cartController.js`'s subscribe-cart branches use a field name `subcricePlanId` that doesn't match the `Cart` model's actual `subscriptionPlanId` field) wasn't in scope for this pass and hasn't been fixed — it looks like the same class of bug as the checkout cart-lookup issue that was just fixed, but affecting a different feature.
 - No CI workflow runs `npm test` automatically yet.
+
+## Commerce FE v2
+
+See [COMMERCE-FE-V2.md](docs/COMMERCE-FE-V2.md) for direct-to-carrier shipping, recipient addresses and staging acceptance. `npm run check:staging:commerce` performs read-only public checks.

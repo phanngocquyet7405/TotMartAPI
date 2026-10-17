@@ -111,6 +111,8 @@ class CheckOutController {
                 totalAmount: subtotal - discounts[index] + shippingFee + giftFee,
                 giftFee, bulkDiscountAmount, pricingPolicyVersion: quote.policyVersion,
                 shippingFee,
+                shippingPayment: quote.shippingPayment,
+                shippingMode: quote.shippingMode,
                 discountAmount: discounts[index],
                 couponCode: quote.couponCode,
                 shippingAddress,
@@ -131,6 +133,7 @@ class CheckOutController {
           orderId: String(created[0]._id),
           orderCode: code,
           totalAmount: quote.totalAmount,
+          shippingPayment: quote.shippingPayment,
         };
         await Checkout.create(
           [
@@ -141,6 +144,7 @@ class CheckOutController {
               paymentCode: code,
               orderIds: created.map((o) => o._id),
               totalAmount: quote.totalAmount,
+              shippingPayment: quote.shippingPayment,
               paymentMethod,
               expiresAt: new Date(
                 Date.now() + config.orderExpiryHours * 3600000,
@@ -199,12 +203,12 @@ class CheckOutController {
       const paid =
         checkout?.state === "paid" ||
         (orders.length > 0 && orders.every((o) => o.paymentStatus === "paid"));
+      const online = (checkout?.paymentMethod || orders[0]?.paymentMethod) === 'online';
       const invalid =
         checkout?.state === "cancelled" ||
-        (checkout?.expiresAt <= new Date() && !paid) ||
+        (online && checkout?.expiresAt <= new Date() && !paid) ||
         orders.some((o) => ["cancelled", "returned"].includes(o.status));
-      const online =
-        (checkout?.paymentMethod || orders[0]?.paymentMethod) === "online";
+
       const payable =
         checkout?.paymentLedgerVersion === 2 &&
         online &&
@@ -223,6 +227,8 @@ class CheckOutController {
         paymentStatus: paid ? "paid" : invalid ? "cancelled" : "pending",
         payable,
         totalAmount,
+        shippingPayment: checkout?.shippingPayment || 'platform',
+        shippingMode: checkout?.shippingPayment === 'customer_to_carrier' ? 'separate' : 'legacy_fixed',
         expiresAt: checkout?.expiresAt,
         kind: checkout?.kind || "products",
         orders: orders.map((o) => ({
@@ -448,6 +454,18 @@ async function changeCod(req, res, next, delivered) {
           note: 'Admin xác nhận đã thu và đối soát tiền COD' });
       }
       await result.save({ session });
+      if (delivered) {
+        const checkout = await Checkout.findOne({ paymentCode: result.paymentCode }).session(session);
+        if (checkout) {
+          const siblings = await Order.find({ paymentCode: result.paymentCode }).session(session);
+          const settled = siblings.filter(o => o.paymentStatus === 'paid');
+          checkout.receivedAmount = settled.reduce((sum, o) => sum + o.totalAmount, 0);
+          await Checkout.updateOne({ _id: checkout._id }, { $set: {
+            receivedAmount: checkout.receivedAmount,
+            state: settled.length === siblings.length ? 'paid' : checkout.state,
+          } }, { session, runValidators: true });
+        }
+      }
     });
     res.json({ success: true, data: result });
   } catch (err) {

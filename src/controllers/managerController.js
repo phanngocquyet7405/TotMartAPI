@@ -21,7 +21,7 @@ async function list(Model, filter, query, res, { present = x => x, populate, met
   res.json({ success: true, data: rows.map(present), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }, ...(meta ? { meta } : {}) });
 }
 const ORDER_FIELDS = ['_id', 'orderId', 'createdAt', 'updatedAt', 'status', 'paymentMethod', 'paymentStatus', 'products',
-  'totalAmount', 'shippingFee', 'giftFee', 'bulkDiscountAmount', 'discountAmount', 'shippingAddress', 'trackingReference',
+  'totalAmount', 'shippingFee', 'shippingPayment', 'giftFee', 'bulkDiscountAmount', 'discountAmount', 'shippingAddress', 'trackingReference',
   'confirmedAt', 'shippedAt', 'deliveredAt', 'codCollectionStatus', 'statusHistory', '__v'];
 function presentOrder(order) {
   const source = order.toObject ? order.toObject() : order;

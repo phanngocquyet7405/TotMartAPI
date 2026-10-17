@@ -3,6 +3,7 @@ const schema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   requestKey: { type: String, required: true }, requestHash: { type: String, required: true },
   paymentCode: { type: String, required: true, unique: true },
+  shippingPayment: { type: String, enum: ['platform', 'customer_to_carrier'] },
   kind: { type: String, enum: ['products', 'subscription'], default: 'products' },
   orderIds: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Order' }],
   subscriptionId: { type: mongoose.Schema.Types.ObjectId, ref: 'UserSubscription' },
