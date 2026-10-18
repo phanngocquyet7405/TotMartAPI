@@ -75,7 +75,7 @@ module.exports = {
   async combos(req, res) {
     const kind = req.managerKind || req.query.kind || 'combo';
     if (!['combo', 'gift'].includes(kind)) catalog.fail('kind phải là combo hoặc gift');
-    return list(Box, { ownerId: req.userId, archivedAt: null, internalSubscription: { $ne: true }, isGift: kind === 'gift' }, req.query, res);
+    return list(Box, { ownerId: req.userId, archivedAt: null, internalSubscription: { $ne: true }, subscriptionOnly: { $ne: true }, isGift: kind === 'gift' }, req.query, res);
   },
   async createCombo(req, res) {
     const images = []; let saved = false;
@@ -87,7 +87,7 @@ module.exports = {
     } finally { if (!saved) await cleanUploads(images); }
   },
   async updateCombo(req, res) {
-    const box = await Box.findOne({ _id: req.params.id, ownerId: req.userId, archivedAt: null, isGift: false, internalSubscription: { $ne: true } });
+    const box = await Box.findOne({ _id: req.params.id, ownerId: req.userId, archivedAt: null, isGift: false, internalSubscription: { $ne: true }, subscriptionOnly: { $ne: true } });
     if (!box) catalog.fail('Combo không tồn tại trong cửa hàng', 404);
     const images = []; let saved = false;
     try {
@@ -107,13 +107,13 @@ module.exports = {
     res.json({ success: true, data: await require('../services/boxDefinitionService').changeDefinition(box._id, req.validatedBody, { ownerId: req.userId }) });
   },
   async boxStock(req, res) {
-    const scope = { ownerId: req.userId, archivedAt: null, internalSubscription: { $ne: true } };
+    const scope = { ownerId: req.userId, archivedAt: null, internalSubscription: { $ne: true }, subscriptionOnly: { $ne: true } };
     const data = await adjustStock(Box, req.params.id, req.validatedBody.delta, { scope });
     logger.info({ actorId: req.userId, boxId: req.params.id, ...req.validatedBody }, 'Merchant package stock adjustment');
     res.json({ success: true, data });
   },
   async deleteBox(req, res) {
-    const box = await Box.findOne({ _id: req.params.id, ownerId: req.userId, archivedAt: null, internalSubscription: { $ne: true } });
+    const box = await Box.findOne({ _id: req.params.id, ownerId: req.userId, archivedAt: null, internalSubscription: { $ne: true }, subscriptionOnly: { $ne: true } });
     if (!box) catalog.fail('Combo không tồn tại trong cửa hàng', 404);
     res.json({ success: true, data: await catalog.archiveBox(req.userId, box) });
   },

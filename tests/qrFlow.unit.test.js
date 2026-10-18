@@ -1,3 +1,4 @@
+jest.mock('../src/services/checkoutAttemptService', () => ({ prepare: jest.fn(), lock: jest.fn(), complete: jest.fn(), reject: jest.fn() }));
 jest.mock('../src/services/paymentReconciliationService', () => ({ receiveWebhook: jest.fn() }));
 jest.mock("../src/models/Checkout", () => ({
   findOne: jest.fn(),
@@ -52,6 +53,11 @@ const response = () => ({
 let session;
 beforeEach(() => {
   jest.resetAllMocks();
+  const attempts = require('../src/services/checkoutAttemptService');
+  attempts.prepare.mockResolvedValue({ state: 'processing' });
+  attempts.lock.mockResolvedValue({ state: 'processing', address: { fullName: 'Customer', phone: '0912345678', address: '12 Nguyen Trai', district: 'Quan 1', city: 'Ho Chi Minh', country: 'VN' } });
+  attempts.complete.mockResolvedValue(undefined);
+  attempts.reject.mockResolvedValue(undefined);
   const Checkout = require("../src/models/Checkout"),
     Event = require("../src/models/PaymentEvent");
   Checkout.findOne.mockReturnValue(query(null));

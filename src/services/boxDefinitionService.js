@@ -84,6 +84,7 @@ async function applyPatch(box, input, uploadedImages, session) {
     if (!input.products.length) fail('Box cần ít nhất một sản phẩm', 400);
     const docs = await Product.find({ _id: { $in: input.products.map(p => p.productId) } }).session(session);
     await assertCompositionOwner(box, input.products, session, docs);
+    await require('./managerCatalogService').buildParts(box.ownerId, input.products, session);
     const map = new Map(docs.map(p => [String(p._id), p]));
     box.products = input.products.map(p => {
       const product = map.get(String(p.productId));
@@ -99,13 +100,13 @@ async function applyPatch(box, input, uploadedImages, session) {
     box.images = box.images.filter(i => retained.has(i.public_id));
   }
   box.images.push(...uploadedImages);
-  const subtotal = box.products.reduce((sum, p) => sum + p.price * p.quantity, 0);
-  box.value = Math.round(subtotal * (1 - box.discountPercent / 100));
+  box.value = require('./managerCatalogService').boxPrice(box.products, box.discountPercent);
   if (!Number.isSafeInteger(box.value) || box.value < 0) fail('Giá Box không hợp lệ', 400);
   box.totalItem = box.products.length;
   // stock ignored: only atomic stock adjustment/inventory services may change it.
 }
 async function assertCompositionOwner(box, parts, session, docs) {
+  if (new Set(parts.map(p => String(p.productId))).size !== parts.length || parts.some(p => !Number.isSafeInteger(p.quantity) || p.quantity < 1)) fail('Invalid or duplicate composition', 400);
   if (!box.ownerId) fail('Combo legacy chưa xác minh merchant sở hữu; cần đối chiếu trước khi sửa', 409);
   docs ||= await Product.find({ _id: { $in: parts.map(p => p.productId) } }).session(session);
   const brands = await require('../models/Brand').find({ ownerId: box.ownerId }).select('_id').session(session);

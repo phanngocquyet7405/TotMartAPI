@@ -1,3 +1,4 @@
+const attempts = require('../services/checkoutAttemptService');
 const reconciliation = require('../services/paymentReconciliationService');
 const { deliverySnapshot } = require("../services/deliverySnapshot");
 const mongoose = require("mongoose");
@@ -46,12 +47,14 @@ class CheckOutController {
     try {
       key = requestKey(req);
       hash = requestHash(req.validatedBody);
-      const previous = await replay(req.userId, key, hash);
+      const previous = await replay(req.userId, key, hash, null, 'products');
       if (previous)
         return res.status(201).json({ success: true, data: previous.result });
+      await attempts.prepare(req.userId, 'products', key, hash, req.validatedBody);
       session = await mongoose.startSession();
       await session.withTransaction(async () => {
-        const existing = await replay(req.userId, key, hash, session);
+        const attempt = await attempts.lock(req.userId, 'products', key, hash, session);
+        const existing = await replay(req.userId, key, hash, session, 'products');
         if (existing) {
           result = existing.result;
           return;
@@ -59,9 +62,7 @@ class CheckOutController {
         const { addressId, paymentMethod, note, couponCode, quoteFingerprint } =
           req.validatedBody;
         const user = await User.findById(req.userId).session(session);
-        const address = user?.addresses.id(addressId);
-        if (!address) fail("Địa chỉ không hợp lệ");
-        const shippingAddress = deliverySnapshot(user, address);
+        const shippingAddress = attempt.address;
         const cart = await Cart.findOne({
           userId: req.userId,
           isSubscribeCart: false,
@@ -155,6 +156,7 @@ class CheckOutController {
           ],
           { session },
         );
+        await attempts.complete(req.userId, 'products', key, result, session);
         await Cart.deleteOne({ _id: cart._id }, { session });
       });
       res.status(201).json({ success: true, data: result });
@@ -162,7 +164,7 @@ class CheckOutController {
     } catch (err) {
       if (err.code === 11000 && key) {
         try {
-          const previous = await replay(req.userId, key, hash);
+          const previous = await replay(req.userId, key, hash, null, 'products');
           if (previous)
             return res
               .status(201)
@@ -171,6 +173,7 @@ class CheckOutController {
           return next(replayError);
         }
       }
+      if (key && hash) await attempts.reject(req.userId, 'products', key, hash, err).catch(() => {});
       next(err);
     } finally {
       if (session) await session.endSession();

@@ -10,8 +10,9 @@ async function lockCheckout(code, session) {
   // Payment, cancellation and expiry therefore cannot commit conflicting snapshots.
   return Checkout.findOneAndUpdate({ paymentCode: code }, { $inc: { revision: 1 } }, { session, new: true });
 }
-async function replay(userId, key, hash, session = null) {
+async function replay(userId, key, hash, session = null, kind = null) {
   const checkout = await Checkout.findOne({ userId, requestKey: key }).session(session);
+  if (checkout && kind && (checkout.kind || 'products') !== kind) fail('IDEMPOTENCY_KIND_CONFLICT', 409);
   if (checkout && checkout.requestHash !== hash) fail('Idempotency-Key đã được dùng với nội dung khác', 409);
   return checkout;
 }

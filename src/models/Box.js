@@ -51,6 +51,11 @@ const boxSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
+boxSchema.pre('validate', function () {
+  const internal = this.internalSubscription || this.subscriptionOnly;
+  this.internalSubscription = internal;
+  this.subscriptionOnly = internal;
+});
 boxSchema.index({ archivedAt: 1, isGift: 1, validTo: 1 });
 boxSchema.index({ ownerId: 1, archivedAt: 1, isGift: 1, createdAt: -1 });
 module.exports = mongoose.model("Box", boxSchema);

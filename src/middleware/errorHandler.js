@@ -4,6 +4,7 @@ module.exports = (err, req, res, next) => {
   if (res.headersSent) return next(err);
   let status = Number(err.statusCode || err.status || 500), message = err.message || 'Internal Server Error';
   const details = {};
+  if (typeof err.code === 'string' && /^(ATTEMPT_|ADDRESS_|IDEMPOTENCY_)/.test(err.code)) details.code = err.code;
   if (err.type === 'entity.parse.failed') { status = 400; message = 'Malformed JSON body'; }
   if (err.type === 'entity.too.large') { status = 413; message = 'Request body too large'; }
   if (err.code === 'INVALID_DELIVERY_ADDRESS') { status = 422; details.code = err.code; details.fields = err.fields; }

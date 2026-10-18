@@ -92,3 +92,32 @@ router.post(
 );
 
 module.exports = router;
+
+const attemptHandler = terminate => async (req, res, next) => {
+  try {
+    const { kind, key } = req.params;
+    const hash = req.get('Attempt-Payload-Hash');
+    if (!['products', 'subscription'].includes(kind) || !/^[A-Za-z0-9_-]{16,128}$/.test(key) || !/^[a-f0-9]{64}$/.test(hash || ''))
+      return res.status(400).json({ success: false, code: 'INVALID_ATTEMPT_REFERENCE' });
+    const data = await require('../services/checkoutAttemptService').resolve(req.userId, kind, key, hash, terminate);
+    res.json({ success: true, data });
+  } catch (err) { next(err); }
+};
+router.get('/attempts/:kind/:key', authMiddleware.authMiddleware, attemptHandler(false));
+router.post('/attempts/:kind/:key/terminate', authMiddleware.authMiddleware, attemptHandler(true));
+
+for (const kind of ['products', 'subscription']) {
+  const schema = kind === 'products' ? checkoutSchema : require('../middleware/validationSchemas').subscribeToTemplateSchema;
+  router.post(`/attempts/${kind}/prepare`, authMiddleware.authMiddleware, authMiddleware.customerCheckoutMiddleware,
+    validationHandler.validate(schema), async (req, res, next) => {
+      try {
+        const key = require('../utils/idempotencyKey')(req);
+        const hash = require('../services/checkoutLifecycle').requestHash(req.validatedBody);
+        const legacy = await require('../services/checkoutLifecycle').replay(req.userId, key, hash, null, kind);
+        const attempt = legacy || await require('../services/checkoutAttemptService').prepare(req.userId, kind, key, hash, req.validatedBody);
+        res.json({ success: true, data: { key, hash, state: legacy ? 'created' : attempt.state,
+          address: attempt.address, addressHash: attempt.address ? require('../services/checkoutLifecycle').requestHash(attempt.address) : undefined,
+          result: attempt.result } });
+      } catch (err) { next(err); }
+    });
+}

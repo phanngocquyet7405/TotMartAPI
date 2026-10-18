@@ -131,6 +131,7 @@ const updateCategorySchema = joi
   .min(1);
 
 const createBoxSchema = joi.object({
+  ownerId: joi.string().hex().length(24).required(),
   name: joi.string().min(3).max(100).required(),
   // Tên field khớp model Box (`descriptions`). Cho phép HTML từ rich-text editor.
   descriptions: joi.string().max(5000).required(),
@@ -288,6 +289,7 @@ const subscribeToTemplateSchema = joi.object({
 });
 
 const checkoutSchema = joi.object({
+  addressHash: joi.string().hex().length(64).optional(),
   addressId: joi.string().hex().length(24).required(),
   paymentMethod: joi.string().valid("cod", "online").required(),
   note: joi.string().max(500).allow("").optional(),

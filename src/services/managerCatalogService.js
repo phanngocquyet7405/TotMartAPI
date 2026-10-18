@@ -21,16 +21,21 @@ async function requireBrand(ownerId, brandId) {
   if (!await Brand.exists({ _id: brandId, ownerId })) fail('Thương hiệu không thuộc cửa hàng', 403);
 }
 async function buildParts(ownerId, parts, session) {
+  if (!parts.length || new Set(parts.map(p => String(p.productId))).size !== parts.length)
+    fail('Duplicate or empty composition', 400);
+  if (parts.some(p => !Number.isSafeInteger(p.quantity) || p.quantity < 1)) fail('Invalid component quantity');
   const scope = await productScope(ownerId, session);
   const docs = await Product.find({ ...scope, _id: { $in: parts.map(p => p.productId) } }).session(session);
   const map = new Map(docs.map(doc => [String(doc._id), doc]));
   if (docs.length !== parts.length) fail('Mọi sản phẩm cấu thành phải thuộc cửa hàng và còn tồn tại', 403);
   return parts.map(part => {
     const product = map.get(String(part.productId));
+    if (!Number.isSafeInteger(product.price) || product.price < 0) fail('Invalid VND price');
     return { productId: product._id, quantity: part.quantity, price: product.price, name: product.name };
   });
 }
 function boxPrice(products, percent = 0) {
+  if (!Number.isFinite(percent) || percent < 0 || percent > 100 || products.some(p => !Number.isSafeInteger(p.price) || p.price < 0 || !Number.isSafeInteger(p.quantity) || p.quantity < 1)) fail('Invalid VND composition');
   const base = products.reduce((n, p) => n + BigInt(p.price) * BigInt(p.quantity), 0n);
   if (base > BigInt(Number.MAX_SAFE_INTEGER)) fail('Giá combo vượt giới hạn');
   const value = Math.round(Number(base) * (1 - percent / 100));
@@ -38,16 +43,17 @@ function boxPrice(products, percent = 0) {
   return value;
 }
 async function ownedBox(ownerId, id, { comboOnly = false, session = null } = {}) {
-  const box = await Box.findOne({ _id: id, ownerId, archivedAt: null, internalSubscription: { $ne: true }, ...(comboOnly ? { isGift: false } : {}) }).session(session);
+  const box = await Box.findOne({ _id: id, ownerId, archivedAt: null, internalSubscription: { $ne: true }, subscriptionOnly: { $ne: true }, ...(comboOnly ? { isGift: false } : {}) }).session(session);
   if (!box) fail('Combo không thuộc cửa hàng hoặc không còn sử dụng được', 403);
   return box;
 }
 async function createCombo(ownerId, input, images = []) {
   let result;
   await mongoose.connection.transaction(async session => {
+    if (!await require('../models/User').exists({ _id: ownerId, role: 'merchant', isActive: { $ne: false } }).session(session)) fail('Owner must be an active merchant');
     const products = await buildParts(ownerId, input.products, session);
-    [result] = await Box.create([{ ...input, ownerId, products, isGift: false, internalSubscription: false,
-      validFrom: new Date(), descriptions: safeHtml(input.descriptions), totalItem: products.length,
+    [result] = await Box.create([{ ...input, ownerId, products, isGift: input.isGift || false, internalSubscription: false, subscriptionOnly: false,
+      validFrom: input.validFrom || new Date(), descriptions: safeHtml(input.descriptions), totalItem: products.length,
       value: boxPrice(products, input.discountPercent), images }], { session });
   });
   return result;
@@ -58,7 +64,7 @@ async function createGift(ownerId, input) {
     // A shared write locks the source definition against concurrent edits/archive.
     await ownedBox(ownerId, input.comboId, { comboOnly: true, session });
     const source = await guardBox(input.comboId, session, { ownerId });
-    if (source.isGift || source.internalSubscription || source.validFrom > new Date() || source.validTo < new Date()) fail('Nguồn gift phải là combo đang bán');
+    if (source.isGift || (source.internalSubscription || source.subscriptionOnly) || source.validFrom > new Date() || source.validTo < new Date()) fail('Nguồn gift phải là combo đang bán');
     await buildParts(ownerId, source.products, session);
     if (new Date(input.validTo) > source.validTo) fail('Gift không được hết hạn sau combo nguồn');
     [result] = await Box.create([{ ownerId, name: input.name, stock: input.stock, validFrom: new Date(), validTo: input.validTo,
@@ -69,7 +75,7 @@ async function createGift(ownerId, input) {
   return result;
 }
 async function updateCombo(ownerId, box, input, images = []) {
-  if (box.isGift || box.internalSubscription) fail('Dùng endpoint sửa gift cho loại này');
+  if (box.isGift || box.internalSubscription || box.subscriptionOnly) fail('Dùng endpoint sửa gift cho loại này');
   if (input.products) await buildParts(ownerId, input.products, null);
   return changeDefinition(box._id, input, { ownerId, uploadedImages: images });
 }
@@ -97,7 +103,7 @@ async function createTemplate(ownerId, input, retail = false) {
         value: boxPrice(products), internalSubscription: true, isGift: false }], { session });
     } else {
       box = await guardBox(input.boxId, session, { ownerId });
-      if (box.isGift || box.internalSubscription || box.validTo < new Date()) fail('Chọn combo hợp lệ cho gói');
+      if (box.isGift || box.internalSubscription || box.subscriptionOnly || box.validTo < new Date()) fail('Chọn combo hợp lệ cho gói');
       await buildParts(ownerId, box.products, session);
     }
     [result] = await Template.create([{ ownerId, sourceType: retail ? 'retail' : 'combo', name: input.name,
@@ -114,7 +120,7 @@ async function updateTemplate(ownerId, id, input) {
     if (!result) fail('Gói không tồn tại trong cửa hàng', 404);
     if (input.boxId && result.sourceType === 'retail') fail('Không đổi nguồn của gói hàng lẻ');
     const box = await guardBox(input.boxId || result.boxId, session, { ownerId });
-    if (box.isGift || (result.sourceType !== 'retail' && box.internalSubscription)) fail('Nguồn gói không hợp lệ');
+    if (box.isGift || (result.sourceType !== 'retail' && (box.internalSubscription || box.subscriptionOnly))) fail('Nguồn gói không hợp lệ');
     await buildParts(ownerId, box.products, session);
     for (const key of ['name', 'description', 'planType', 'discountPercent', 'isActive']) if (input[key] !== undefined) result[key] = input[key];
     result.description = safeHtml(result.description);
@@ -128,5 +134,5 @@ async function catalogOptions(ownerId) {
   const [brands, categories] = await Promise.all([Brand.find({ ownerId }).select('_id name').lean(), Category.find({ isActive: { $ne: false } }).select('_id name').lean()]);
   return { brands, categories };
 }
-module.exports = { productScope, requireProduct, requireBrand, buildParts, ownedBox, createCombo, createGift,
+module.exports = { buildParts, boxPrice, productScope, requireProduct, requireBrand, ownedBox, createCombo, createGift,
   updateCombo, archiveBox, createTemplate, updateTemplate, presentTemplate, catalogOptions, fail };
