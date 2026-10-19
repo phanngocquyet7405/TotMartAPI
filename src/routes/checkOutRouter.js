@@ -103,11 +103,24 @@ const attemptHandler = terminate => async (req, res, next) => {
     res.json({ success: true, data });
   } catch (err) { next(err); }
 };
-router.get('/attempts/:kind/:key', authMiddleware.authMiddleware, attemptHandler(false));
-router.post('/attempts/:kind/:key/terminate', authMiddleware.authMiddleware, attemptHandler(true));
+const { attemptIpLimiter, attemptUserLimiter } = require('../middleware/rateLimiter');
+router.use('/attempts', attemptIpLimiter, authMiddleware.authMiddleware, attemptUserLimiter);
+router.get('/attempts/:kind/:key', attemptHandler(false));
+router.post('/attempts/:kind/:key/terminate', attemptHandler(true));
 
 for (const kind of ['products', 'subscription']) {
   const schema = kind === 'products' ? checkoutSchema : require('../middleware/validationSchemas').subscribeToTemplateSchema;
+  // Hash the original body using exactly the create validation/defaults. No address/template lookup.
+  // This also recovers a lost prepare response or a business failure before an attempt existed.
+  router.post(`/attempts/${kind}/:key/terminate-with-body`, validationHandler.validate(schema), async (req, res, next) => {
+    try {
+      const { key } = req.params;
+      if (!/^[A-Za-z0-9_-]{16,128}$/.test(key)) return res.status(400).json({ success: false, code: 'INVALID_ATTEMPT_REFERENCE' });
+      const hash = require('../services/checkoutLifecycle').requestHash(req.validatedBody);
+      const data = await require('../services/checkoutAttemptService').resolve(req.userId, kind, key, hash, true);
+      res.json({ success: true, data: { key, hash, ...data } });
+    } catch (err) { next(err); }
+  });
   router.post(`/attempts/${kind}/prepare`, authMiddleware.authMiddleware, authMiddleware.customerCheckoutMiddleware,
     validationHandler.validate(schema), async (req, res, next) => {
       try {

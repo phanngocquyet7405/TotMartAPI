@@ -6,7 +6,7 @@ const { MongoMemoryReplSet } = require("mongodb-memory-server");
 // nên bắt buộc phải dùng MongoMemoryReplSet chứ không phải MongoMemoryServer thường.
 let replSet;
 
-async function connect() {
+async function connect(options = {}) {
   if (process.env.TEST_MONGODB_URI) {
     const uri = process.env.TEST_MONGODB_URI;
     if (!/^mongodb:\/\/(127\.0\.0\.1|localhost):\d+\/totmart_test(?:\?|$)/.test(uri)) throw new Error('External tests require a local database named totmart_test');
@@ -15,7 +15,7 @@ async function connect() {
     return;
   }
   replSet = await MongoMemoryReplSet.create({
-    replSet: { count: 1, storageEngine: "wiredTiger" },
+    replSet: { count: 1, storageEngine: "wiredTiger", args: options.mongoArgs || [] },
     binary: { version: process.env.MONGOMS_VERSION || "7.0.14" },
   });
   const uri = replSet.getUri();

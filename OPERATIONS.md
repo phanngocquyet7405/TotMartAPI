@@ -1,5 +1,37 @@
 # TotMart — nghiệm thu và vận hành
 
+## Bổ sung kiểm chứng 2026-10-19
+
+Hợp đồng mới và thứ tự drain/migration/deploy/rollback nằm ở đầu [checkout-attempt-contract.md](docs/checkout-attempt-contract.md); kết quả từng lượt tại [be-handoff-verification.md](docs/be-handoff-verification.md). Không dùng kết quả ngày 18 thay cho trạng thái hiện tại.
+
+Attempt giữ vĩnh viễn, không TTL. Quota attempt: IP 300/phút, user 120/phút; production dùng namespace Redis chung. Admission tối đa 10.000 reference/user được serialize bằng transaction, bao gồm legacy và tombstone; cảnh báo từ 8.000. `ATTEMPT_CAPACITY_REACHED` không cấp quyền dùng key mới. Không xóa record để “giải phóng”; điều tra abuse, sizing và chính sách lưu trữ bảo toàn fencing/replay trước khi sửa ngưỡng.
+
+Admin operations summary thêm tổng attempt, tăng trưởng 24 giờ, số user tới ngưỡng; alert tăng trưởng >=100.000/ngày, webhook retry quá 15 phút, outbox quá 15 phút và refund pending quá 24 giờ. Summary có aggregation toàn collection: chạy định kỳ thưa, đo latency; không dùng làm probe mỗi giây. Thu thập time series dung lượng collection/index và tốc độ tăng, cảnh báo độ lệch baseline phù hợp traffic staging. Đây là endpoint cung cấp tín hiệu; cần nối hệ thống giám sát của tổ chức trước production. Chưa có bằng chứng thông báo bên ngoài được giao, và đợt này không gửi tin cho ai.
+
+Redis có deadline ứng dụng 2,5 giây cho eval/del/publish/set/GETDEL; probe PING cả client/subscriber mỗi giây, socket timeout 5 giây và giới hạn queue 1.000. Không chỉ dựa vào command queue timeout của driver: lệnh đã ghi vào socket im lặng cũng phải kết thúc chờ. Khi deadline lỗi: readiness false, đóng stream, security request fail closed; worker giữ outbox để retry. Lệnh đã gửi có thể hoàn thành muộn sau timeout: không suy ra nó chưa chạy, chấp nhận quota bị tính dư/ticket mất hiệu lực thay vì bỏ bảo mật; publish có thể trùng và consumer phải idempotent. Không dùng deadline này để suy luận kết quả transaction MongoDB.
+
+Diễn tập riêng, không nạp `.env`, không nhận URI database thật:
+
+```powershell
+node scripts/drill-backup-disposable.js
+```
+
+Script cần Docker và image `mongo:7.0`, tự tạo container Mongo replica set với port loopback ngẫu nhiên, seed 6 collection giả, dùng MongoDB Database Tools trong container để archive gzip/restore vào database mới. Kiểm tra counts, toàn bộ document/index, quan hệ Order/Checkout và conservation allocation/receipt/refund; chỉ xóa container tên ngẫu nhiên chính script tạo. Không thay thế backup production, mã hóa archive, retention, PITR, tải lớn hoặc việc kiểm chứng các script backup ngoài repo. Không dừng writer thật hoặc thao tác database thật trong drill.
+
+Test Redis HTTP nhiều process khác với Redis primitives:
+
+```powershell
+$env:TEST_REDIS_URL='redis://127.0.0.1:16380'
+$env:TEST_REDIS_CONTAINER='totmart-session-20261019-redis'
+$env:TEST_MONGODB_URI=''
+$env:MONGOMS_VERSION='7.0.14'
+$env:CI='true'
+$env:LOG_LEVEL='silent'
+npm test -- --silent
+```
+
+Phải tạo Redis disposable có tên prefix `totmart-session-...-redis` và port tương ứng trước khi chạy. Suite sẽ stop/start và pause/unpause **đúng container đó**, nên tuyệt đối không trỏ tới Redis dùng chung hoặc staging. Mongo test mặc định tự tạo replica set một member; không dùng URI ứng dụng. Hai process HTTP chỉ chạy security outbox worker, không scheduler gửi email/SMS hay ngân hàng thật. Kiểm chứng reconnect/blackhole không chứng minh Sentinel/Cluster, multi-node primary failover hoặc unknown commit-result thật.
+
 ## Môi trường kiểm tra đã chuẩn bị
 
 MongoDB replica set rs0 dùng cổng 27018, Redis cổng 6380. Không chuyển đổi hoặc xóa MongoDB standalone đang dùng ở 27017. Bộ kiểm thử chỉ nhận database localhost tên `totmart_test`; dữ liệu nghiệm thu trình duyệt ở `totmart_acceptance` tách riêng.

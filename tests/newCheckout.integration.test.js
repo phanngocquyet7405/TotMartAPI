@@ -10,6 +10,20 @@ async function fixture() { const {user}=await createUser(), {user:admin}=await c
 const body = user => ({addressId:String(user.addresses[0]._id),paymentMethod:'online'});
 function pay(code,amount,ref='NEW-REF') { return request(app).post('/api/checkout/sepay-webhook').set('Authorization',`Apikey ${process.env.SEPAY_API_KEY}`).send({id:1,gateway:'TestBank',transactionDate:new Date().toISOString(),accountNumber:process.env.SEPAY_BANK_ACCOUNT,code,content:code,transferType:'in',transferAmount:amount,referenceCode:ref}); }
 async function boxFor(product,parts) {return Box.create({name:'Test box',stock:10,descriptions:'Box',validFrom:new Date(Date.now()-86400000),validTo:new Date(Date.now()+86400000*400),value:200000,products:parts||[{productId:product._id,quantity:1}]});}
+test('two consecutive subscription purchases are independent and old key replays only its own result', async () => {
+  const { user, product } = await fixture(), box = await boxFor(product);
+  const template = await Template.create({name:'Repeat plan',boxId:box._id,planType:'3_month',basePrice:600000,discountPercent:0,discountPrice:600000});
+  const payload = {templateId:String(template._id),shippingAddress:{address:'Street',district:'District',city:'City',country:'VN',phone:'0900000000'}};
+  const send = key => request(app).post('/api/subcribe-plans/user-subscribe').set(auth(user)).set('Idempotency-Key',key).send(payload);
+  const first = await send('first-subscription-12345'), second = await send('second-subscription-12345');
+  expect(first.status).toBe(201); expect(second.status).toBe(201);
+  expect(second.body.data._id).not.toBe(first.body.data._id);
+  const before = await Subscription.findById(second.body.data._id).lean();
+  expect((await send('first-subscription-12345')).body.data).toEqual(first.body.data);
+  expect(await Subscription.findById(second.body.data._id).lean()).toEqual(before);
+  expect(await Checkout.countDocuments()).toBe(2); expect(await Subscription.countDocuments()).toBe(2);
+  expect(await Order.countDocuments()).toBe(0); expect((await Product.findById(product._id)).stock).toBe(10);
+});
 test('concurrent checkout retries cannot create two orders',async()=>{
   const {user,product}=await fixture();await createCartWithItems(user._id,[{productId:product._id,quantity:1}]);
   const send=()=>request(app).post('/api/checkout/check-out').set(auth(user)).set('Idempotency-Key','concurrent-checkout-key-123').send(body(user));

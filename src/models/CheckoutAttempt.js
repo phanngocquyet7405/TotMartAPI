@@ -8,5 +8,6 @@ const schema = new mongoose.Schema({
   result: mongoose.Schema.Types.Mixed, error: mongoose.Schema.Types.Mixed,
 }, { timestamps: true });
 schema.index({ userId: 1, kind: 1, key: 1 }, { unique: true });
+schema.index({ createdAt: 1 });
 // No TTL: tombstones and replay results must outlive delayed requests.
 module.exports = mongoose.model('CheckoutAttempt', schema);

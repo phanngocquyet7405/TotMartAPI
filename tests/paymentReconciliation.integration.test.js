@@ -88,6 +88,28 @@ test('concurrent receipts settle once and conservatively queue surplus', async (
   expect((await Product.findById(product._id)).stock).toBe(4);
   expect((await Refund.findOne()).amount).toBe(10000);
 });
+test.each(['expiry', 'cancel'])('HTTP payment races %s and conserves receipt, inventory, attempt and refunds', async mode => {
+  const {user,code,product}=await checkout(), payload=receipt(code,100000);
+  const order=await Order.findOne({paymentCode:code});
+  if(mode==='expiry') await Checkout.updateOne({paymentCode:code},{expiresAt:new Date(0)});
+  const webhook=()=>request(app).post('/api/checkout/sepay-webhook').set('Authorization',`Apikey ${process.env.SEPAY_API_KEY}`).send({...payload,gateway:'TestBank',transactionDate:new Date().toISOString()});
+  const stopping=mode==='expiry' ? expireCheckout(code,new Date()) : request(app).post(`/api/checkout/cancel/${order._id}`).set('Authorization',`Bearer ${signToken(user)}`).send({});
+  const [paid]=await Promise.all([webhook(),stopping]); expect(paid.status).toBe(200);
+  expect((await webhook()).status).toBe(200);
+  const checkoutDoc=await Checkout.findOne({paymentCode:code}), finalOrder=await Order.findById(order._id);
+  const events=await Event.find({paymentCode:code}), allocations=await Allocation.find({checkoutId:checkoutDoc._id}), refunds=await Refund.find({checkoutId:checkoutDoc._id});
+  expect(events).toHaveLength(1);
+  expect(allocations.reduce((sum,a)=>sum+a.amount,0)).toBe(checkoutDoc.receivedAmount);
+  expect(await require('../src/models/CheckoutAttempt').countDocuments({userId:user._id,state:'created'})).toBe(1);
+  expect(checkoutDoc.orderIds.map(String)).toContain(String(order._id));
+  const refundTotal=refunds.reduce((sum,r)=>sum+r.amount,0);
+  if(checkoutDoc.state==='paid' && finalOrder.status!=='cancelled') {
+    expect(finalOrder.paymentStatus).toBe('paid'); expect(refundTotal).toBe(0); expect((await Product.findById(product._id)).stock).toBe(4);
+  } else {
+    expect(finalOrder.status).toBe('cancelled'); expect(refundTotal).toBe(100000); expect((await Product.findById(product._id)).stock).toBe(5);
+  }
+  expect((checkoutDoc.state==='paid' && finalOrder.status!=='cancelled' ? 100000 : 0)+refundTotal).toBe(100000);
+});
 test('refund completion is idempotent and bank reference cannot complete two refunds', async () => {
   const { user: admin } = await createUser({ role: 'admin' });
   await receiveWebhook(receipt('TMARTUNKNOWN', 10000));

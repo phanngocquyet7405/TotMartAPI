@@ -11,6 +11,15 @@ function check(attempt, hash) {
   if (attempt.state === 'rejected') throw Object.assign(error(attempt.error.code, attempt.error.statusCode), { message: attempt.error.message });
   return attempt;
 }
+async function insertAttempt(values, session) {
+  // A durable per-user write fence serializes admission across instances. Never prune tombstones.
+  // Count existing legacy attempts too; a rate window alone cannot bound lifetime storage.
+  const owner = await User.collection.updateOne({ _id: new mongoose.Types.ObjectId(values.userId) }, { $inc: { checkoutAttemptRevision: 1 } }, { session });
+  if (owner.matchedCount !== 1) throw error('ATTEMPT_USER_NOT_FOUND', 404);
+  if (await Attempt.countDocuments({ userId: values.userId }).session(session) >= 10000) throw error('ATTEMPT_CAPACITY_REACHED', 429);
+  const [attempt] = await Attempt.create([values], { session });
+  return attempt;
+}
 async function prepare(userId, kind, key, hash, body) {
   let attempt = await Attempt.findOne({ userId, kind, key });
   if (attempt) return check(attempt, hash);
@@ -22,7 +31,12 @@ async function prepare(userId, kind, key, hash, body) {
     address = deliverySnapshot(user, selected);
     if (body.addressHash && body.addressHash !== requestHash(address)) throw error('ADDRESS_CHANGED');
   }
-  try { attempt = await Attempt.create({ userId, kind, key, hash, address }); }
+  try {
+    await mongoose.connection.transaction(async session => {
+      attempt = await Attempt.findOne({ userId, kind, key }).session(session);
+      if (!attempt) attempt = await insertAttempt({ userId, kind, key, hash, address }, session);
+    });
+  }
   catch (err) {
     if (err.code !== 11000) throw err;
     attempt = await Attempt.findOne({ userId, kind, key });
@@ -55,7 +69,7 @@ async function resolve(userId, kind, key, hash, terminate = false) {
       ? await Attempt.findOneAndUpdate({ userId, kind, key }, { $inc: { revision: 1 } }, { new: true, session })
       : await Attempt.findOne({ userId, kind, key }).session(session);
     if (attempt && attempt.hash !== hash) throw error('ATTEMPT_PAYLOAD_MISMATCH');
-    if (terminate && !attempt) [attempt] = await Attempt.create([{ userId, kind, key, hash, state: 'invalidated' }], { session });
+    if (terminate && !attempt) attempt = await insertAttempt({ userId, kind, key, hash, state: 'invalidated' }, session);
     if (terminate && attempt.state !== 'created') { attempt.state = 'invalidated'; await attempt.save({ session }); }
     data = attempt ? { state: attempt.state, result: attempt.result, error: attempt.error, canRestart: attempt.state === 'invalidated' } : { state: 'unknown', canRestart: false };
   });

@@ -1,5 +1,46 @@
 # Bàn giao BE TotMart — hợp đồng checkout attempt và đợt FE tiếp theo
 
+## Bổ sung hợp đồng 2026-10-19 (ưu tiên nếu khác nội dung lịch sử bên dưới)
+
+### Kết thúc khi prepare chưa trả hash
+
+`POST /api/checkout/attempts/products/:key/terminate-with-body` và `POST /api/checkout/attempts/subscription/:key/terminate-with-body`.
+
+- Auth như lookup/terminate hiện có; không nhận userId từ client. Key theo regex 16–128 ký tự hiện có. Không cần header `Attempt-Payload-Hash` hoặc `Idempotency-Key` vì key ở path.
+- Request JSON là **nguyên body gốc đã lưu trước prepare**, qua đúng schema create của kind tương ứng: Joi conversion/defaults/stripUnknown và thứ tự thuộc tính hiện tại. Không sửa body để thử kết thúc; không tự tính hash ở FE.
+- Không tra địa chỉ/template, không yêu cầu prepare thành công. Dùng được sau `ADDRESS_NOT_FOUND` (400), `ADDRESS_CHANGED` (409), lỗi nghiệp vụ trước hash và khi mất response prepare.
+- HTTP 200: `{success:true,data:{key,hash,state:"invalidated",canRestart:true}}`; `hash` do BE tính sau validation. Tombstone được ghi transaction, serialize với create qua attempt revision/unique index. Request cũ đã chạy/đến trễ hoặc prepare đang tra địa chỉ không thể tạo giao dịch sau tombstone commit.
+- Nếu giao dịch đã commit: HTTP 200 với `{key,hash,state:"created",result:<kết quả cũ>,canRestart:false}`. Không vô hiệu hóa giao dịch, không hủy đơn/subscription.
+- Body chưa vượt validation: HTTP 400 envelope Joi hiện có, **không tính hash, không tạo attempt/tombstone, không có quyền restart**. Không nhầm lỗi validation với payload hợp lệ nhưng lỗi nghiệp vụ. Nếu body gốc không hợp lệ, FE cần hiển thị lỗi và sửa luồng thu thập/validation dữ liệu; không xem 400 là bằng chứng đã fence reference cũ. Không thay body của reference có thể đã gửi thành công.
+- Hash khác reference đã tồn tại: 409 `ATTEMPT_PAYLOAD_MISMATCH`. Key sai: 400 `INVALID_ATTEMPT_REFERENCE`. Hết admission capacity: 429 `ATTEMPT_CAPACITY_REACHED`. Auth/Redis/DB lỗi không cấp quyền mở key mới.
+- Chỉ mở key mới để sửa thông tin sau response `invalidated` + `canRestart:true` đúng reference hoặc lookup xác nhận tombstone đó. Nếu mất response của endpoint mới, retry nguyên body/path; response trả lại hash để lưu và lookup. Một 400/404, timeout, lookup unknown hay lỗi mạng không bao giờ là bằng chứng restart.
+
+Prepare, create, lookup và terminate bằng hash giữ nguyên API cũ; không yêu cầu client legacy gọi endpoint mới. Legacy Checkout đã commit tiếp tục replay trước mọi ghi Attempt. Không đổi hash/canonicalization của key cũ.
+
+### Created và lần mua mới
+
+`created` là **giao dịch đã tồn tại**, không còn là attempt cần hủy. `canRestart:false` ngăn recovery tự tạo giao dịch khác; nó không cấm một giao dịch kinh doanh độc lập được người dùng chủ động xác nhận.
+
+Sau khi đã xác nhận kết quả giao dịch cũ, FE cho phép hành động rõ ràng “Mua lần mới”/“Đăng ký gói mới”: giữ reference cũ trong lịch sử, tạo UUID mới, lấy giỏ/quote/thông tin mới và xác nhận lại. BE đã hỗ trợ nhiều checkout/subscription cùng user với key khác nhau; không cần endpoint reset scope. Key cũ luôn replay kết quả cũ, không tiêu thụ giỏ của lần mua mới. Không tự mở lần mua mới từ timeout/unknown hoặc khi chưa xác định giao dịch cũ. `terminate` với giao dịch created tiếp tục trả created/result, không hủy giao dịch đó.
+
+### Giới hạn và lưu trữ
+
+Toàn bộ `/api/checkout/attempts` có quota IP 300 request/phút và user 120 request/phút, dùng hai policy Redis riêng khi `REDIS_URL` bật. Quota bao gồm cả lookup và retry; tôn trọng `Retry-After`, backoff, không polling dồn dập. Production bắt buộc Redis và namespace chung giữa các instance, cấu hình `TRUST_PROXY` đúng proxy tin cậy. Redis không sẵn sàng trả lỗi đóng bảo mật; không fallback memory trong production.
+
+Admission mới giới hạn bền vững **10.000 Attempt/user**, đếm cả dữ liệu trước release và tất cả state/kind. Ghi revision trên User và count/insert trong cùng transaction serialize admission giữa instance. Tới giới hạn: không thêm key/tombstone mới, 429 `ATTEMPT_CAPACITY_REACHED`; existing lookup/replay/terminate vẫn hoạt động. Đây là giới hạn cố định cần vận hành đánh giá trước khi tăng, không phải TTL. Không xóa tombstone/Checkout để mở quota. Revision nội bộ `User.checkoutAttemptRevision` không phải business state hoặc credential.
+
+Admin `GET /api/admin/operations/health-summary` thêm `attempts:{total,last24h,highWaterUsers,perUserLimit}`; cảnh báo từ 8.000 reference/user, outbox quá 15 phút, webhook `retry_required` quá 15 phút, refund pending quá 24 giờ. Chỉ trả số lượng, không trả key/hash/userId. Endpoint có aggregation toàn collection: probe readiness riêng; chạy summary định kỳ thưa, theo dõi latency, dung lượng/index và tốc độ tăng theo ngày. Các ngưỡng là tín hiệu cần điều tra, không tự xóa dữ liệu hoặc tự gửi thông báo.
+
+### Migration/deploy/rollback của bổ sung này
+
+1. Drain **tất cả** writer cũ (checkout, subscription, webhook, scheduler); không rolling với bản bỏ qua tombstone. Backup nhất quán khi dừng ghi, thử restore vào DB mới. Rà manifest/dry-run và conflict trước apply theo runbook bên dưới.
+2. Giữ scripts CAS migration hiện tại: apply là transaction, interruption trước commit rollback toàn batch; manifest đã apply phải lập lại dry-run, replay manifest cũ có thể báo CAS. Rollback chỉ khi giá trị vẫn khớp after, không ghi đè sửa đổi sau migration. Migration checkout legacy là insert-only, không có rollback tự động; không xóa Checkout đã có hoạt động sau migration.
+3. Tạo/kiểm tra unique Attempt `{userId,kind,key}`, Checkout `{userId,requestKey}` và index Attempt `{createdAt:1}` (additive). Không TTL trên Attempt. Startup phải fail nếu index/integrity lỗi. Không cần backfill revision User; `$inc` khởi tạo khi admission đầu tiên.
+4. Deploy BE hiểu tombstone trước FE recovery mới. Smoke prepare lỗi địa chỉ → terminate-with-body → key mới; old key replay; quota dùng chung; logout stream; readiness Redis/DB; đối soát ledger/refund/outbox và collection growth.
+5. Rollback: đóng nhận giao dịch/drain rồi dùng bản vẫn tôn trọng Attempt/tombstone. Không quay về writer bỏ qua tombstone, không xóa reference hay kết quả đã created. FE có thể tắt UX mới nhưng phải giữ reference.
+
+Xem kết quả thực chạy và phần chưa kiểm chứng tại [biên bản kiểm chứng](be-handoff-verification.md); không suy ra mức sẵn sàng production từ số test pass.
+
 Tài liệu đối chiếu với source hiện tại ngày 2026-10-18. Không thay đổi repo FE, không commit/push/deploy hoặc chạy migration lên dữ liệu thật. Các thay đổi source/test/Compose có sẵn được giữ nguyên trong đợt bàn giao này.
 
 ## 1. Phạm vi và nguyên tắc
