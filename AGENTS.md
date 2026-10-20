@@ -13,7 +13,7 @@
 - Test: `npm test` (Jest, experimental VM modules, runInBand); `npm run test:manager` (hai suite manager integration và merchant order policy). Chọn suite: `npm test -- --runTestsByPath tests/checkout.test.js`. Kiểm chứng CI/local đầy đủ: `npm run test:b01:http` rồi `npm run test:b01`; unit harness: `npm run test:b01:unit`.
 - `npm run check:staging:commerce` là probe staging, không thay thế test. Chỉ dùng với môi trường đã xác minh và được phép truy cập.
 - Có `npm run migrate:checkouts` và `npm run migrate:merchant-ownership`; đây là migration, không phải bước cài đặt/test mặc định. Không tự chạy chúng hoặc script migration khác trên dữ liệu thật.
-- Hiện không có script lint hoặc build trong package.json; không báo đã chạy `npm run lint`/build. CI còn chạy `npm audit --omit=dev --audit-level=high`.
+- B05 thêm `npm run lint` (quét toàn source, hash chỉ chuẩn hóa CRLF→LF; giữ byte hash/lỗi baseline gốc; file đổi/mới phải sạch), `npm run lint:all` (hiện nợ cũ), `npm run format:check` và `npm run validate:api`. Không có build. Xem `docs/B05-inventory.md`; không cập nhật baseline để che lỗi mới. CI còn chạy `npm audit --omit=dev --audit-level=high`.
 
 ## Kiểm chứng với hạ tầng thật, dữ liệu dùng riêng
 - Xác minh đích kết nối trước khi chạy. Không dùng DB/Redis dùng chung hoặc dữ liệu thật cho test. `tests/helpers/db.js` xóa dữ liệu trong quá trình test/teardown; chỉ cho phép trên DB dùng một lần do phiên tạo.

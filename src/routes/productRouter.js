@@ -10,8 +10,8 @@ const upload = require("../middleware/uploadMiddleware");
 
 router.post(
   "/create-product/",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
+  authMiddleware.requireAdmin,
   upload.array("images", 10),
   validationHandler.validate(validationSchemas.productSchema),
   productController.createProduct,
@@ -21,28 +21,28 @@ router.get("/get-all-products/", productController.getAllProducts);
 
 router.put(
   "/update-product/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
-  upload.array("images", 10),
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireAdmin,
+  upload.array("images", 10),
   (req, res, next) => validationHandler.validate(req.files?.length ? validationSchemas.productUpdateSchema.min(0) : validationSchemas.productUpdateSchema)(req, res, next),
   productController.updateProduct,
 );
 
 router.patch(
   "/adjust-stock/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   validationHandler.validate(validationSchemas.adjustStockSchema),
   productController.adjustStock,
 );
 
 router.delete(
   "/delete-product/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   productController.deleteProduct,
 );
 

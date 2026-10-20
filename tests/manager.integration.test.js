@@ -130,6 +130,9 @@ async function orderFixture(overrides = {}) {
 test('merchant COD lifecycle separates delivered from paid; admin alone settles COD', async () => {
   const order = await orderFixture(); const url = `/api/manager/orders/${order._id}/status`;
   expect((await request(app).patch(url).set(auth(other)).send({ status: 'processing' })).status).toBe(404);
+  expect((await request(app).post(url).send({ status: 'processing' })).status).toBe(401);
+  expect((await request(app).post(url).set(auth(admin)).send({ status: 'processing' })).status).toBe(403);
+  expect((await request(app).post(url).set(auth(other)).send({ status: 'processing' })).status).toBe(404);
   for (const status of ['processing', 'shipped', 'delivered']) {
     const response = await request(app).patch(url).set(auth(merchant)).send({ status });
     expect(response.status).toBe(200); expect(response.body.data.status).toBe(status);
@@ -138,6 +141,7 @@ test('merchant COD lifecycle separates delivered from paid; admin alone settles 
   const current = await Order.findById(order._id);
   expect(current.codCollectionStatus).toBe('pending_review'); expect(current.paidAt).toBeNull();
   const historyLength = current.statusHistory.length;
+  expect((await request(app).post(url).set(auth(merchant)).send({ status: 'delivered' })).status).toBe(200);
   expect((await request(app).patch(url).set(auth(merchant)).send({ status: 'delivered' })).status).toBe(200);
   expect((await Order.findById(order._id)).statusHistory.length).toBe(historyLength);
   expect((await request(app).post(`/api/checkout/mark-cod-delivered/${order._id}`).set(auth(merchant))).status).toBe(403);

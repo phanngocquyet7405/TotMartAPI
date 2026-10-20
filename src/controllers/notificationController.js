@@ -12,17 +12,17 @@ const {
 // Each user may have several open tabs.
 const activeUserStreams = new Map();
 
-function terminateUserStreams(userId) {
+function terminateUserStreams(userId, sessionId) {
   const key = String(userId);
 
   // Prevent previously issued tickets from reopening a revoked stream.
-  revokeUserSseTickets(key);
+  revokeUserSseTickets(key, sessionId);
 
   const streams = activeUserStreams.get(key);
   if (!streams) return;
 
   // Closing a stream removes it from the original Set.
-  for (const close of [...streams]) close();
+  for (const close of [...streams]) if (!sessionId || close.sid === sessionId) close();
 }
 
 class NotificationController {
@@ -35,14 +35,18 @@ class NotificationController {
   }
 
   streamNotifications(req, res, next) {
-    if (redis.enabled() && !req._verifiedStreamTicket) {
-      return Promise.resolve(consumeSseTicket(req.query.ticket)).then(async credentials => {
+    if (!req._verifiedStreamTicket && !req._localLegacyUser) {
+      const ticket = consumeSseTicket(req.query.ticket, true);
+      if (!redis.enabled() && ticket && ticket.tokenVersion === undefined && !require("../config/sessionPolicy").strictSessions()) {
+        return module.exports.streamNotifications({ ...req, _localLegacyUser: ticket.userId }, res, next);
+      }
+      return Promise.resolve(ticket).then(async credentials => {
         if (!credentials || !await validCredentials(credentials)) return res.status(401).json({success:false,message:'Invalid or revoked stream ticket'});
         return module.exports.streamNotifications({ ...req, _verifiedStreamTicket:credentials },res,next);
       }).catch(next);
     }
     const credentials = req._verifiedStreamTicket;
-    const userId = credentials?.userId || consumeSseTicket(req.query.ticket);
+    const userId = credentials?.userId || req._localLegacyUser;
 
     if (!userId) {
       return res.status(401).json({
@@ -95,6 +99,7 @@ class NotificationController {
       activeUserStreams.set(key, new Set());
     }
 
+    close.sid = credentials?.sid;
     activeUserStreams.get(key).add(close);
     registerSseClient(clientId, res);
 
@@ -188,7 +193,7 @@ module.exports.terminateUserStreams = terminateUserStreams;
 async function validCredentials(credentials) {
   const user = await require('../models/User').findById(credentials.userId);
   if (!user || user.isActive === false || user.role !== 'admin' || user.tokenVersion !== credentials.tokenVersion) return false;
-  if (!credentials.sid) return process.env.NODE_ENV !== 'production';
-  return Boolean(await require('../models/AuthSession').exists({sessionId:credentials.sid,userId:user._id,tokenVersion:user.tokenVersion,expiresAt:{$gt:new Date()}}));
+  if (!credentials.sid) return !require('../config/sessionPolicy').strictSessions();
+  return Boolean(await require('../models/AuthSession').exists({sessionId:credentials.sid,userId:user._id,tokenVersion:user.tokenVersion,revokedAt:null,expiresAt:{$gt:new Date()}}));
 }
 module.exports.terminateAllStreams = () => { for (const userId of [...activeUserStreams.keys()]) terminateUserStreams(userId); };

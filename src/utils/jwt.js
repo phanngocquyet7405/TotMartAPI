@@ -1,5 +1,5 @@
-const jwt = require("jsonwebtoken");
-const config = require("../config/environment");
+const jwt = require('jsonwebtoken');
+const config = require('../config/environment');
 
 const generateAccessToken = (user) => {
   return jwt.sign(
@@ -9,7 +9,7 @@ const generateAccessToken = (user) => {
       tokenVersion: user.tokenVersion || 0,
     },
     config.jwt.secret,
-    { expiresIn: process.env.JWT_ACCESS_EXPIRES_IN || "30m" },
+    { expiresIn: config.jwt.legacyAccessExpiresIn },
   );
 };
 
@@ -19,27 +19,21 @@ const generateRefreshToken = (user) => {
       userId: user._id,
       tokenVersion: user.tokenVersion || 0,
     },
-    process.env.JWT_REFRESH_SECRET || config.jwt.secret,
-    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d" },
+    config.jwt.legacyRefreshSecret,
+    { expiresIn: config.jwt.legacyRefreshExpiresIn },
   );
 };
 
 const generateToken = (userId, tokenVersion = 0) => {
   return jwt.sign({ userId, tokenVersion }, config.jwt.secret, {
-    expiresIn: config.jwt.expiresIn || "1d",
+    expiresIn: config.jwt.expiresIn || '1d',
   });
 };
 
 const verifyToken = (token, isRefresh = false) => {
-  try {
-    const secret = isRefresh
-      ? process.env.JWT_REFRESH_SECRET || config.jwt.secret
-      : config.jwt.secret;
-    const decoded = jwt.verify(token, secret, { algorithms: ["HS256"] });
-    return decoded;
-  } catch (error) {
-    throw error;
-  }
+  const secret = isRefresh ? config.jwt.legacyRefreshSecret : config.jwt.secret;
+  const decoded = jwt.verify(token, secret, { algorithms: ['HS256'] });
+  return decoded;
 };
 
 const decodeToken = (token) => {

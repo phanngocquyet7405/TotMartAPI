@@ -12,7 +12,7 @@ const couponRouter = require("./couponRouter");
 const orderRouter = require("./orderRouter");
 // Health check endpoint
 function router(app) {
-  app.get('/api/admin/operations/health-summary', require('../middleware/authMiddleware').authMiddleware, require('../middleware/authMiddleware').adminMiddleware, require('../controllers/operationsController').summary);
+  app.get('/api/admin/operations/health-summary', require('../middleware/authMiddleware').authenticate, require('../middleware/authMiddleware').requireAdmin, require('../controllers/operationsController').summary);
   app.use("/api/manager", require("./managerRouter"));
   app.use("/api/admin", require("./adminCommerceRouter"));
   app.use("/api/admin/reconciliation", require("./reconciliationRouter"));

@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "origin": "artifacts/b01/all-OpVcHq",
+  "sourceManifestSha256": "0417c3678b7dedbd4e72b31572eb7c9d4dfca7ba70cece8d3ba345a2c00333ab",
+  "reason": "No regression from the first successful B06 full regression on unchanged runtime modules; retain scenario assertions, disclose uncovered branches. Source or instrumentation changes require explicit review, never automatic baseline updates.",
+  "files": {
+    "src/services/boxDefinitionService.js": {
+      "sourceSha256": "678ce941c280716fddad03d34e28b0b635be4ef306ae7e3cca7e1a098d2acb8c",
+      "branches": {
+        "total": 95,
+        "covered": 72
+      }
+    },
+    "src/services/checkoutAttemptService.js": {
+      "sourceSha256": "b22a24c8f29750f5286062ef9b28067cffee98de2ad8535e2e013c5d924b95a2",
+      "branches": {
+        "total": 61,
+        "covered": 54
+      }
+    },
+    "src/services/inventoryService.js": {
+      "sourceSha256": "61e3187f2c8c268c14b710491ecec1cf4df79a17e70ec915394f0f1a7854fd1d",
+      "branches": {
+        "total": 12,
+        "covered": 7
+      }
+    },
+    "src/services/managerCatalogService.js": {
+      "sourceSha256": "fad2ba72d2fe783820511e204232f1558f3e0346d18b33067cbf8d668667262c",
+      "branches": {
+        "total": 109,
+        "covered": 74
+      }
+    },
+    "src/services/merchantScope.js": {
+      "sourceSha256": "b193d7b1fd3f04d35ce3b189c743af60990392c1bc859c5b3ccfd21922d19d70",
+      "branches": {
+        "total": 42,
+        "covered": 34
+      }
+    },
+    "src/services/paymentReconciliationService.js": {
+      "sourceSha256": "ccec9c1580d341e6d2ed089f72c330dab9decd1cc2d0d138b88686d4a84c9f14",
+      "branches": {
+        "total": 172,
+        "covered": 117
+      }
+    },
+    "src/services/pricingService.js": {
+      "sourceSha256": "09053b8bb14167310a36930957f4f8ce61bd4becd141eecfa448a9783087ad3f",
+      "branches": {
+        "total": 104,
+        "covered": 93
+      }
+    },
+    "src/services/subscriptionService.js": {
+      "sourceSha256": "734a9640837cb7dd3bd3401b30c8b57a2c80736d1ac998667f1518feec46226a",
+      "branches": {
+        "total": 46,
+        "covered": 34
+      }
+    }
+  }
+}

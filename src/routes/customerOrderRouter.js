@@ -1,10 +1,10 @@
 const router = require("express").Router();
 const controller = require("../controllers/customerOrderController");
-const { authMiddleware } = require("../middleware/authMiddleware");
+const { authenticate } = require("../middleware/authMiddleware");
 const validation = require("../middleware/validationHandler");
 const { idParamSchema } = require("../middleware/validationSchemas");
 
-router.use(authMiddleware);
+router.use(authenticate);
 router.post('/:_id/confirm-receipt', validation.validate(idParamSchema, 'params'), controller.confirmReceipt);
 router.get("/", controller.list);
 router.get(

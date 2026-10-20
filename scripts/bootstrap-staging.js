@@ -1,5 +1,7 @@
 require('dotenv').config();
-const mongoose=require('mongoose'),bcrypt=require('bcrypt');
+const mongoose=require('mongoose');
+const {hashPassword}=require('../src/services/passwordService');
+const {findForAuthentication}=require('../src/services/userIdentityService');
 const User=require('../src/models/User');
 function settings(env) {
   if(env.APP_ENV!=='staging')throw new Error('APP_ENV must be staging');
@@ -18,9 +20,9 @@ async function run() {
   try {
     await User.createIndexes();
     for(const input of users) {
-      const existing=await User.findOne({email:input.email});
+      const existing=await findForAuthentication(User,input.email);
       if(existing){if(existing.role!==input.role || !existing.isActive)throw new Error('Existing staging account needs explicit review; no role/password changed');continue;}
-      await User.create({...input,password:await bcrypt.hash(input.password,12)});
+      await User.create({...input,password:await hashPassword(input.password,undefined,12)});
     }
     console.log('Staging accounts ready. No existing passwords changed. Create catalog/address fixtures through the staging UI.');
   } finally {await mongoose.disconnect();}

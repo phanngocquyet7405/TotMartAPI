@@ -1,22 +1,21 @@
-const userModel = require("../models/User");
-const bcrypt = require("bcrypt");
-const cloudinary = require("cloudinary").v2;
-const { paginate } = require("../utils/pagination");
-const AuthSession = require("../models/AuthSession");
-const notificationController = require("./notificationController");
-require("dotenv").config();
+const userModel = require('../models/User');
+const { hashPassword } = require('../services/passwordService');
+const cloudinary = require('cloudinary').v2;
+const { paginate } = require('../utils/pagination');
+require('../models/AuthSession'); // Preserve model registration side effect.
+require('./notificationController'); // Preserve module initialization.
 
 cloudinary.config({
-  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-  api_key: process.env.CLOUDINARY_API_KEY,
-  api_secret: process.env.CLOUDINARY_API_SECRET,
+  cloud_name: require('../config/environment').cloudinary.cloud_name,
+  api_key: require('../config/environment').cloudinary.api_key,
+  api_secret: require('../config/environment').cloudinary.api_secret,
   secure: true,
 });
 class UserController {
   async createUser(req, res, next) {
     try {
       const validated = req.validatedBody;
-      const hashedPassword = await bcrypt.hash(validated.password, 9);
+      const hashedPassword = await hashPassword(validated.password);
       const user = await userModel.create({
         ...validated,
         password: hashedPassword,
@@ -24,14 +23,23 @@ class UserController {
 
       res.status(201).json({
         success: true,
-        message: "User created successfully",
+        message: 'User created successfully',
         data: user,
       });
     } catch (error) {
-      if (error && error.code === 11000) {
-        return res
-          .status(409)
-          .json({ success: false, message: "Email đã được đăng ký" });
+      if (
+        error?.code === 11000 &&
+        error.keyPattern?.name &&
+        Object.keys(error.keyPattern).length === 1
+      ) {
+        return res.status(503).json({
+          success: false,
+          code: 'IDENTITY_MIGRATION_REQUIRED',
+          message: 'Registration temporarily unavailable',
+        });
+      }
+      if (error && (error.code === 11000 || error.code === 'EMAIL_CONFLICT')) {
+        return res.status(409).json({ success: false, message: 'Email đã được đăng ký' });
       }
       next(error);
     }
@@ -43,7 +51,7 @@ class UserController {
 
       res.status(200).json({
         success: true,
-        message: "Users retrieved successfully",
+        message: 'Users retrieved successfully',
         data: data,
         pagination: pagination,
       });
@@ -55,11 +63,11 @@ class UserController {
     try {
       const user = await userModel.findById(req.params._id);
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ message: 'User not found' });
       }
       res.status(200).json({
         success: true,
-        message: "User retrieved successfully",
+        message: 'User retrieved successfully',
         data: user,
       });
     } catch (error) {
@@ -71,12 +79,13 @@ class UserController {
     try {
       const validated = req.validatedBody;
       const getUserAvatar = await userModel.findById(req.params._id);
-      if (!getUserAvatar) return res.status(404).json({success:false,message:'User not found'});
+      if (!getUserAvatar)
+        return res.status(404).json({ success: false, message: 'User not found' });
       let result = getUserAvatar.avatar;
       if (req.file) {
         const uploadResult = await new Promise((resolve, reject) => {
           const stream = cloudinary.uploader.upload_stream(
-            { folder: "avatar_users", resource_type: "image" },
+            { folder: 'avatar_users', resource_type: 'image' },
             (error, result) => {
               if (error) return reject(error);
               resolve(result);
@@ -98,15 +107,18 @@ class UserController {
         new: true,
       });
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ message: 'User not found' });
       }
       if (req.file && getUserAvatar.avatar?.public_id) {
-        try { await cloudinary.uploader.destroy(getUserAvatar.avatar.public_id); }
-        catch { require("../utils/logger").warn("Old avatar cleanup requires retry"); }
+        try {
+          await cloudinary.uploader.destroy(getUserAvatar.avatar.public_id);
+        } catch {
+          require('../utils/logger').warn('Old avatar cleanup requires retry');
+        }
       }
       res.status(200).json({
         success: true,
-        message: "User updated successfully",
+        message: 'User updated successfully',
         data: user,
       });
     } catch (error) {
@@ -116,9 +128,13 @@ class UserController {
 
   async deleteUser(req, res, next) {
     try {
-      const user = await require('../services/securityRevocationService').revoke({ userId: req.params._id,
-        set: { isActive: false }, actorId: req.userId, reason: 'account_deactivated' });
-      if (!user) return res.status(404).json({success:false,message:'User not found'});
+      const user = await require('../services/securityRevocationService').revoke({
+        userId: req.params._id,
+        set: { isActive: false },
+        actorId: req.userId,
+        reason: 'account_deactivated',
+      });
+      if (!user) return res.status(404).json({ success: false, message: 'User not found' });
       res.json({ success: true, message: 'User deactivated; historical records retained' });
     } catch (error) {
       next(error);
@@ -130,15 +146,19 @@ class UserController {
       // Khóa tài khoản phải thu hồi toàn bộ truy cập đang có: tăng tokenVersion
       // (token cũ vô hiệu vĩnh viễn, kể cả sau khi mở khóa), xóa phiên làm mới
       // và đóng các luồng SSE đang mở.
-      const user = await require('../services/securityRevocationService').revoke({ userId: req.params._id,
-        set: { isActive: false }, actorId: req.userId, reason: 'account_locked' });
+      const user = await require('../services/securityRevocationService').revoke({
+        userId: req.params._id,
+        set: { isActive: false },
+        actorId: req.userId,
+        reason: 'account_locked',
+      });
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ message: 'User not found' });
       }
 
       res.status(200).json({
         success: true,
-        message: "User locked successfully",
+        message: 'User locked successfully',
         data: user,
       });
     } catch (error) {
@@ -154,11 +174,11 @@ class UserController {
         { new: true },
       );
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ message: 'User not found' });
       }
       res.status(200).json({
         success: true,
-        message: "User unlocked successfully",
+        message: 'User unlocked successfully',
         data: user,
       });
     } catch (error) {
@@ -182,11 +202,11 @@ class UserController {
         { new: true },
       );
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ message: 'User not found' });
       }
       res.status(200).json({
         success: true,
-        message: "Address updated successfully",
+        message: 'Address updated successfully',
         data: user,
       });
     } catch (error) {
@@ -198,15 +218,16 @@ class UserController {
     try {
       const user = await userModel.findById(req.params._id);
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ message: 'User not found' });
       }
       const addressIndex = user.addresses.findIndex(
         (addr) => addr._id.toString() === req.params.address_id,
       );
       if (addressIndex === -1) {
-        return res.status(404).json({ message: "Address not found" });
+        return res.status(404).json({ message: 'Address not found' });
       }
-      if (req.validatedBody.fullName !== undefined) user.addresses[addressIndex].fullName = req.validatedBody.fullName;
+      if (req.validatedBody.fullName !== undefined)
+        user.addresses[addressIndex].fullName = req.validatedBody.fullName;
       user.addresses[addressIndex].country =
         req.validatedBody.country || user.addresses[addressIndex].country;
       user.addresses[addressIndex].city =
@@ -220,7 +241,7 @@ class UserController {
       await user.save();
       res.status(200).json({
         success: true,
-        message: "Address edited successfully",
+        message: 'Address edited successfully',
         data: user,
       });
     } catch (error) {
@@ -236,11 +257,11 @@ class UserController {
         { new: true },
       );
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ message: 'User not found' });
       }
       res.status(200).json({
         success: true,
-        message: "Address deleted successfully",
+        message: 'Address deleted successfully',
         data: user,
       });
     } catch (error) {
@@ -252,11 +273,11 @@ class UserController {
     try {
       const user = await userModel.findById(req.userId);
       if (!user) {
-        return res.status(404).json({ message: "User not found" });
+        return res.status(404).json({ message: 'User not found' });
       }
       res.status(200).json({
         success: true,
-        message: "Profile retrieved successfully",
+        message: 'Profile retrieved successfully',
         data: user,
       });
     } catch (error) {

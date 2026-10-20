@@ -11,13 +11,19 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      - run: npm run lint
+      - run: npm run format:check
+      - run: npm run validate:api
       - run: npm audit --omit=dev --audit-level=high
       - run: docker pull redis:7.4-alpine
       - name: Redis HTTP (isolated outage container and disposable Mongo replica set)
         run: npm run test:b01:http
-      - name: Full BE regression with coverage baseline
+      - name: Full BE regression with reviewed commerce module coverage ratchet
         if: ${{ !cancelled() }}
         run: npm run test:b01
+      - name: Verify source, restore archive chain and resource absence
+        if: ${{ !cancelled() }}
+        run: node scripts/verify-be-evidence.js artifacts/b01/http-* artifacts/b01/all-* artifacts/b01/final-verification.json
       - name: Upload test and coverage evidence (including failures)
         if: always()
         uses: actions/upload-artifact@v4

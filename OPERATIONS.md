@@ -1,5 +1,7 @@
 # TotMart — nghiệm thu và vận hành
 
+Current local operational evidence: [B07 verification](docs/B07-verification.md), [incident/backup/migration runbook](docs/B07-operations-runbook.md) and [review-only release plan](docs/B07-release-plan.md). Earlier tool/permission/backup notes below are historical; they do not authorize using an existing environment or prove current checks.
+
 ## Bổ sung kiểm chứng 2026-10-19
 
 Hợp đồng mới và thứ tự drain/migration/deploy/rollback nằm ở đầu [checkout-attempt-contract.md](docs/checkout-attempt-contract.md); kết quả từng lượt tại [be-handoff-verification.md](docs/be-handoff-verification.md). Không dùng kết quả ngày 18 thay cho trạng thái hiện tại.
@@ -99,3 +101,7 @@ Trước deploy: backup, lưu bản release, chạy migration preview, kiểm tr
 ## Giới hạn quyền Codex
 
 Trong phiên hiện tại lệnh Docker daemon và mở Next server trực tiếp gặp hạn chế quyền. Chủ máy chạy script hạ tầng/frontend bên ngoài Codex; Codex dùng kết nối tới dịch vụ thử đã mở. Không tắt firewall, sandbox hoặc cấp quyền quản trị diện rộng chỉ để chạy test. Với chính sách managed, cần quản trị viên xem cấu hình quyền theo tài liệu OpenAI chính thức.
+## Session rotation and staging policy
+
+See [refresh family state machine, retention, legacy cutover and rollback](docs/refresh-family-policy.md).
+`NODE_ENV=staging` now uses production configuration validation and requires session `sid` at HTTP/SSE authentication entrypoints, with Secure cookies. Deploy all auth writers together with additive indexes; preserve the same `JWT_REFRESH_SECRET` across instances. Do not roll back to code that ignores `revokedAt`. Local proxy fixture tests do not constitute staging validation.

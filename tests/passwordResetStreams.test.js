@@ -129,7 +129,9 @@ test("an older failed reset email does not invalidate a newer reset token", asyn
       success: false,
       error: "Simulated delivery failure",
     });
-    expect((await firstRequest).status).toBe(500);
+    const firstResponse = await firstRequest;
+    expect(firstResponse.status).toBe(200);
+    expect(firstResponse.body).toEqual(secondResponse.body);
 
     const saved = await User.findById(user._id);
     expect(saved.resetPasswordToken).toBe(hashToken(secondToken));

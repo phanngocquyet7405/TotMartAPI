@@ -4,7 +4,7 @@ Ngày: 17/10/2026. Browser tiếp tục gọi /api cùng origin, Next rewrite t�
 
 ## Quyền và nguồn sở hữu
 
-Tất cả /api/manager yêu cầu token/cookie còn hiệu lực và role merchant hiện tại trong database. Guest 401; user/admin 403 ở namespace merchant. Các route admin vẫn riêng cho admin. Merchant chỉ được dùng checkout/quote để ước tính, không được tạo checkout khách hàng hoặc tự đăng ký subscription bằng tài khoản merchant.
+Các endpoint tồn tại trong /api/manager yêu cầu token/cookie còn hiệu lực và role merchant hiện tại trong database. Với ID hợp lệ: guest 401; user/admin 403. Route có ID validator trước guard: ID sai trên request đã xác thực trả 400 trước lỗi role; anonymous vẫn 401. Subpath không tồn tại trong mount manager: anonymous 401, đã xác thực (mọi role) 404, không phải 403. Merchant truy cập tài nguyên của merchant khác thường 404; tham chiếu nguồn/brand/product ngoại lai trong payload có thể 403. Các route admin vẫn riêng cho admin. Merchant chỉ được dùng checkout/quote để ước tính, không được tạo checkout khách hàng hoặc tự đăng ký subscription bằng tài khoản merchant. Các kết quả HTTP đã chạy và nhận xét chỉ từ đọc source được phân biệt trong [biên bản B02](B02-verification.md).
 
 Sản phẩm mới có ownerId server gán, đồng thời brand phải thuộc merchant. Dữ liệu sản phẩm cũ chưa có ownerId chỉ được thấy khi brand thuộc merchant; dữ liệu có ownerId khác không được suy diễn lại. Combo/gift/template dùng ownerId do server đặt. Mọi cấu phần và combo nguồn phải cùng cửa hàng. Các query đọc, cập nhật và stock đều được giới hạn server-side; không tin ownerId từ client.
 
@@ -66,3 +66,7 @@ Projection merchant không trả customerEmail, paymentCode, thông tin receipt/
 Quote/check-out giữ nguồn sự thật ở server. Gift mới được tính giảm theo tổng số cùng gift trên giỏ và cộng phí amenity theo đơn vị; snapshot tổng dòng lưu vào đơn. Inventory khấu trừ/hoàn kho qua transaction cũ. Test đã kiểm tra gift 3 × 200.000, giảm 10%, tiện ích 5.000/hộp → 555.000 (không thu phí ship trong đơn theo policy mới).
 
 Khách trả phí ship trực tiếp cho bên giao hàng. Quote/check-out mới không thu phí ship trong tiền COD/chuyển khoản; shippingFee=0 và shippingPayment=customer_to_carrier. Đơn cũ giữ snapshot và số tiền cũ. API addresses có fullName tùy chọn; FE đã sửa tên trường và lưu địa chỉ mới bằng API. Xem COMMERCE-FE-V2.md để biết phạm vi và giới hạn nghiệm thu.
+
+## Bổ sung B02 (20/10/2026)
+
+Manager dùng authenticate chung rồi validate ID (nếu route có ID), requireMerchant, validation payload và controller. Role lấy từ DB mỗi request; admin không được truy cập manager và ownership không đổi. ID sai trên request đã xác thực có thể trả 400 trước lỗi role 403. Xem [B02](B02-verification.md) cho bằng chứng và giới hạn.

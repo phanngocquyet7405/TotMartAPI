@@ -32,11 +32,11 @@ function issueSseTicket(userId, credentials = {}) {
   }
   for (const [key, entry] of ssePendingTickets) if (entry.expiresAt <= Date.now()) ssePendingTickets.delete(key);
   if (ssePendingTickets.size >= 10000) throw Object.assign(new Error('Too many stream tickets'), {statusCode:429});
-  ssePendingTickets.set(ticket, { userId, expiresAt: Date.now() + 30_000 });
+  ssePendingTickets.set(ticket, { userId, ...credentials, expiresAt: Date.now() + 30_000 });
   return ticket;
 }
 
-function consumeSseTicket(ticket) {
+function consumeSseTicket(ticket, full = false) {
   if (typeof ticket !== 'string' || !/^[a-f0-9-]{36}$/.test(ticket)) return null;
   if (redis.enabled()) return redis.getClient().getDel(redis.namespace() + ':ticket:' + ticket).then(value => value ? JSON.parse(value) : null);
   const entry = ssePendingTickets.get(ticket);
@@ -47,14 +47,14 @@ function consumeSseTicket(ticket) {
 
   if (entry.expiresAt <= Date.now()) return null;
 
-  return entry.userId;
+  return full ? entry : entry.userId;
 }
 
-function revokeUserSseTickets(userId) {
+function revokeUserSseTickets(userId, sessionId) {
   const key = String(userId);
 
   for (const [ticket, entry] of ssePendingTickets) {
-    if (String(entry.userId) === key) {
+    if (String(entry.userId) === key && (!sessionId || entry.sid === sessionId)) {
       ssePendingTickets.delete(ticket);
     }
   }

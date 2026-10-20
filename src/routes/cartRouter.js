@@ -11,61 +11,61 @@ const {
 
 router.get(
   "/get-cart/:_id",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   cartController.getCartByUser,
 );
 router.get(
   "/get-all-cart",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
+  authMiddleware.requireAdmin,
   cartController.getAllCart,
 );
 router.post(
   "/add-to-cart",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(addToCartSchema, "body"),
   cartController.addToCart,
 );
 // FE đồng bộ giỏ localStorage lên DB ngay trước khi checkout
 router.put(
   "/sync",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(syncCartSchema, "body"),
   cartController.syncCart,
 );
 router.put(
   "/update-cart/:_id",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(updateCartSchema, "body"),
   cartController.updateCart,
 );
 router.delete(
   "/delete-from-cart/:_id",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   cartController.deleteFromCart,
 );
 
 router.post(
   "/add-subscribe-plan-to-cart",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(require("../middleware/validationSchemas").subscriptionCartSchema),
   cartController.addSubscribeCart,
 );
 router.put(
   "/update-subscribe-cart",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(require("../middleware/validationSchemas").subscriptionCartSchema),
   cartController.updateSubscribeCart,
 );
 router.delete(
   "/delete-from-subscribe-cart/:_id",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   cartController.deleteFromSubscribeCart,
 );
 
 router.get(
   "/get-subscribe-cart/:_id",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   cartController.getSubscribeCartByUser,
 );
 module.exports = router;

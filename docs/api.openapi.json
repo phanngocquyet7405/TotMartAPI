@@ -1,0 +1,1963 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "TotMart sensitive API subset",
+    "version": "B05",
+    "description": "Source-aligned sensitive subset. Auth, attempt envelopes and admin refund completion have actual integration response assertions. Detailed checkout-kind results and other operations remain partial; see B05 verification. No route aliases."
+  },
+  "servers": [
+    {
+      "url": "/api"
+    }
+  ],
+  "paths": {
+    "/home/login": {
+      "post": {
+        "summary": "Login and create an opaque refresh family",
+        "operationId": "post_home_login",
+        "description": "Sensitive subset only. Schema omits detailed business data; refer to current commerce contracts.",
+        "security": [],
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user",
+        "x-idempotency": "No commerce Idempotency-Key. Login creates a new family; refresh uses persisted consumed-hash retry budget; logout revokes the current family.",
+        "x-retry-recovery": "Login creates a new family. Failed auth is generic; do not infer account existence.",
+        "parameters": [
+          {
+            "name": "X-TotMart-Request",
+            "in": "header",
+            "required": false,
+            "description": "Required with cookies and no Authorization; value must be 1.",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result; original status preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResult"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "HttpOnly; Path=/; SameSite=Lax; Secure in production/staging. Persistent refresh Max-Age 30d; logical family expiry never slides. Logout clears both cookies. No credential values in examples.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or business precondition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF, role, inactive account or origin denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Payload/idempotency/state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency/configuration unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Login"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/home/refresh": {
+      "post": {
+        "summary": "Rotate or recover a refresh successor",
+        "operationId": "post_home_refresh",
+        "description": "Sensitive subset only. Schema omits detailed business data; refer to current commerce contracts.",
+        "security": [
+          {
+            "RefreshCookie": []
+          }
+        ],
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user",
+        "x-idempotency": "No commerce Idempotency-Key. Login creates a new family; refresh uses persisted consumed-hash retry budget; logout revokes the current family.",
+        "x-retry-recovery": "At most two duplicates within <30s, only while the successor remains current. Reuse otherwise revokes this sid. Old token theft is indistinguishable from a retry within this policy. Absolute family expiry is 30 days, maximum 4096 consumed hashes.",
+        "parameters": [
+          {
+            "name": "X-TotMart-Request",
+            "in": "header",
+            "required": false,
+            "description": "Required with cookies and no Authorization; value must be 1.",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result; original status preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResult"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "HttpOnly; Path=/; SameSite=Lax; Secure in production/staging. Persistent refresh Max-Age 30d; logical family expiry never slides. Logout clears both cookies. No credential values in examples.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or business precondition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF, role, inactive account or origin denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Payload/idempotency/state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency/configuration unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/home/logout": {
+      "post": {
+        "summary": "Revoke current family",
+        "operationId": "post_home_logout",
+        "description": "Sensitive subset only. Schema omits detailed business data; refer to current commerce contracts.",
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "AccessCookie": []
+          }
+        ],
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user",
+        "x-idempotency": "No commerce Idempotency-Key. Login creates a new family; refresh uses persisted consumed-hash retry budget; logout revokes the current family.",
+        "x-retry-recovery": "Retry may return 401 after successful revocation. No other family is revoked when sid is present.",
+        "parameters": [
+          {
+            "name": "X-TotMart-Request",
+            "in": "header",
+            "required": false,
+            "description": "Required with cookies and no Authorization; value must be 1.",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result; original status preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            },
+            "headers": {
+              "Set-Cookie": {
+                "description": "HttpOnly; Path=/; SameSite=Lax; Secure in production/staging. Persistent refresh Max-Age 30d; logical family expiry never slides. Logout clears both cookies. No credential values in examples.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or business precondition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked authentication",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF, role, inactive account or origin denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Payload/idempotency/state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency/configuration unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/attempts/{kind}/{key}": {
+      "get": {
+        "summary": "Lookup or terminate checkout attempt",
+        "operationId": "get_checkout_attempts_kind_key",
+        "description": "Sensitive subset only. Schema omits detailed business data; refer to current commerce contracts.",
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "AccessCookie": []
+          }
+        ],
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user only; foreign lookup returns unknown. Termination does not cancel an existing checkout.",
+        "x-idempotency": "No commerce idempotency key for auth; checkout/attempt use authenticated user + kind/key + Joi-validated JSON.stringify payload hash.",
+        "x-retry-recovery": "Unknown/timeout/400/404 do not authorize a new key. Restart only after invalidated and canRestart=true. Created results replay; rejected/invalidated tombstones persist.",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["products", "subscription"]
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,128}$"
+            }
+          },
+          {
+            "name": "Attempt-Payload-Hash",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptResolution"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or business precondition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked authentication",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF, role, inactive account or origin denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Payload/idempotency/state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency/configuration unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/attempts/{kind}/{key}/terminate": {
+      "post": {
+        "summary": "Lookup or terminate checkout attempt",
+        "operationId": "post_checkout_attempts_kind_key_terminate",
+        "description": "Sensitive subset only. Schema omits detailed business data; refer to current commerce contracts.",
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "AccessCookie": []
+          }
+        ],
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user only; foreign lookup returns unknown. Termination does not cancel an existing checkout.",
+        "x-idempotency": "No commerce idempotency key for auth; checkout/attempt use authenticated user + kind/key + Joi-validated JSON.stringify payload hash.",
+        "x-retry-recovery": "Unknown/timeout/400/404 do not authorize a new key. Restart only after invalidated and canRestart=true. Created results replay; rejected/invalidated tombstones persist.",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": ["products", "subscription"]
+            }
+          },
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,128}$"
+            }
+          },
+          {
+            "name": "Attempt-Payload-Hash",
+            "in": "header",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          {
+            "name": "X-TotMart-Request",
+            "in": "header",
+            "required": false,
+            "description": "Required with cookies and no Authorization; value must be 1.",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptResolution"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or business precondition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked authentication",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF, role, inactive account or origin denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Payload/idempotency/state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency/configuration unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/attempts/products/prepare": {
+      "post": {
+        "summary": "Prepare product attempt",
+        "operationId": "post_checkout_attempts_products_prepare",
+        "description": "Sensitive subset only. Schema omits detailed business data; refer to current commerce contracts.",
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "AccessCookie": []
+          }
+        ],
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user",
+        "x-idempotency": "No commerce idempotency key for auth; checkout/attempt use authenticated user + kind/key + Joi-validated JSON.stringify payload hash.",
+        "x-retry-recovery": "No automatic restart or new idempotency key after an ambiguous result.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128
+            },
+            "description": "Required in NODE_ENV=production. Existing non-production modes (including staging) generate a key when absent; callers must always retain/send their own stable key for safe recovery. B05 preserves this source behavior."
+          },
+          {
+            "name": "X-TotMart-Request",
+            "in": "header",
+            "required": false,
+            "description": "Required with cookies and no Authorization; value must be 1.",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptPrepared"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or business precondition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked authentication",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF, role, inactive account or origin denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Payload/idempotency/state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency/configuration unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Checkout"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/attempts/products/{key}/terminate-with-body": {
+      "post": {
+        "summary": "Recover and terminate using original validated body",
+        "operationId": "post_checkout_attempts_products_key_terminate_with_body",
+        "description": "Sensitive subset only. Schema omits detailed business data; refer to current commerce contracts.",
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "AccessCookie": []
+          }
+        ],
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user",
+        "x-idempotency": "No commerce idempotency key for auth; checkout/attempt use authenticated user + kind/key + Joi-validated JSON.stringify payload hash.",
+        "x-retry-recovery": "No automatic restart or new idempotency key after an ambiguous result.",
+        "parameters": [
+          {
+            "name": "key",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,128}$"
+            }
+          },
+          {
+            "name": "X-TotMart-Request",
+            "in": "header",
+            "required": false,
+            "description": "Required with cookies and no Authorization; value must be 1.",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AttemptBodyResolution"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or business precondition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked authentication",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF, role, inactive account or origin denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Payload/idempotency/state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency/configuration unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Checkout"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/check-out": {
+      "post": {
+        "summary": "Create product checkout",
+        "operationId": "post_checkout_check_out",
+        "description": "Sensitive subset only. Schema omits detailed business data; refer to current commerce contracts.",
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "AccessCookie": []
+          }
+        ],
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Customer purchases use current user/cart/address snapshots; merchants cannot purchase.",
+        "x-idempotency": "No commerce idempotency key for auth; checkout/attempt use authenticated user + kind/key + Joi-validated JSON.stringify payload hash.",
+        "x-retry-recovery": "Replay same user/kind/key/hash returns original 201 result. Different payload/kind conflicts. After timeout recover original attempt; never infer safe restart from 400/404.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 16,
+              "maxLength": 128
+            },
+            "description": "Required in NODE_ENV=production. Existing non-production modes (including staging) generate a key when absent; callers must always retain/send their own stable key for safe recovery. B05 preserves this source behavior."
+          },
+          {
+            "name": "X-TotMart-Request",
+            "in": "header",
+            "required": false,
+            "description": "Required with cookies and no Authorization; value must be 1.",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful result; original status preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or business precondition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked authentication",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF, role, inactive account or origin denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Payload/idempotency/state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency/configuration unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Checkout"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/sepay-webhook": {
+      "post": {
+        "summary": "Authenticated SePay receipt reconciliation",
+        "operationId": "post_checkout_sepay_webhook",
+        "description": "Sensitive subset only. Schema omits detailed business data; refer to current commerce contracts.",
+        "security": [
+          {
+            "SePay": []
+          }
+        ],
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Server-to-server authenticated receipt, receiving account checked; no user ownership claim from payload.",
+        "x-idempotency": "Payment receipt/reference dedup in reconciliation transactions; not a client-provided checkout idempotency key.",
+        "x-retry-recovery": "Authenticated receipt/reference dedup; missing/excess/late/mismatched payments reconcile without duplicate fulfillment.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Successful result; original status preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or business precondition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked authentication",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF, role, inactive account or origin denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Payload/idempotency/state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency/configuration unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Webhook"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/complete-refund/{_id}": {
+      "post": {
+        "summary": "Complete an audited refund",
+        "operationId": "post_checkout_complete_refund__id",
+        "description": "Sensitive subset only. Schema omits detailed business data; refer to current commerce contracts.",
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "AccessCookie": []
+          }
+        ],
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Current DB admin role. Reconciliation service verifies available principal/excess, transaction lock and transfer evidence.",
+        "x-idempotency": "Reconciliation refund key/reference and transfer evidence; preserve transaction lock and available-amount audit.",
+        "x-retry-recovery": "Do not treat queueing as completed transfer; reconcile original refund key/reference before retry.",
+        "parameters": [
+          {
+            "name": "_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-fA-F0-9]{24}$"
+            }
+          },
+          {
+            "name": "X-TotMart-Request",
+            "in": "header",
+            "required": false,
+            "description": "Required with cookies and no Authorization; value must be 1.",
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful result; original status preserved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Success"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or business precondition",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing, invalid, expired or revoked authentication",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF, role, inactive account or origin denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Payload/idempotency/state conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Resource unavailable or internal failure; existing handler status retained.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Dependency/configuration unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Refund"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/admin/reconciliation/refunds/{_id}/complete": {
+      "post": {
+        "summary": "Record evidenced completion of a pending receipt/principal refund",
+        "operationId": "complete_receipt_refund",
+        "security": [
+          {
+            "Bearer": []
+          },
+          {
+            "AccessCookie": []
+          }
+        ],
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1.",
+        "x-ownership": "Current DB role admin required; no merchant override. Exact pending refund amount required.",
+        "x-idempotency": "Required key scoped by authenticated admin/action; identical command replays; different payload conflicts. Unique bank reference prevents double completion.",
+        "x-retry-recovery": "Retry with the same key/body after lost response. Pending means liability, not transferred money. Completion requires bank evidence.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "_id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_-]{16,128}$"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-TotMart-Request",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": ["1"]
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteReceiptRefund"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptRefundCompleted"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Source-aligned response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "Bearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      },
+      "RefreshCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "refreshToken"
+      },
+      "SePay": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "Authorization"
+      },
+      "AccessCookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "token"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [false]
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          }
+        },
+        "required": ["success"],
+        "additionalProperties": true
+      },
+      "Login": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 6
+          },
+          "rememberMe": {
+            "type": "boolean"
+          }
+        },
+        "required": ["email", "password"],
+        "additionalProperties": false
+      },
+      "TokenResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "token": {
+            "type": "string",
+            "minLength": 1
+          },
+          "message": {
+            "type": "string"
+          },
+          "passwordChangeRequired": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "passwordPolicyReason": {
+            "type": "string",
+            "enum": ["LEGACY_BCRYPT_BYTE_LIMIT"]
+          }
+        },
+        "required": ["success", "token"],
+        "additionalProperties": false
+      },
+      "Success": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object"
+          }
+        },
+        "required": ["success"],
+        "additionalProperties": true
+      },
+      "Checkout": {
+        "type": "object",
+        "properties": {
+          "addressId": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{24}$"
+          },
+          "paymentMethod": {
+            "type": "string",
+            "enum": ["cod", "online"]
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 500
+          },
+          "couponCode": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 30
+          },
+          "quoteFingerprint": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$"
+          },
+          "addressHash": {
+            "type": "string",
+            "pattern": "^[a-fA-F0-9]{64}$"
+          }
+        },
+        "required": ["addressId", "paymentMethod"],
+        "additionalProperties": false
+      },
+      "Refund": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 150
+          }
+        },
+        "required": ["amount", "reference"],
+        "additionalProperties": false
+      },
+      "Webhook": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "gateway": {
+            "type": "string"
+          },
+          "transactionDate": {
+            "type": "string"
+          },
+          "accountNumber": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "transferType": {
+            "type": "string",
+            "enum": ["in", "out"]
+          },
+          "transferAmount": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "referenceCode": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 150
+          }
+        },
+        "required": [
+          "id",
+          "gateway",
+          "transactionDate",
+          "accountNumber",
+          "content",
+          "transferType",
+          "transferAmount",
+          "referenceCode"
+        ],
+        "additionalProperties": true
+      },
+      "AuthError": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [false]
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["success", "message"],
+        "additionalProperties": false
+      },
+      "DeliverySnapshot": {
+        "type": "object",
+        "properties": {
+          "fullName": {
+            "type": "string",
+            "minLength": 1
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1
+          },
+          "district": {
+            "type": "string",
+            "minLength": 1
+          },
+          "city": {
+            "type": "string",
+            "minLength": 1
+          },
+          "country": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["fullName", "phone", "address", "district", "city", "country"],
+        "additionalProperties": false
+      },
+      "AttemptResolution": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["processing", "created", "rejected", "invalidated", "unknown"]
+              },
+              "canRestart": {
+                "type": "boolean"
+              },
+              "result": {
+                "type": "object"
+              },
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "statusCode": {
+                    "type": "integer",
+                    "minimum": 400,
+                    "maximum": 599
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["state", "canRestart"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["success", "data"],
+        "additionalProperties": false
+      },
+      "AttemptBodyResolution": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{16,128}$"
+              },
+              "hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "state": {
+                "type": "string",
+                "enum": ["processing", "created", "rejected", "invalidated", "unknown"]
+              },
+              "canRestart": {
+                "type": "boolean"
+              },
+              "result": {
+                "type": "object"
+              },
+              "error": {
+                "type": "object",
+                "properties": {
+                  "code": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "message": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "statusCode": {
+                    "type": "integer",
+                    "minimum": 400,
+                    "maximum": 599
+                  }
+                },
+                "additionalProperties": false
+              }
+            },
+            "required": ["key", "hash", "state", "canRestart"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["success", "data"],
+        "additionalProperties": false
+      },
+      "AttemptPrepared": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9_-]{16,128}$"
+              },
+              "hash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "state": {
+                "type": "string",
+                "enum": ["processing", "created"]
+              },
+              "address": {
+                "$ref": "#/components/schemas/DeliverySnapshot"
+              },
+              "addressHash": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "result": {
+                "type": "object"
+              }
+            },
+            "required": ["key", "hash", "state"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["success", "data"],
+        "additionalProperties": false
+      },
+      "CompleteReceiptRefund": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 9007199254740991
+          },
+          "reference": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 150
+          },
+          "evidence": {
+            "type": "string",
+            "minLength": 10,
+            "maxLength": 500
+          }
+        },
+        "required": ["amount", "reference", "evidence"],
+        "additionalProperties": false
+      },
+      "ReceiptRefundCompleted": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "refundId": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{24}$"
+              },
+              "status": {
+                "type": "string",
+                "enum": ["completed"]
+              },
+              "amount": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "replayed": {
+                "type": "boolean",
+                "enum": [true]
+              }
+            },
+            "required": ["refundId", "status", "amount"],
+            "additionalProperties": false
+          }
+        },
+        "required": ["success", "data"],
+        "additionalProperties": false
+      }
+    }
+  }
+}

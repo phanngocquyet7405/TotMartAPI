@@ -5,6 +5,7 @@ jest.mock("../src/models/User", () => ({
   findById: jest.fn(),
   findByIdAndUpdate: jest.fn(),
   findOne: jest.fn(),
+  updateOne: jest.fn(),
 }));
 
 const express = require("express");
@@ -43,6 +44,7 @@ beforeEach(() => {
   User.findById.mockImplementation(async (id) => String(id).toLowerCase() === actorId ? actor : target);
   User.findByIdAndUpdate.mockResolvedValue(target);
   User.findOne.mockResolvedValue(actor);
+  User.updateOne.mockResolvedValue({ matchedCount: 1 });
 });
 
 function authorization(claims = {}) {

@@ -16,15 +16,15 @@ const {
   paymentCodeParamSchema,
 } = require("../middleware/validationSchemas");
 
-router.post("/quote", authMiddleware.authMiddleware, validationHandler.validate(quoteSchema), checkOutController.quote);
-router.post("/resolve-inventory/:_id", authMiddleware.authMiddleware, authMiddleware.adminMiddleware, validationHandler.validate(idParamSchema, "params"), checkOutController.resolveInventoryHold);
-router.get("/payment-events", authMiddleware.authMiddleware, authMiddleware.adminMiddleware, checkOutController.listPaymentEvents);
+router.post("/quote", authMiddleware.authenticate, validationHandler.validate(quoteSchema), checkOutController.quote);
+router.post("/resolve-inventory/:_id", authMiddleware.authenticate, validationHandler.validate(idParamSchema, "params"), authMiddleware.requireAdmin, checkOutController.resolveInventoryHold);
+router.get("/payment-events", authMiddleware.authenticate, authMiddleware.requireAdmin, checkOutController.listPaymentEvents);
 
 // ==== User đặt hàng (COD hoặc online) ====
 router.post(
   "/check-out",
   checkoutLimiter,
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   authMiddleware.customerCheckoutMiddleware,
   validationHandler.validate(checkoutSchema, "body"),
   checkOutController.checkOut,
@@ -33,7 +33,7 @@ router.post(
 // ==== User: polling trạng thái thanh toán ở màn QR SePay ====
 router.get(
   "/order-status/:paymentCode",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(paymentCodeParamSchema, "params"),
   checkOutController.getOrderStatus,
 );
@@ -49,7 +49,7 @@ router.post(
 // ==== User huỷ đơn của mình / admin huỷ bất kỳ đơn nào (check quyền trong controller) ====
 router.post(
   "/cancel/:_id",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(idParamSchema, "params"),
   validationHandler.validate(cancelSchema),
   checkOutController.cancelOrder,
@@ -58,35 +58,35 @@ router.post(
 // ==== Admin xác nhận đơn COD trước khi giao ====
 router.post(
   "/confirm-cod/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   checkOutController.confirmCodOrder,
 );
 
 // ==== Admin/shipper xác nhận đã giao và đã thu tiền COD ====
 router.post(
   "/mark-cod-delivered/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   checkOutController.markCodDelivered,
 );
 
 // ==== Admin: danh sách đơn đang chờ hoàn tiền ====
 router.get(
   "/pending-refunds",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
+  authMiddleware.requireAdmin,
   checkOutController.getPendingRefunds,
 );
 
 // ==== Admin: đánh dấu đã hoàn tiền xong ====
 router.post(
   "/complete-refund/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   validationHandler.validate(refundSchema),
   checkOutController.completeRefund,
 );
@@ -104,7 +104,7 @@ const attemptHandler = terminate => async (req, res, next) => {
   } catch (err) { next(err); }
 };
 const { attemptIpLimiter, attemptUserLimiter } = require('../middleware/rateLimiter');
-router.use('/attempts', attemptIpLimiter, authMiddleware.authMiddleware, attemptUserLimiter);
+router.use('/attempts', attemptIpLimiter, authMiddleware.authenticate, attemptUserLimiter);
 router.get('/attempts/:kind/:key', attemptHandler(false));
 router.post('/attempts/:kind/:key/terminate', attemptHandler(true));
 
@@ -121,7 +121,7 @@ for (const kind of ['products', 'subscription']) {
       res.json({ success: true, data: { key, hash, ...data } });
     } catch (err) { next(err); }
   });
-  router.post(`/attempts/${kind}/prepare`, authMiddleware.authMiddleware, authMiddleware.customerCheckoutMiddleware,
+  router.post(`/attempts/${kind}/prepare`, authMiddleware.customerCheckoutMiddleware,
     validationHandler.validate(schema), async (req, res, next) => {
       try {
         const key = require('../utils/idempotencyKey')(req);

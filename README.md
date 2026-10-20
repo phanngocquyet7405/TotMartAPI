@@ -1,3 +1,5 @@
+[Current contracts, tooling and historical verification index](docs/README.md)
+
 ## Merchant compatibility update — 2026-10-17
 
 [Upgrade and verification](docs/UPGRADE-MERCHANT.md) · [Manager API contract](docs/MANAGER-API-CONTRACT.md) · [Operational permissions](docs/MERCHANT-OPERATING-MODEL.md)

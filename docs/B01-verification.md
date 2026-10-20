@@ -1,5 +1,9 @@
 # B01 — runtime và kiểm chứng Redis/teardown
 
+Trạng thái đối chiếu 2026-10-20: **đạt kiểm chứng local; CI còn chờ**. Đợt đối chiếu đọc artifact có sẵn, không chạy lại 435 test: đếm trực tiếp 435 trạng thái passed/0 fail/0 skip và 8 HTTP passed; Jest/runner exit đều 0; tính lại đủ 186 SHA-256 mỗi lượt, không lệch snapshot trước B02; coverage summary khớp baseline bên dưới. Diff `3b1ada5..84cef89` không đổi `src/`, dependency lock chỉ đổi engine gốc. Working tree đầu đợt đối chiếu sạch, B01 đã nằm trong HEAD `84cef89` do phiên trước, không phải thay đổi chưa commit của phiên này.
+
+Metadata hai lượt ghi Redis ID/owner/URL riêng, tmpfs và cleaned=true; source harness kiểm ownership trước mutation và cleanup. Kiểm tra Docker chỉ đọc trong đợt đối chiếu exit 0, không còn container label `totmart.test.run`. Bằng chứng volume lịch sử là artifact ownership, không phải bằng chứng tạo lại trong đợt này. Bảy hash metadata cũng khớp: sáu file không đổi và bản gốc biên bản tại HEAD (LF); biên bản được bổ sung kết luận sau kiểm tra. **GitHub Actions chưa chạy cho thay đổi B01; startup deadline Windows ban đầu vẫn chưa xác định nguyên nhân; 19 dependency moderate toàn cây vẫn còn theo biên bản cài đặt.** Không xem local pass, production audit exit 0 hay lỗi không tái hiện là đã giải quyết các giới hạn đó. B02 thay source nên kết quả/hash B01 chỉ áp dụng snapshot gốc, không dùng làm kết quả B02.
+
 Biên bản cho lần chạy ngày 2026-10-20; kết quả chỉ áp dụng cho snapshot được ghi trong artifact, không bảo đảm chất lượng tương lai hoặc mức sẵn sàng production.
 
 ## Snapshot và phạm vi

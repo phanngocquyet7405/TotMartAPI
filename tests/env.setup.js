@@ -2,6 +2,7 @@
 // jest.config.js -> setupFiles). Đặt sẵn các biến môi trường bắt buộc để
 // src/config/environment.js không throw khi bị import trong lúc test.
 process.env.NODE_ENV = "test";
+process.env.BCRYPT_COST = '12'; // Pin the measured B03 test policy; never inherit developer tuning.
 jest.mock('dotenv', () => ({ config: () => ({ parsed: {} }) }));
 // Ordinary regression tests must not connect to a real Redis from developer .env.
 // Shared store behavior is tested explicitly with mocks; real Redis needs a separate staging drill.

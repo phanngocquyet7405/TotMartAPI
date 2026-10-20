@@ -8,17 +8,17 @@ const brandLogoUpload = require("../middleware/brandLogoUpload");
 
 router.post(
   "/create-brand",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
+  authMiddleware.requireAdmin,
   brandLogoUpload,
   validationHandler.validate(validationSchemas.brandSchema),
   brandController.createBrand,
 );
 router.put(
   "/update-brand/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   brandLogoUpload,
   // A file is in req.file, not req.body: allow an empty text body only with a logo.
   (req, res, next) =>
@@ -31,18 +31,19 @@ router.put(
 );
 router.delete(
   "/delete-brand/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   brandController.deleteBrand,
 );
 
-router.get('/merchant-options', authMiddleware.authMiddleware, authMiddleware.adminMiddleware, async (req,res) => {
+router.get('/merchant-options', authMiddleware.authenticate, authMiddleware.requireAdmin, async (req,res) => {
   const data = await require('../models/User').find({role:'merchant',isActive:{$ne:false}}).select('_id name').sort({name:1}).limit(500).lean();
   res.set('Cache-Control','no-store'); res.json({success:true,data});
 });
-router.get('/manage/:_id', authMiddleware.authMiddleware, authMiddleware.adminMiddleware,
-  validationHandler.validate(validationSchemas.idParamSchema, 'params'), brandController.getManagedBrand);
+router.get('/manage/:_id', authMiddleware.authenticate, validationHandler.validate(validationSchemas.idParamSchema, 'params'),
+  authMiddleware.requireAdmin,
+  brandController.getManagedBrand);
 router.get("/get-all-brands", brandController.getAllBrands);
 
 module.exports = router;

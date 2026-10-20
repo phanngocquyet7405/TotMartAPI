@@ -7,7 +7,7 @@ Object.assign(process.env, { NODE_ENV: 'test', MONGODB_URI: uri, PORT: '3001',
   JWT_SECRET: crypto.randomBytes(32).toString('hex'), JWT_REFRESH_SECRET: crypto.randomBytes(32).toString('hex'),
   SEPAY_API_KEY: 'acceptance-only-no-live-payment', SEPAY_BANK_ACCOUNT: '0123456789', SEPAY_BANK_NAME: 'TestBank' });
 const mongoose = require('mongoose');
-const bcrypt = require('bcrypt');
+const { hashPassword } = require('../src/services/passwordService');
 const app = require('../src/app');
 const User = require('../src/models/User'), Brand = require('../src/models/Brand'), Product = require('../src/models/Product'), Category = require('../src/models/Category'), Box = require('../src/models/Box');
 async function start() {
@@ -16,7 +16,7 @@ async function start() {
   if (!hello.setName) throw new Error('Acceptance requires replica set');
   await Promise.all(Object.values(mongoose.models).map(m => m.init()));
   const password = process.env.ACCEPTANCE_PASSWORD || 'TotMart-Test-2026!';
-  const hash = await bcrypt.hash(password, 10);
+  const hash = await hashPassword(password, undefined, 10);
   const accounts = [['admin', 'admin'], ['merchant1', 'merchant'], ['merchant2', 'merchant'], ['customer', 'user']];
   const users = {};
   for (const [name, role] of accounts) {

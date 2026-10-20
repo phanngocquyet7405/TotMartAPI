@@ -16,7 +16,7 @@ async function revoke({ userId, filter = {}, set = {}, unset = {}, actorId, reas
     await Outbox.create([{ userId: user._id, tokenVersion: user.tokenVersion, sessionId, actorId, reason }], { session });
   });
   // Only after commit. Other instances close through outbox; heartbeat validates DB even if Pub/Sub was missed.
-  if (user) require('../controllers/notificationController').terminateUserStreams(user._id);
+  if (user) require('../controllers/notificationController').terminateUserStreams(user._id, sessionId);
   return user;
 }
 module.exports = { revoke };

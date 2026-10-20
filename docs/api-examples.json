@@ -1,0 +1,78 @@
+[
+  {
+    "schema": "Login",
+    "joi": "loginSchema",
+    "value": {
+      "email": "demo@example.com",
+      "password": "FixturePassword123!",
+      "rememberMe": false
+    }
+  },
+  {
+    "schema": "Checkout",
+    "joi": "checkoutSchema",
+    "value": {
+      "addressId": "507f1f77bcf86cd799439011",
+      "paymentMethod": "cod"
+    }
+  },
+  {
+    "schema": "Refund",
+    "joi": "refundSchema",
+    "value": {
+      "amount": 1000,
+      "reference": "fixture-transfer-reference"
+    }
+  },
+  {
+    "schema": "Webhook",
+    "joi": "sepayWebhookSchema",
+    "value": {
+      "id": 1,
+      "gateway": "FixtureBank",
+      "transactionDate": "2026-10-20 00:00:00",
+      "accountNumber": "0000000000",
+      "content": "TMARTFIXTURE",
+      "transferType": "in",
+      "transferAmount": 1000,
+      "referenceCode": "fixture-receipt-1"
+    }
+  },
+  {
+    "schema": "Error",
+    "value": {
+      "success": false,
+      "code": "INVALID_ATTEMPT_REFERENCE"
+    }
+  },
+  {
+    "schema": "TokenResult",
+    "value": {
+      "success": true,
+      "token": "<access-token-placeholder>"
+    }
+  },
+  {
+    "schema": "ReceiptRefundCompleted",
+    "value": {
+      "success": true,
+      "data": {
+        "refundId": "507f1f77bcf86cd799439011",
+        "status": "completed",
+        "amount": 1000
+      }
+    }
+  },
+  {
+    "schema": "AttemptBodyResolution",
+    "value": {
+      "success": true,
+      "data": {
+        "key": "fixture-attempt-key",
+        "hash": "0000000000000000000000000000000000000000000000000000000000000000",
+        "state": "invalidated",
+        "canRestart": true
+      }
+    }
+  }
+]

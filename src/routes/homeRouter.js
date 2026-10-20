@@ -17,7 +17,7 @@ router.post(
   authController.login,
 );
 router.post("/refresh", refreshLimiter, authController.refresh);
-router.post("/logout", auth.authMiddleware, authController.logout);
+router.post("/logout", auth.authenticate, authController.logout);
 router.post(
   "/forgot-password",
   authLimiter,

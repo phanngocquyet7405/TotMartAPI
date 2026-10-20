@@ -10,8 +10,8 @@ const authMiddleware = require("../middleware/authMiddleware");
 
 router.post(
   "/create-box",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
+  authMiddleware.requireAdmin,
   upload.boxUpload.array("images", 10),
   validateHandler.validate(validationSchemas.createBoxSchema),
   boxController.createBox,
@@ -22,15 +22,15 @@ router.get("/public/:_id", validateHandler.validate(validationSchemas.idParamSch
 
 router.get(
   "/get-box-by-id/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
+  authMiddleware.requireAdmin,
   boxController.getBoxById,
 );
 
 router.put(
   "/update-box/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
+  authMiddleware.requireAdmin,
   upload.boxUpload.array("images", 10),
   validateHandler.validate(validationSchemas.updateBoxSchema),
   boxController.updateBox,
@@ -38,17 +38,17 @@ router.put(
 
 router.patch(
   "/adjust-stock/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
   validateHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   validateHandler.validate(validationSchemas.adjustStockSchema),
   boxController.adjustStock,
 );
 
 router.delete(
   "/delete-box/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
+  authMiddleware.requireAdmin,
   boxController.deleteBox,
 );
 
