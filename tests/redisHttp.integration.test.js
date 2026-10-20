@@ -1,10 +1,13 @@
-const { fork, execFileSync } = require('node:child_process');
+const { fork } = require('node:child_process');
 const { randomUUID } = require('node:crypto');
 const http = require('node:http');
+const { writeFileSync } = require('node:fs');
 const mongoose = require('mongoose');
 const { createClient } = require('redis');
 const { connect, clearDatabase, closeDatabase } = require('./helpers/db');
 const { createUser, signToken } = require('./helpers/factories');
+const { localRedisUrl } = require('./helpers/localRedisUrl');
+const { disposableRedis } = require('./helpers/disposableRedis');
 const uri = process.env.TEST_REDIS_URL;
 if (process.env.CI && !uri) throw new Error('CI requires real TEST_REDIS_URL');
 const poll = async (fn, timeout = 15000) => {
@@ -13,29 +16,50 @@ const poll = async (fn, timeout = 15000) => {
   throw new Error('Condition deadline exceeded');
 };
 (uri ? describe : describe.skip)('two backend processes over HTTP with real Redis', () => {
-  let children = [], urls = [], client, namespace;
+  let children = [], urls = [], client, observer, namespace, ownedRedis, dbConnected = false;
   beforeAll(async () => {
-    if (!/^redis:\/\/(127\.0\.0\.1|localhost):\d+$/.test(uri)) throw new Error('Local test Redis required');
+    const { database } = localRedisUrl(uri);
     if (process.env.TEST_MONGODB_URI) throw new Error('Crash drill requires its own disposable Mongo process, unset TEST_MONGODB_URI');
-    await connect({mongoArgs:['--setParameter','transactionLifetimeLimitSeconds=5']}); namespace = 'totmart:test:http:' + randomUUID();
-    client = createClient({ url: uri }); client.on('error', () => {}); await client.connect();
+    ownedRedis = await disposableRedis({ database, onEvidence: evidence => {
+      if (process.env.B01_HTTP_RESOURCE_FILE) writeFileSync(process.env.B01_HTTP_RESOURCE_FILE, JSON.stringify(evidence) + '\n');
+    } });
+    observer = createClient({ url: uri, socket: { connectTimeout: 2000, reconnectStrategy: false } });
+    observer.on('error', () => {}); await observer.connect();
+    expect(localRedisUrl(ownedRedis.url).port).not.toBe(localRedisUrl(uri).port);
+    await connect({mongoArgs:['--setParameter','transactionLifetimeLimitSeconds=5']}); dbConnected = true; namespace = 'totmart:test:http:' + randomUUID();
+    client = createClient({ url: ownedRedis.url, socket: { connectTimeout: 2000, reconnectStrategy: false } }); client.on('error', () => {}); await client.connect();
     for (let i = 0; i < 2; i++) {
-      const child = fork(require.resolve('./helpers/http-process'), [], { env: { ...process.env, MONGODB_URI: mongoose.connection.getClient().s.url, REDIS_URL: uri, REDIS_NAMESPACE: namespace, LOG_LEVEL: 'silent' }, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+      const child = fork(require.resolve('./helpers/http-process'), [], { env: { ...process.env, MONGODB_URI: mongoose.connection.getClient().s.url, REDIS_URL: ownedRedis.url, REDIS_NAMESPACE: namespace, LOG_LEVEL: 'silent' }, stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
       children.push(child);
       const port = await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => reject(new Error('Child startup deadline')), 20000);
-        child.once('message', data => { clearTimeout(timer); resolve(data.port); });
-        child.once('exit', code => { clearTimeout(timer); reject(new Error('Child exited: ' + code)); });
+        let stage = 'spawn';
+        const finish = (error, value) => { clearTimeout(timer); child.removeListener('message', onMessage); child.removeListener('exit', onExit); child.removeListener('error', onError); error ? reject(error) : resolve(value); };
+        const onMessage = data => {
+          if (['modules', 'mongo', 'redis'].includes(data?.startupStage)) stage = data.startupStage;
+          else if (['modules', 'mongo', 'redis'].includes(data?.startupFailed)) finish(new Error('Child startup failed at ' + data.startupFailed));
+          else if (Number.isInteger(data?.port)) finish(null, data.port);
+        };
+        const onExit = code => finish(new Error('Child exited during ' + stage + ': ' + code));
+        const onError = () => finish(new Error('Child spawn failed'));
+        const timer = setTimeout(() => finish(new Error('Child startup deadline at ' + stage)), 20000);
+        child.on('message', onMessage); child.once('exit', onExit); child.once('error', onError);
       });
       urls.push('http://127.0.0.1:' + port);
     }
-  });
+  }, 120000);
   afterAll(async () => {
-    for (const child of children) if (child.connected) {
-      await new Promise(resolve => { const timer = setTimeout(() => { child.kill(); resolve(); }, 5000); child.once('exit', () => { clearTimeout(timer); resolve(); }); child.send('stop'); });
+    // No Redis commands during teardown: a failed outage/setup may leave it
+    // unavailable. Removing this suite's owned container discards its keys.
+    try {
+      for (const child of children) if (child.exitCode === null && child.signalCode === null) {
+        await new Promise(resolve => { const timer = setTimeout(() => { child.kill('SIGKILL'); resolve(); }, 5000); child.once('exit', () => { clearTimeout(timer); resolve(); }); if (child.connected) child.send('stop'); else child.kill('SIGKILL'); });
+      }
+    } finally {
+      if (client?.isOpen) client.destroy();
+      if (observer?.isOpen) observer.destroy();
+      try { if (dbConnected) await clearDatabase(); }
+      finally { try { await closeDatabase(); } finally { ownedRedis?.cleanup(); } }
     }
-    if (client?.isReady) { const keys = []; for await (const batch of client.scanIterator({ MATCH: namespace + ':*' })) keys.push(...batch); if (keys.length) await client.del(keys); }
-    if (client?.isOpen) client.destroy(); await clearDatabase(); await closeDatabase();
   });
   const call = async (index, path, user, method = 'GET') => {
     const response = await fetch(urls[index] + path, { method, headers: { Authorization: 'Bearer ' + signToken(user) }, signal: AbortSignal.timeout(5000) });
@@ -86,30 +110,28 @@ const poll = async (fn, timeout = 15000) => {
     expect((await call(1, '/api/users/me', user)).status).toBe(403);
   });
   test('owned Redis outage fails readiness and limiter closed, then reconnects and drains revocation backlog', async () => {
-    const container = process.env.TEST_REDIS_CONTAINER;
-    if (!/^totmart-session-[a-z0-9-]+-redis$/.test(container || '')) throw new Error('Set TEST_REDIS_CONTAINER to the Redis created for this drill');
     const { user } = await createUser();
     try {
-      execFileSync('docker', ['stop', container], { timeout: 20000, stdio: 'ignore' });
+      ownedRedis.action('stop');
+      expect(await observer.ping()).toBe('PONG'); // Another suite's Redis is unaffected.
       await poll(async () => (await call(0, '/api/home/health', user)).status === 503);
       expect((await call(1, '/api/checkout/attempts/products/unknown-reference-1234', user)).status).toBe(503);
       await require('../src/services/securityRevocationService').revoke({ userId: user._id, reason: 'outage-drill' });
       expect(await require('../src/models/SecurityOutbox').countDocuments({ userId: user._id, state: 'pending' })).toBe(1);
-    } finally { execFileSync('docker', ['start', container], { timeout: 20000, stdio: 'ignore' }); }
+    } finally { ownedRedis.action('start'); }
     await poll(async () => (await call(0, '/api/home/health', user)).status === 200, 25000);
     await poll(async () => await require('../src/models/SecurityOutbox').countDocuments({ userId: user._id, state: 'published' }) === 1, 25000);
     expect((await call(1, '/api/users/me', user)).status).toBe(401);
   });
   test('subscriber receives revocation again after Redis recovery', exerciseLogout);
   test('Redis accepts TCP but stops responding: HTTP limiter has a bounded fail-closed deadline', async () => {
-    const container = process.env.TEST_REDIS_CONTAINER;
-    if (!/^totmart-session-[a-z0-9-]+-redis$/.test(container || '')) throw new Error('Owned Redis required');
     const { user } = await createUser();
     try {
-      execFileSync('docker', ['pause', container], { timeout: 10000, stdio: 'ignore' });
+      ownedRedis.action('pause');
+      expect(await observer.ping()).toBe('PONG');
       expect((await call(0, '/api/checkout/attempts/products/unknown-reference-1234', user)).status).toBe(503);
       await poll(async () => (await call(1, '/api/home/health', user)).status === 503);
-    } finally { execFileSync('docker', ['unpause', container], { timeout: 10000, stdio: 'ignore' }); }
+    } finally { ownedRedis.action('unpause'); }
     await poll(async () => (await call(1, '/api/home/health', user)).status === 200, 25000);
   });
   test('abrupt process death during an HTTP create is recoverable through the surviving process', async () => {

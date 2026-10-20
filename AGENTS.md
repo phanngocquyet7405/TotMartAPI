@@ -1,0 +1,44 @@
+# Hướng dẫn làm việc với TotMart BE
+
+## Phạm vi và kiến trúc
+- Đọc AGENTS.md ở các thư mục cha và thư mục con liên quan trước khi sửa; giữ hướng dẫn hiện có, không ghi đè hoặc thêm quy tắc mâu thuẫn. Giữ nguyên thay đổi có sẵn của người dùng.
+- Backend CommonJS, Express 5, Mongoose 8/MongoDB và Redis. `src/server.js` kết nối hạ tầng, kiểm tra index/topology và khởi động workers; `src/app.js` lắp middleware; `src/routes/index.js` lắp routes dưới `/api`.
+- `src/routes/`: endpoints; `src/controllers/`: xử lý HTTP; `src/services/`: nghiệp vụ checkout, pricing, inventory, payment reconciliation, merchant và session; `src/models/`: schema/index Mongoose; `src/middleware/`: auth, validation, CSRF, rate limit; `src/config/` và `src/utils/`: cấu hình/tiện ích.
+- `src/jobs/`: delivery, expiry, payment reconciliation, notification/security outbox. `tests/`: Jest unit/integration, `tests/helpers/`: DB và HTTP process; `scripts/`: kiểm tra vận hành/migration.
+- Đối chiếu source và hợp đồng liên quan trong `docs/checkout-attempt-contract.md`, `docs/UNIFIED-COMMERCE-CONTRACT.md`, `docs/MANAGER-API-CONTRACT.md`, `docs/MERCHANT-OPERATING-MODEL.md`; vận hành xem `OPERATIONS.md`. Báo khác biệt tài liệu/source, không tự suy diễn hợp đồng mới từ tài liệu lịch sử.
+
+## Runtime và lệnh thực có
+- `package.json` yêu cầu Node `>=24 <25`; Dockerfile và CI dùng Node 24. Cài dependency bằng `npm ci` theo `package-lock.json` (cần devDependencies để test).
+- Chạy: `npm start` (server), `npm run dev` (Node watch).
+- Test: `npm test` (Jest, experimental VM modules, runInBand); `npm run test:manager` (hai suite manager integration và merchant order policy). Chọn suite: `npm test -- --runTestsByPath tests/checkout.test.js`. Kiểm chứng CI/local đầy đủ: `npm run test:b01:http` rồi `npm run test:b01`; unit harness: `npm run test:b01:unit`.
+- `npm run check:staging:commerce` là probe staging, không thay thế test. Chỉ dùng với môi trường đã xác minh và được phép truy cập.
+- Có `npm run migrate:checkouts` và `npm run migrate:merchant-ownership`; đây là migration, không phải bước cài đặt/test mặc định. Không tự chạy chúng hoặc script migration khác trên dữ liệu thật.
+- Hiện không có script lint hoặc build trong package.json; không báo đã chạy `npm run lint`/build. CI còn chạy `npm audit --omit=dev --audit-level=high`.
+
+## Kiểm chứng với hạ tầng thật, dữ liệu dùng riêng
+- Xác minh đích kết nối trước khi chạy. Không dùng DB/Redis dùng chung hoặc dữ liệu thật cho test. `tests/helpers/db.js` xóa dữ liệu trong quá trình test/teardown; chỉ cho phép trên DB dùng một lần do phiên tạo.
+- Mặc định helper dùng `MongoMemoryReplSet` một node, WiredTiger, MongoDB 7.0.14: đây là tiến trình `mongod` thật, không phải mock. Lần đầu có thể cần tải binary; dùng `MONGOMS_SYSTEM_BINARY` trỏ binary tương thích nếu cần. MongoDB standalone không đủ cho transaction.
+- Nếu cần MongoDB bên ngoài helper: tự tạo replica set local dùng một lần, khởi tạo replica set và chờ PRIMARY; đặt `TEST_MONGODB_URI` dạng `mongodb://127.0.0.1:<port>/totmart_test?replicaSet=<name>`. Helper chỉ chấp nhận localhost/127.0.0.1, port tường minh, DB `totmart_test`; không trỏ vào DB có sẵn cần giữ.
+- `tests/env.setup.js` xóa `REDIS_URL`; test thông thường không chứng minh Redis thật hoạt động. Hai suite `redisLive.integration.test.js`, `redisHttp.integration.test.js` cần `TEST_REDIS_URL`; thiếu biến thì skip ở local, CI báo lỗi.
+- Dùng runner B01 với Docker Linux đang chạy: runner tự cấp Redis primitives, suite HTTP tự cấp container khác để outage không ảnh hưởng suite khác; URL local hỗ trợ DB `0..15`. Harness xác minh ID/label riêng, binding/URL và PONG trước test; cleanup unpause rồi xóa đúng container đã tạo, kể cả setup lỗi. Không dùng `TEST_REDIS_CONTAINER` làm bằng chứng ownership. `compose.redis-test.yml` không phải tài nguyên cho outage drill.
+- Suite HTTP từ chối `TEST_MONGODB_URI` và tự tạo MongoDB dùng một lần. Runner bỏ target/credential môi trường kế thừa, vô hiệu `.env` trong Jest/subprocess, lưu coverage baseline cùng kết quả đã lọc ở `artifacts/b01/`; không đặt ngưỡng tùy ý. Node 22 chưa được chứng minh cho đợt này, chỉ hỗ trợ Node 24.
+- Phân biệt: Docker/port/quyền, tải binary, MongoDB chưa PRIMARY/không replica set, Redis không kết nối được, cấu hình thiếu là lỗi môi trường; ghi nguyên nhân đã xác minh và phần test bị chặn. Assertion nghiệp vụ sai sau khi setup thành công là lỗi cần điều tra; không đổi tên thành lỗi môi trường để bỏ qua.
+- Khi đổi nghiệp vụ, chạy suite liên quan và regression phù hợp, chú ý retry/concurrency/recovery và cách ly người dùng. Báo số pass/fail/skip và phạm vi thực chạy; skip, chưa chạy, lỗi setup hoặc mock không được báo là đã pass kiểm chứng thật. Kết quả test cũ và điểm số không bảo đảm chất lượng hiện tại.
+
+## Bất biến commerce
+- Giữ các ghi liên quan trong cùng MongoDB session/transaction; bảo toàn unique index và khóa revision chung (`lockCheckout`, attempt fencing). Không tách stock/coupon/order/checkout/ledger/outbox sang ghi rời; không gọi tác dụng phụ bên ngoài trong callback transaction có thể retry. Không hạ kiểm tra topology/index hoặc tự drop index để chạy được.
+- Idempotency gắn user đã xác thực, kind, key và payload hash: cùng nội dung replay kết quả cũ, khác nội dung/kind phải conflict. Giữ unique Checkout `{userId,requestKey}` và Attempt `{userId,kind,key}`; không tạo giao dịch trùng khi mất response/unknown commit.
+- Hash hiện tính từ `JSON.stringify(req.validatedBody)` sau Joi; không đổi thứ tự/canonicalization làm hỏng replay legacy. Giữ snapshot địa chỉ, giá, cấu phần/BoxVersion và chủ sở hữu đã chốt; không tính lại nghĩa vụ đã bán từ catalog/profile mới.
+- CheckoutAttempt prepare/create/lookup/terminate phải serialize qua transaction/revision; bảo toàn rejected/invalidated tombstone, replay created và giới hạn admission. Không TTL/xóa reference để mở quota. Timeout, unknown, 400/404 không chứng minh được phép dùng key mới; restart recovery chỉ sau invalidated + `canRestart:true`. Terminate attempt không hủy giao dịch đã tạo.
+- Tồn kho: cập nhật có điều kiện, không âm, không trừ/hoàn hai lần khi webhook/retry/hủy/expiry tranh chấp; dùng inventory service và snapshot gốc. Coupon giữ giới hạn/usedCount, chỉ giải phóng một lần theo checkout khi đủ điều kiện, không giảm theo từng retry/đơn con.
+- Ledger: giữ PaymentEvent, PaymentAllocation, PaymentAudit, ReceiptRefund và version/invariant tiền; không sửa cờ paid để bỏ qua đối soát. Webhook phải giữ xác thực SePay, validation và dedup receipt/reference; xử lý rõ thiếu/thừa tiền, receipt không khớp, đến muộn và retry, không cấp hàng hai lần.
+- Refund qua reconciliation service với key chống lặp, khóa transaction, kiểm tra số tiền khả dụng và audit/bằng chứng chuyển tiền khi hoàn tất. Không cộng tiền thừa vào principal refund lần nữa, không hoàn quá khoản nhận hoặc đánh dấu hoàn tiền khi chỉ mới xếp hàng.
+
+## Auth, dữ liệu và giới hạn thao tác
+- Giữ kiểm tra user đang active, tokenVersion, sessionId/expiry/revocation; quyền lấy từ DB hiện hành, không tin role hoặc ownerId từ client/JWT cũ. Production yêu cầu session; không nới để test chạy qua. Bảo toàn refresh hash/rotation và thu hồi session/stream qua security outbox.
+- Giữ cookie HttpOnly/Secure/SameSite, CORS allowlist, cookie-CSRF (`X-TotMart-Request: 1` cho write dùng cookie không Authorization), quota Redis dùng chung và fail-closed khi production Redis lỗi.
+- Mọi query/read/write theo user/merchant phải ràng buộc chủ sở hữu từ danh tính xác thực; dùng `merchantScope`/policy hiện có. Chủ sở hữu trực tiếp là chuẩn, không tự chuyển nghĩa vụ qua đổi brand. Kiểm tra cross-user/cross-merchant, kể cả lookup attempt, export, order, subscription và stream; không tự thêm admin override.
+- Không tự sửa FE hoặc đổi hợp đồng API ngoài phạm vi nhiệm vụ. Nếu nhiệm vụ yêu cầu đổi API, ghi rõ ảnh hưởng endpoint/request/response/auth/error và tương thích, cập nhật tài liệu liên quan; không tự sửa FE để đồng bộ.
+- Không tự commit/push/deploy, chạy migration trên dữ liệu thật, xóa dữ liệu/volume. Chỉ dọn process/container/tài nguyên do chính phiên tạo và xác minh đúng ID/tên; không kill hàng loạt Node/mongod, không prune, không down volume dùng chung. Ngoại lệ dữ liệu test chỉ là fixture/teardown trên tài nguyên dùng một lần đã xác minh ở trên.
+- Không đưa secret, nội dung `.env`, token, connection string chứa credential hoặc dữ liệu cá nhân vào báo cáo/log/diff. Chỉ nêu tên biến và trạng thái đã che giá trị; dùng dữ liệu giả trong ví dụ/test.
+- Cuối mỗi nhiệm vụ: báo file đã đổi, kiểm chứng/lệnh thực chạy, kết quả và giới hạn/chưa kiểm chứng. Không khẳng định pass nếu chưa chạy hoặc bị skip.

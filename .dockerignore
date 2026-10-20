@@ -4,6 +4,7 @@
 node_modules
 .cache
 coverage
+artifacts
 tests
 *.log
 audit-*.json

@@ -2,12 +2,13 @@ const {createClient}=require('redis');
 const {randomUUID}=require('crypto');
 const config=require('../src/config/redis');
 const {RedisRateLimitStore}=require('../src/services/redisRateLimitStore');
+const {localRedisUrl}=require('./helpers/localRedisUrl');
 const uri=process.env.TEST_REDIS_URL;
 if (process.env.CI && !uri) throw new Error('CI requires TEST_REDIS_URL; real Redis tests must run');
 (uri ? describe : describe.skip)('real Redis primitives for multiple API instances',()=>{
   let a,b,subscriber,namespace,keys=[];
   beforeAll(async()=>{
-    if (!/^redis:\/\/(?:127\.0\.0\.1|localhost):\d+(?:\/\d+)?$/.test(uri)) throw new Error('TEST_REDIS_URL must be a local isolated Redis');
+    localRedisUrl(uri);
     namespace='totmart:test:'+randomUUID();
     a=createClient({url:uri,socket:{connectTimeout:2000,reconnectStrategy:false}});
     b=a.duplicate();subscriber=a.duplicate();
@@ -16,8 +17,8 @@ if (process.env.CI && !uri) throw new Error('CI requires TEST_REDIS_URL; real Re
     jest.spyOn(config,'namespace').mockReturnValue(namespace);
   });
   afterAll(async()=>{
-    if(a?.isReady && keys.length)await a.del(keys);
-    jest.restoreAllMocks();for(const client of [subscriber,b,a])if(client?.isOpen)client.destroy();
+    try { if(a?.isReady && keys.length)await a.del(keys); }
+    finally { jest.restoreAllMocks();for(const client of [subscriber,b,a])if(client?.isOpen)client.destroy(); }
   });
   test('two instances share auth quota and preserve separate refresh policy',async()=>{
     const get=jest.spyOn(config,'getClient'),authA=new RedisRateLimitStore('auth'),authB=new RedisRateLimitStore('auth'),refresh=new RedisRateLimitStore('refresh');

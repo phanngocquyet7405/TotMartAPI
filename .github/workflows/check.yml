@@ -2,17 +2,8 @@ name: Backend checks
 on: [push, pull_request]
 jobs:
   test:
-    runs-on: ubuntu-latest
-    services:
-      redis:
-        image: redis:7-alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,12 +12,17 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm audit --omit=dev --audit-level=high
-      - name: Real Redis integration (required)
-        run: npm test -- --runTestsByPath tests/redisLive.integration.test.js --verbose
-        env:
-          LOG_LEVEL: silent
-          TEST_REDIS_URL: redis://127.0.0.1:6379/15
-      - run: npm test
-        env:
-          LOG_LEVEL: silent
-          TEST_REDIS_URL: redis://127.0.0.1:6379/15
+      - run: docker pull redis:7.4-alpine
+      - name: Redis HTTP (isolated outage container and disposable Mongo replica set)
+        run: npm run test:b01:http
+      - name: Full BE regression with coverage baseline
+        if: ${{ !cancelled() }}
+        run: npm run test:b01
+      - name: Upload test and coverage evidence (including failures)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: b01-node24-${{ github.run_id }}-${{ github.run_attempt }}
+          path: artifacts/b01/
+          if-no-files-found: warn
+          retention-days: 14

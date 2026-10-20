@@ -7,6 +7,9 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "test": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand",
+    "test:b01:http": "node scripts/run-be-tests.js --http",
+    "test:b01": "node scripts/run-be-tests.js --all",
+    "test:b01:unit": "node scripts/run-be-tests.js --unit",
     "migrate:checkouts": "node scripts/migrate-checkouts.js",
     "test:manager": "node --experimental-vm-modules ./node_modules/jest/bin/jest.js --runInBand tests/manager.integration.test.js tests/merchantOrderPolicy.test.js",
     "migrate:merchant-ownership": "node scripts/migrate-merchant-ownership.js",
@@ -53,6 +56,6 @@
     "supertest": "^7.2.2"
   },
   "engines": {
-    "node": ">=22.12 <25"
+    "node": ">=24 <25"
   }
 }

@@ -46,14 +46,14 @@ tests/
 
 ## Prerequisites
 
-- Node.js v18+ (developed against v22)
+- Node.js 24.x (release runtime; Node 22 is not supported by this release)
 - MongoDB **replica set** (required — `checkOutController` uses multi-document transactions via `session.withTransaction()`, which MongoDB only supports on a replica set, not a standalone `mongod`). A single-node replica set is enough for local dev.
 - A SePay account with a webhook configured (Api_Key auth type) if you need to exercise the online-payment path end to end.
 
 ## Installation
 
 ```bash
-npm install
+npm ci
 cp .env.example .env
 # fill in .env — see the "Environment variables" section below
 npm run dev
@@ -81,7 +81,7 @@ npm run dev
 ## Running
 
 ```bash
-npm run dev      # nodemon, auto-reload
+npm run dev      # node --watch, auto-reload
 npm start        # production
 npm test         # Jest test suite (see below)
 ```
@@ -114,14 +114,19 @@ All routes are mounted under `/api`. Endpoints requiring auth expect `Authorizat
 ## Testing
 
 ```bash
-npm test
+npm ci
+npm run test:b01:http  # first: real local HTTP, disposable Redis outage + Mongo replica set
+npm run test:b01       # then: full BE regression, real Redis, coverage baseline
+npm run test:b01:unit  # URL/ownership/DB teardown unit tests; no Docker needed
 ```
 
-Two of the four test files (`security.test.js`, `rateLimiter.test.js`) need nothing but Node — they cover auth rejection, CORS, security headers, and rate-limit behavior.
+Use Node 24 and a running Linux Docker daemon, locally and in CI. The runner provisions a Redis 7.4 container on a free loopback port, database `/15`, for primitives. The HTTP suite validates the same URL format, then provisions a **different** Redis container exclusively for stop/start/pause/unpause. It verifies the exact ID, random run label, configured binding and active URL mapping before operations; ambient `TEST_REDIS_CONTAINER` is never trusted. No shared CI Redis service is stopped. Each container has no persisted data and is removed by its owner, with unpause first if needed, including setup failures.
 
-`checkout.test.js` and `webhook.test.js` spin up an **in-memory MongoDB replica set** via `mongodb-memory-server` and need outbound internet access the first time you run them (to download the `mongod` binary, cached afterwards under `~/.cache/mongodb-binaries`). If you're on a network that blocks that download, either run on a machine with normal internet access, or point `mongodb-memory-server` at a locally installed `mongod` via `MONGOMS_SYSTEM_BINARY=/path/to/mongod`.
+The runner removes ambient test/service credentials and DB targets; Jest and subprocesses do not load `.env`. Mongo integration uses `MongoMemoryReplSet` (real disposable `mongod`, default 7.0.14, one-node replica set). The first run needs its binary download or a compatible `MONGOMS_SYSTEM_BINARY`. The HTTP crash drill refuses `TEST_MONGODB_URI`; it must own its Mongo process. Teardown only clears a successfully connected DB and stops initialized resources.
 
-These tests also cover a regression: order placement previously used a misspelled field name when looking up the user's cart (fixed in this change — see below), which meant `check-out` could never find an existing cart and always failed with "cart is empty."
+`npm test` remains the direct Jest entrypoint: without `TEST_REDIS_URL`, both real Redis suites skip locally (error in CI). That is not full verification. The shared test URL validator permits only `redis://127.0.0.1:port` or `redis://localhost:port`, optional database `0..15`; no credentials, remote hosts, queries or fragments. These bounds match the default 16 databases in the disposable Redis image.
+
+Artifacts are under `artifacts/b01/{http,all,unit}-<unique-run>/`: sanitized test counts/statuses, original Jest exit code and coverage JSON/LCOV/HTML over `src/**/*.js`. No arbitrary coverage threshold is enforced. CI uploads these even after failures. Setup failure is not a passing test; compare exit codes and pass/fail/skip counts. Unit/mock tests, local HTTP integration and browser/UI E2E are different evidence; this runner does not prove browser E2E or production readiness. See [B01 evidence](docs/B01-verification.md).
 
 ## Security notes
 
@@ -134,7 +139,7 @@ These tests also cover a regression: order placement previously used a misspelle
 
 - `authController.forgotPassword` hardcodes the reset-password URL host (`https://totmartapi.onrender.com/...`) instead of using `FRONTEND_URL` — worth fixing before relying on password reset emails in a different environment.
 - Subscription-box cart code (`cartController.js`'s subscribe-cart branches use a field name `subcricePlanId` that doesn't match the `Cart` model's actual `subscriptionPlanId` field) wasn't in scope for this pass and hasn't been fixed — it looks like the same class of bug as the checkout cart-lookup issue that was just fixed, but affecting a different feature.
-- No CI workflow runs `npm test` automatically yet.
+- CI runs Node 24 checks via `.github/workflows/check.yml`; see the disposable runner below.
 
 ## Commerce FE v2
 
