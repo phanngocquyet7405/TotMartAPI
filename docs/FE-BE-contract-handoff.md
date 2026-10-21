@@ -1,8 +1,10 @@
-# Hợp đồng bàn giao FE — B08-20261020.1
+# Hợp đồng bàn giao FE — A-20261021.2
 
-Ngày 20/10/2026, Asia/Bangkok (UTC+7). Đây là bản tổng hợp hiện hành để tích hợp; source và các hợp đồng chi tiết được fingerprint cùng nhau. Không thay thế browser E2E hoặc cấp quyền triển khai. Kết luận nghiệm thu tại [B08](B08-verification.md), candidate tại [BE release candidate](BE-release-candidate.md), vấn đề cần owner tại [open issues](BE-open-issues.md).
+Ngày cập nhật 21/10/2026, Asia/Bangkok (UTC+7). Đợt A thay đổi chính sách disclosure 5xx ở staging và lọc metadata lỗi trong log staging/production; không đổi endpoint, request, auth, quyền hoặc message/status/code 4xx đã công bố. Đây là bản tổng hợp hiện hành để tích hợp; source và các hợp đồng chi tiết được fingerprint cùng nhau. Không thay thế browser E2E hoặc cấp quyền triển khai. Kết luận lịch sử tại [B08](B08-verification.md), candidate lịch sử tại [BE release candidate](BE-release-candidate.md), vấn đề cần owner tại [open issues](BE-open-issues.md).
 
-Contract bundle: **122 file**, SHA-256 **`df911be1070f05a5fdd6ae326482a541a59068e9c4cb3a0f29290d0a59eabfd6`**. Manifest `artifacts/b08/contract-fingerprint.json` gồm toàn bộ src và bảy tài liệu/spec/example hợp đồng, hash byte từng file rồi hash JSON manifest được sắp theo path, indent2 và LF cuối. Bản tổng hợp này và báo cáo sinh sau test có hash riêng trong release seal, tránh tự tham chiếu. B08 không đổi endpoint, body, response, ownership, money, claims hay hash legacy.
+Bundle lịch sử B08: **122 file**, SHA-256 **`df911be1070f05a5fdd6ae326482a541a59068e9c4cb3a0f29290d0a59eabfd6`**. Manifest `artifacts/b08/contract-fingerprint.json` gồm toàn bộ src và bảy tài liệu/spec/example hợp đồng, hash byte từng file rồi hash JSON manifest được sắp theo path, indent2 và LF cuối. Không dùng hash lịch sử này làm fingerprint source sau Đợt A. Bản tổng hợp này và báo cáo sinh sau test có hash riêng, tránh tự tham chiếu. B08 không đổi endpoint, body, response, ownership, money, claims hay hash legacy.
+
+Bundle hiện hành Đợt A: **122 file**, SHA-256 **`cd70a15b6e7377d4a59b65c4c5db322e7edbffb90a87fd8a6d2881ac5125624e`**; manifest đầy đủ tại artifacts/round-a/contract-fingerprint.json, cùng thuật toán B08.
 
 ## Endpoint và envelope quan trọng
 
@@ -14,9 +16,13 @@ Contract bundle: **122 file**, SHA-256 **`df911be1070f05a5fdd6ae326482a541a59068
 - `GET /api/checkout/order-status/:paymentCode`: trạng thái tiền mới nhất và payable/QR khi đủ điều kiện; result của attempt là replay snapshot, không thay thế polling trạng thái tiền. Shipping `customer_to_carrier` không được cộng lại vào khoản BE thu.
 - Error không hoàn toàn đồng nhất giữa endpoint: errorHandler thường `{success:false,status,message,requestId,...code/fields/errors}`; validator/attempt-reference/auth có envelope riêng được giữ. Không dựa chỉ vào text hoặc giả định mọi error đều có code. OpenAPI là **11 operations/8 examples**, chỉ là subset; đọc source và hợp đồng chi tiết cho phần còn lại.
 
+Thay đổi hành vi disclosure Đợt A: mọi response 5xx đi qua errorHandler trong staging và production dùng message cố định `Lỗi hệ thống. Vui lòng thử lại.` cùng requestId; không trả nguyên message, stack, cause hay payload lỗi provider. Giữ nguyên status và mapping 4xx hiện hành. Log vẫn ghi requestId, event, dependency đã nhận diện và type/code an toàn; không serialize message/stack/cause/body/headers của lỗi provider. Type không nhận diện trở thành Error, code không thuộc tập mã hệ thống/TLS đã nhận diện hoặc mã số hợp lệ trở thành UNCLASSIFIED. Dùng requestId để điều tra; không dựa vào chi tiết 5xx để quyết định thử key mới. Không thay đổi envelope của các handler trả lỗi trực tiếp.
+
 ## Auth, session, cookie và expiry
 
 Access JWT giữ userId/role/name/email/tokenVersion/sid. `verifyToken` và các export JWT legacy vẫn còn. Role trong JWT không cấp quyền: mỗi request đọc User hiện hành, active/tokenVersion và session tương ứng. Production/staging bắt buộc sid, family chưa hết hạn/revoke; token legacy thiếu sid cần login lại. User đã xóa có thể404, locked403, invalid JWT/session401. FE không suy role/owner từ claim để vượt kiểm BE.
+
+Thay đổi hành vi availability Đợt A: mỗi lệnh đọc Mongo trong tìm danh tính xác thực (exact email, cursor canonical fallback, đọc lại ứng viên duy nhất) có driver timeout 5000ms; timeout dừng lookup, không tiếp tục chọn ứng viên hoặc tạo session. MongoOperationTimeoutError đi qua errorHandler thành503, message 5xx an toàn và requestId trong staging/production. Đây là giới hạn từng read, không phải SLA tổng cho login hoặc mọi thao tác Mongo. Canonical fallback trên dữ liệu legacy lớn có thể hết thời gian và fail closed; không tự rewrite email hay đoán danh tính. Cùng helper được dùng bởi forgot-password; response200 chung của luồng đó được giữ.
 
 Cookie token/refreshToken: HttpOnly, Secure trong staging/production, SameSite=Lax, path `/`. Browser gửi credentials. Write dùng cookie mà không có Authorization cần **`X-TotMart-Request: 1`**; Origin phải thuộc CORS allowlist. Strict mode yêu cầu public HTTPS origins và Redis TLS. Cấu hình proxy thật phải được owner kiểm chứng; test loopback không chứng nhận cookie/TLS triển khai.
 

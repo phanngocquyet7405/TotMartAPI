@@ -15,7 +15,7 @@
       "post": {
         "summary": "Login and create an opaque refresh family",
         "operationId": "post_home_login",
-        "description": "Sensitive subset only. Schema omits detailed business data; refer to current commerce contracts.",
+        "description": "Sensitive subset only. Identity lookup uses a 5000ms driver timeout per Mongo read; MongoOperationTimeoutError returns 503 through errorHandler, with a safe 5xx message and requestId in staging/production. This is not an end-to-end login SLA. Published 4xx mappings remain unchanged. Schema omits detailed business data; refer to current commerce contracts.",
         "security": [],
         "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
         "x-ownership": "Authenticated user",
@@ -1554,7 +1554,8 @@
           }
         },
         "required": ["success"],
-        "additionalProperties": true
+        "additionalProperties": true,
+        "description": "Existing endpoint-specific error envelopes remain supported. For responses routed through errorHandler, staging and production 5xx use the fixed safe message with requestId; provider message, stack, cause and payload are not disclosed. Published 4xx status/code/message mappings are unchanged."
       },
       "Login": {
         "type": "object",
