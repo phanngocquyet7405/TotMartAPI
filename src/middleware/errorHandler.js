@@ -1,5 +1,6 @@
 const logger = require('../utils/logger');
 const { redactUrl } = require('../utils/logRedaction');
+const dependencies = new Set(['MongoDB', 'Redis', 'SePay', 'Cloudinary', 'email']);
 module.exports = (err, req, res, next) => {
   if (res.headersSent) return next(err);
   let status = Number(err.statusCode || err.status || 500),
@@ -36,15 +37,33 @@ module.exports = (err, req, res, next) => {
     status = 401;
     message = 'Invalid or expired token';
   } else if (err.name === 'MulterError' || /^Chỉ chấp nhận file ảnh/.test(message)) status = 400;
-  else if (['MongoServerSelectionError', 'MongoNetworkError'].includes(err.name)) {
+  else if (
+    ['MongoServerSelectionError', 'MongoNetworkError', 'MongoOperationTimeoutError'].includes(
+      err.name,
+    )
+  ) {
     status = 503;
     message = 'Database temporarily unavailable';
   }
   if (!Number.isInteger(status) || status < 400 || status > 599) status = 500;
   const meta = { requestId: req.id, path: redactUrl(req.originalUrl), method: req.method, status };
-  if (status >= 500) logger.error({ ...meta, err }, 'Request failed');
+  if (status >= 500)
+    logger.error(
+      {
+        ...meta,
+        event: 'request_failed',
+        dependency: dependencies.has(err.dependency) ? err.dependency : undefined,
+        err,
+      },
+      'Request failed',
+    );
   else logger.warn(meta, message);
-  if (status >= 500 && require('../config/environment').nodeEnv === 'production')
+  if (
+    status >= 500 &&
+    ['production', 'staging'].includes(require('../config/environment').nodeEnv)
+  ) {
     message = 'Lỗi hệ thống. Vui lòng thử lại.';
+    delete details.code;
+  }
   res.status(status).json({ success: false, status, message, ...details, requestId: req.id });
 };
