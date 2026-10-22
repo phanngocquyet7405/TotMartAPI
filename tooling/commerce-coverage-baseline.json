@@ -1,8 +1,13 @@
 {
-  "version": 1,
+  "version": 2,
   "origin": "artifacts/b01/all-OpVcHq",
   "sourceManifestSha256": "0417c3678b7dedbd4e72b31572eb7c9d4dfca7ba70cece8d3ba345a2c00333ab",
   "reason": "No regression from the first successful B06 full regression on unchanged runtime modules; retain scenario assertions, disclose uncovered branches. Source or instrumentation changes require explicit review, never automatic baseline updates.",
+  "review": {
+    "evidence": "artifacts/round-b/a2-0/6d74d41c-abf9-4ca8-b4d0-c9431a825748/coverage-instrumentation-review.json",
+    "reason": "Auth/A1 read options only. checkoutAttemptService retains all 61 instrumented branches and the minimum 54 covered. managerCatalogService adds three readOptions default-argument branches: 109 to 112 total, minimum covered raised from 74 to 77. Existing transaction, ownership and monetary branches are retained; no threshold reduction or ignored branches.",
+    "previousPolicyVersion": 1
+  },
   "files": {
     "src/services/boxDefinitionService.js": {
       "sourceSha256": "678ce941c280716fddad03d34e28b0b635be4ef306ae7e3cca7e1a098d2acb8c",
@@ -12,7 +17,7 @@
       }
     },
     "src/services/checkoutAttemptService.js": {
-      "sourceSha256": "b22a24c8f29750f5286062ef9b28067cffee98de2ad8535e2e013c5d924b95a2",
+      "sourceSha256": "17facf9607844b66fc580f85e38c349a8e1526a48fe4163743eb0f86a5d0f2eb",
       "branches": {
         "total": 61,
         "covered": 54
@@ -26,10 +31,10 @@
       }
     },
     "src/services/managerCatalogService.js": {
-      "sourceSha256": "fad2ba72d2fe783820511e204232f1558f3e0346d18b33067cbf8d668667262c",
+      "sourceSha256": "ddac5e984758c81dabdf5a3660ac031fb6daa3d4c46ae1d2797789946ffb7035",
       "branches": {
-        "total": 109,
-        "covered": 74
+        "total": 112,
+        "covered": 77
       }
     },
     "src/services/merchantScope.js": {
