@@ -1,3 +1,4 @@
+const { AUTH_READ_TIMEOUT_MS } = require('../config/authReadPolicy');
 // No provider aliases, dot/plus stripping or Unicode normalization.
 const canonicalEmail = (email) => email.trim().toLowerCase();
 
@@ -34,7 +35,7 @@ async function assertEmailAvailable(User, email, excludeId) {
 async function findForAuthentication(User, rawEmail) {
   // Bound actual driver I/O (including a silent TCP peer), not just server selection.
   // A timeout is an availability failure; never continue to another identity candidate.
-  const options = { timeoutMS: 5000 };
+  const options = { timeoutMS: AUTH_READ_TIMEOUT_MS };
   // Exact legacy identity wins even when two old accounts canonicalize alike.
   const exact = await User.findOne({ email: rawEmail }, null, options);
   if (exact) return exact;

@@ -3,6 +3,7 @@ const Checkout = require('../models/Checkout');
 const Coupon = require('../models/Coupon');
 const Order = require('../models/Order');
 const { fail } = require('./pricingService');
+const { AUTH_READ_TIMEOUT_MS } = require('../config/authReadPolicy');
 function requestHash(body) {
   return crypto.createHash('sha256').update(JSON.stringify(body)).digest('hex');
 }
@@ -19,7 +20,9 @@ async function lockCheckout(code, session) {
   );
 }
 async function replay(userId, key, hash, session = null, kind = null) {
-  const checkout = await Checkout.findOne({ userId, requestKey: key }).session(session);
+  const query = Checkout.findOne({ userId, requestKey: key }).session(session);
+  if (!session) query.setOptions({ timeoutMS: AUTH_READ_TIMEOUT_MS });
+  const checkout = await query;
   if (checkout && kind && (checkout.kind || 'products') !== kind)
     fail('IDEMPOTENCY_KIND_CONFLICT', 409);
   if (checkout && checkout.requestHash !== hash)

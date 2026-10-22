@@ -9,6 +9,7 @@ const cookieParser = require('cookie-parser');
 const pinoHttp = require('pino-http');
 const logger = require('./utils/logger');
 const { reqSerializer } = require('./utils/logRedaction');
+const safeErrorSerializer = require('./utils/safeErrorSerializer');
 const config = require('./config/environment');
 const app = express();
 
@@ -31,7 +32,12 @@ if (config.nodeEnv !== 'test') {
         ignore: (req) => req.url === '/api/home/health',
       },
       // Không ghi token/vé nằm trong query string vào log.
-      serializers: { req: reqSerializer },
+      serializers: {
+        req: reqSerializer,
+        ...(['production', 'staging'].includes(config.nodeEnv)
+          ? { err: (error) => safeErrorSerializer(error.raw || error) }
+          : {}),
+      },
     }),
   );
 }

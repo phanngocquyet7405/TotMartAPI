@@ -1,6 +1,31 @@
 const logger = require('../utils/logger');
 const { redactUrl } = require('../utils/logRedaction');
 const dependencies = new Set(['MongoDB', 'Redis', 'SePay', 'Cloudinary', 'email']);
+const mongoAvailabilityNames = new Set([
+  'MongoServerSelectionError',
+  'MongoNetworkError',
+  'MongoNetworkTimeoutError',
+  'MongoOperationTimeoutError',
+  'MongoPoolClearedError',
+  'PoolClearedOnNetworkError',
+  'MongoPoolClosedError',
+  'MongoWaitQueueTimeoutError',
+  'MongoTopologyClosedError',
+  'MongoServerClosedError',
+  'MongoClientClosedError',
+]);
+// node-redis availability subclasses inherit name="Error". Match their actual classes,
+// never a generic Error, message substring, or application-defined Redis-like name.
+const redisErrors = require('redis');
+const redisAvailabilityClasses = [
+  'ConnectionTimeoutError',
+  'SocketTimeoutError',
+  'ClientClosedError',
+  'ClientOfflineError',
+  'DisconnectsClientError',
+  'SocketClosedUnexpectedlyError',
+  'RootNodesUnavailableError',
+].map((name) => redisErrors[name]);
 module.exports = (err, req, res, next) => {
   if (res.headersSent) return next(err);
   let status = Number(err.statusCode || err.status || 500),
@@ -38,12 +63,13 @@ module.exports = (err, req, res, next) => {
     message = 'Invalid or expired token';
   } else if (err.name === 'MulterError' || /^Chỉ chấp nhận file ảnh/.test(message)) status = 400;
   else if (
-    ['MongoServerSelectionError', 'MongoNetworkError', 'MongoOperationTimeoutError'].includes(
-      err.name,
-    )
+    mongoAvailabilityNames.has(err.name) ||
+    redisAvailabilityClasses.some((ErrorClass) => err instanceof ErrorClass)
   ) {
     status = 503;
-    message = 'Database temporarily unavailable';
+    message = mongoAvailabilityNames.has(err.name)
+      ? 'Database temporarily unavailable'
+      : 'Shared security store unavailable';
   }
   if (!Number.isInteger(status) || status < 400 || status > 599) status = 500;
   const meta = { requestId: req.id, path: redactUrl(req.originalUrl), method: req.method, status };
