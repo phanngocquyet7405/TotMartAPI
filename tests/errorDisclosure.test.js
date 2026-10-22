@@ -21,7 +21,7 @@ function fixture(mode) {
     REDIS_NAMESPACE: 'fixture:disclosure',
     TRUST_PROXY: '1',
   });
-  let handler, logger;
+  let handler, logger, drivers;
   jest.isolateModules(() => {
     jest.doMock('../src/config/environment', () => config);
     // Keep real Pino serialization/redaction; replace only its output destination.
@@ -32,6 +32,11 @@ function fixture(mode) {
     );
     logger = require('../src/utils/logger');
     handler = require('../src/middleware/errorHandler');
+    drivers = {
+      mongo: require('mongoose').mongo,
+      pool: require('mongodb/lib/cmap/errors'),
+      redis: require('redis'),
+    };
   });
   const requestId = randomUUID();
   const app = express();
@@ -47,7 +52,7 @@ function fixture(mode) {
       .post('/fixture?token=synthetic-query-value')
       .send({ token: 'synthetic-body-value' });
   };
-  return { respond, logs, logger, requestId };
+  return { respond, logs, logger, requestId, drivers };
 }
 
 afterEach(() => {
@@ -115,6 +120,66 @@ describe.each(['staging', 'production'])('%s error disclosure', (mode) => {
       });
     },
   );
+
+  test.each([
+    ['MongoNetworkTimeoutError', (d) => new d.mongo.MongoNetworkTimeoutError('fixture')],
+    ['MongoTopologyClosedError', (d) => new d.mongo.MongoTopologyClosedError()],
+    ['MongoServerClosedError', (d) => new d.mongo.MongoServerClosedError()],
+    ['MongoClientClosedError', (d) => new d.mongo.MongoClientClosedError()],
+    ['MongoPoolClosedError', (d) => new d.pool.PoolClosedError({ address: 'fixture.invalid' })],
+    ['MongoPoolClearedError', (d) => new d.pool.PoolClearedError({ address: 'fixture.invalid' })],
+    [
+      'PoolClearedOnNetworkError',
+      (d) => new d.pool.PoolClearedOnNetworkError({ address: 'fixture.invalid' }),
+    ],
+    [
+      'MongoWaitQueueTimeoutError',
+      (d) => new d.pool.WaitQueueTimeoutError('fixture', 'fixture.invalid'),
+    ],
+    ...[
+      'ConnectionTimeoutError',
+      'SocketTimeoutError',
+      'ClientClosedError',
+      'ClientOfflineError',
+      'DisconnectsClientError',
+      'SocketClosedUnexpectedlyError',
+      'RootNodesUnavailableError',
+    ].map((name) => [name, (d) => new d.redis[name]()]),
+  ])('maps the installed driver availability class %s to safe503', async (name, make) => {
+    const context = fixture(mode);
+    const error = make(context.drivers);
+    expect(error.name === name || (error.name === 'Error' && error.constructor.name === name)).toBe(
+      true,
+    );
+    const response = await context.respond(error);
+    expect(response.status).toBe(503);
+    expect(response.body.requestId).toBe(context.requestId);
+    expect(response.body.message).toBe('Lỗi hệ thống. Vui lòng thử lại.');
+  });
+
+  test.each([
+    'MongoBusinessError',
+    'MongoBulkWriteError',
+    'MongoServerError',
+    'RedisBusinessError',
+    'ErrorReply',
+    'WatchError',
+    'AbortError',
+    'TimeoutError',
+    'SocketTimeoutErrorBusiness',
+  ])('does not remap the business/non-availability name %s', async (name) => {
+    const context = fixture(mode);
+    const response = await context.respond(
+      Object.assign(new Error('Published domain conflict'), {
+        name,
+        statusCode: 409,
+        code: 'ATTEMPT_PAYLOAD_MISMATCH',
+      }),
+    );
+    expect(response.status).toBe(409);
+    expect(response.body.code).toBe('ATTEMPT_PAYLOAD_MISMATCH');
+    expect(response.body.message).toBe('Published domain conflict');
+  });
 
   test.each([400, 401, 403, 404, 409, 413, 422, 429])(
     'preserves a published %i status/code/message',

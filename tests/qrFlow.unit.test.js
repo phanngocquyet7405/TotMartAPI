@@ -1,47 +1,60 @@
-jest.mock('../src/services/checkoutAttemptService', () => ({ prepare: jest.fn(), lock: jest.fn(), complete: jest.fn(), reject: jest.fn() }));
+jest.mock('../src/services/checkoutAttemptService', () => ({
+  prepare: jest.fn(),
+  lock: jest.fn(),
+  complete: jest.fn(),
+  reject: jest.fn(),
+}));
 jest.mock('../src/services/paymentReconciliationService', () => ({ receiveWebhook: jest.fn() }));
-jest.mock("../src/models/Checkout", () => ({
+jest.mock('../src/models/Checkout', () => ({
   findOne: jest.fn(),
   findOneAndUpdate: jest.fn(),
   create: jest.fn(),
 }));
-jest.mock("../src/models/PaymentEvent", () => ({
+jest.mock('../src/models/PaymentEvent', () => ({
   findOneAndUpdate: jest.fn(),
   findById: jest.fn(),
   updateOne: jest.fn(),
 }));
-jest.mock("../src/jobs/notificationOutboxScheduler", () => ({
+jest.mock('../src/jobs/notificationOutboxScheduler', () => ({
   enqueue: jest.fn().mockResolvedValue(undefined),
   drain: jest.fn().mockResolvedValue(undefined),
 }));
-jest.mock("../src/models/Order", () => ({
+jest.mock('../src/models/Order', () => ({
   create: jest.fn(),
   find: jest.fn(),
   exists: jest.fn(),
 }));
-jest.mock("../src/models/Cart", () => ({
+jest.mock('../src/models/Cart', () => ({
   findOne: jest.fn(),
   deleteOne: jest.fn(),
 }));
-jest.mock("../src/models/User", () => ({ findById: jest.fn() }));
-jest.mock("../src/models/Product", () => ({
+jest.mock('../src/models/User', () => ({ findById: jest.fn() }));
+jest.mock('../src/models/Product', () => ({
   find: jest.fn(),
   findById: jest.fn(),
   findOneAndUpdate: jest.fn(),
   findByIdAndUpdate: jest.fn(),
 }));
-jest.mock("../src/utils/notify", () => ({
+jest.mock('../src/utils/notify', () => ({
   notifyMerchant: jest.fn().mockResolvedValue(undefined),
 }));
-const mongoose = require("mongoose");
-const Order = require("../src/models/Order");
-const Cart = require("../src/models/Cart");
-const User = require("../src/models/User");
-const Product = require("../src/models/Product");
-const controller = require("../src/controllers/checkOutController");
-const customer = require("../src/controllers/customerOrderController");
+const mongoose = require('mongoose');
+const Order = require('../src/models/Order');
+const Cart = require('../src/models/Cart');
+const User = require('../src/models/User');
+const Product = require('../src/models/Product');
+const controller = require('../src/controllers/checkOutController');
+const customer = require('../src/controllers/customerOrderController');
 const query = (value) => ({
-  session: async () => value,
+  session() {
+    return this;
+  },
+  setOptions() {
+    return this;
+  },
+  then(resolve, reject) {
+    return Promise.resolve(value).then(resolve, reject);
+  },
   sort() {
     return this;
   },
@@ -55,19 +68,29 @@ beforeEach(() => {
   jest.resetAllMocks();
   const attempts = require('../src/services/checkoutAttemptService');
   attempts.prepare.mockResolvedValue({ state: 'processing' });
-  attempts.lock.mockResolvedValue({ state: 'processing', address: { fullName: 'Customer', phone: '0912345678', address: '12 Nguyen Trai', district: 'Quan 1', city: 'Ho Chi Minh', country: 'VN' } });
+  attempts.lock.mockResolvedValue({
+    state: 'processing',
+    address: {
+      fullName: 'Customer',
+      phone: '0912345678',
+      address: '12 Nguyen Trai',
+      district: 'Quan 1',
+      city: 'Ho Chi Minh',
+      country: 'VN',
+    },
+  });
   attempts.complete.mockResolvedValue(undefined);
   attempts.reject.mockResolvedValue(undefined);
-  const Checkout = require("../src/models/Checkout"),
-    Event = require("../src/models/PaymentEvent");
+  const Checkout = require('../src/models/Checkout'),
+    Event = require('../src/models/PaymentEvent');
   Checkout.findOne.mockReturnValue(query(null));
   Checkout.findOneAndUpdate.mockResolvedValue(null);
   Checkout.create.mockResolvedValue([]);
   const event = {
-    _id: "event",
-    state: "received",
-    payloadHash: require("../src/services/checkoutLifecycle").requestHash({
-      code: "TMART123",
+    _id: 'event',
+    state: 'received',
+    payloadHash: require('../src/services/checkoutLifecycle').requestHash({
+      code: 'TMART123',
       amount: 200,
       account: process.env.SEPAY_BANK_ACCOUNT,
     }),
@@ -76,21 +99,19 @@ beforeEach(() => {
   Event.findOneAndUpdate.mockResolvedValue(event);
   Event.findById.mockReturnValue(query(event));
   Event.updateOne.mockResolvedValue({});
-  Order.find.mockReturnValue(query([order("default")]));
-  require("../src/jobs/notificationOutboxScheduler").drain.mockResolvedValue(
-    undefined,
-  );
+  Order.find.mockReturnValue(query([order('default')]));
+  require('../src/jobs/notificationOutboxScheduler').drain.mockResolvedValue(undefined);
   session = { withTransaction: async (fn) => fn(), endSession: jest.fn() };
-  jest.spyOn(mongoose, "startSession").mockResolvedValue(session);
+  jest.spyOn(mongoose, 'startSession').mockResolvedValue(session);
 });
 afterEach(() => jest.restoreAllMocks());
-test("checkout returns HTTP 201 with payment fields and shipping policy after create", async () => {
+test('checkout returns HTTP 201 with payment fields and shipping policy after create', async () => {
   const product = {
-    _id: "product",
-    name: "Item",
+    _id: 'product',
+    name: 'Item',
     price: 100000,
     stock: 3,
-    brand: { _id: "brand", ownerId: "merchant" },
+    brand: { _id: 'brand', ownerId: 'merchant' },
   };
   Product.find.mockReturnValue({ populate: () => query([product]) });
   Product.findById.mockReturnValue({
@@ -99,31 +120,29 @@ test("checkout returns HTTP 201 with payment fields and shipping policy after cr
   });
   User.findById.mockReturnValue(
     query({
-      name: "Customer",
-      email: "customer@example.com",
+      name: 'Customer',
+      email: 'customer@example.com',
       addresses: {
         id: () => ({
-          phone: "0912345678",
-          address: "12 Nguyen Trai",
-          district: "Quan 1",
-          city: "Ho Chi Minh",
-          country: "VN",
+          phone: '0912345678',
+          address: '12 Nguyen Trai',
+          district: 'Quan 1',
+          city: 'Ho Chi Minh',
+          country: 'VN',
         }),
       },
     }),
   );
   Cart.findOne.mockReturnValue(
-    query({ _id: "cart", items: [{ productId: "product", quantity: 1 }] }),
+    query({ _id: 'cart', items: [{ productId: 'product', quantity: 1 }] }),
   );
-  Order.create.mockImplementation(async ([data]) => [
-    { ...data, _id: "mongo-order-id" },
-  ]);
+  Order.create.mockImplementation(async ([data]) => [{ ...data, _id: 'mongo-order-id' }]);
   const res = response();
   const next = jest.fn();
   await controller.checkOut(
     {
-      userId: "user",
-      validatedBody: { addressId: "address", paymentMethod: "online" },
+      userId: 'user',
+      validatedBody: { addressId: 'address', paymentMethod: 'online' },
     },
     res,
     next,
@@ -133,7 +152,7 @@ test("checkout returns HTTP 201 with payment fields and shipping policy after cr
   expect(res.json.mock.calls[0][0]).toEqual({
     success: true,
     data: {
-      orderId: "mongo-order-id",
+      orderId: 'mongo-order-id',
       orderCode: expect.stringMatching(/^TMART/),
       totalAmount: 100000,
       shippingPayment: 'customer_to_carrier',
@@ -146,11 +165,11 @@ function order(id, overrides = {}) {
   return {
     _id: id,
     orderId: id,
-    status: "pending",
-    paymentMethod: "online",
-    paymentStatus: "pending",
+    status: 'pending',
+    paymentMethod: 'online',
+    paymentStatus: 'pending',
     totalAmount: 100,
-    products: [{ productId: "p", name: "Item", quantity: 1 }],
+    products: [{ productId: 'p', name: 'Item', quantity: 1 }],
     save: jest.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -158,69 +177,63 @@ function order(id, overrides = {}) {
 function webhook() {
   return {
     validatedBody: {
-      code: "TMART123",
-      content: "",
-      referenceCode: "REF",
-      transferType: "in",
+      code: 'TMART123',
+      content: '',
+      referenceCode: 'REF',
+      transferType: 'in',
       transferAmount: 200,
       accountNumber: process.env.SEPAY_BANK_ACCOUNT,
     },
   };
 }
-test("partial reservation is restored before a paid order is put on hold", async () => {
-  const item = order("a", {
+test('partial reservation is restored before a paid order is put on hold', async () => {
+  const item = order('a', {
     products: [
-      { productId: "first", name: "A", quantity: 1 },
-      { productId: "second", name: "B", quantity: 1 },
+      { productId: 'first', name: 'A', quantity: 1 },
+      { productId: 'second', name: 'B', quantity: 1 },
     ],
   });
   Order.exists.mockReturnValue(query(null));
   Order.find.mockReturnValue(query([item]));
-  Product.findOneAndUpdate
-    .mockResolvedValueOnce({ stock: 2 })
-    .mockResolvedValueOnce(null);
+  Product.findOneAndUpdate.mockResolvedValueOnce({ stock: 2 }).mockResolvedValueOnce(null);
   item.paymentStatus = 'paid';
   await require('../src/services/inventoryService').reserveOrder(item, session);
   expect(Product.findByIdAndUpdate).toHaveBeenCalledWith(
-    "first",
+    'first',
     { $inc: { stock: 1 }, instock: true },
     { session },
   );
-  expect(item.status).toBe("on_hold");
+  expect(item.status).toBe('on_hold');
   expect(item.stockDeducted).toBe(false);
-  expect(item.paymentStatus).toBe("paid");
+  expect(item.paymentStatus).toBe('paid');
 });
-test("customer detail preserves shipping status and reports aggregate paid status", async () => {
+test('customer detail preserves shipping status and reports aggregate paid status', async () => {
   Order.findOne = jest.fn().mockReturnValue({
     select: () => ({
       lean: async () => ({
-        _id: "id",
-        paymentCode: "TMART123",
-        status: "processing",
+        _id: 'id',
+        paymentCode: 'TMART123',
+        status: 'processing',
       }),
     }),
   });
   Order.find.mockReturnValue({
     select: () => ({
       lean: async () => [
-        { totalAmount: 100, paymentStatus: "paid", status: "processing" },
-        { totalAmount: 200, paymentStatus: "paid", status: "processing" },
+        { totalAmount: 100, paymentStatus: 'paid', status: 'processing' },
+        { totalAmount: 200, paymentStatus: 'paid', status: 'processing' },
       ],
     }),
   });
   const res = response();
-  await customer.detail(
-    { params: { _id: "id" }, userId: "owner" },
-    res,
-    jest.fn(),
-  );
-  expect(Order.findOne).toHaveBeenCalledWith({ _id: "id", userId: "owner" });
+  await customer.detail({ params: { _id: 'id' }, userId: 'owner' }, res, jest.fn());
+  expect(Order.findOne).toHaveBeenCalledWith({ _id: 'id', userId: 'owner' });
   expect(res.json.mock.calls[0][0]).toMatchObject({
     success: true,
-    status: "paid",
+    status: 'paid',
     data: {
-      status: "processing",
-      checkout: { orderId: "id", orderCode: "TMART123", totalAmount: 300 },
+      status: 'processing',
+      checkout: { orderId: 'id', orderCode: 'TMART123', totalAmount: 300 },
     },
   });
 });
@@ -228,7 +241,9 @@ test("customer detail preserves shipping status and reports aggregate paid statu
 test('webhook delegates receipt handling and acknowledges durable result', async () => {
   const service = require('../src/services/paymentReconciliationService');
   service.receiveWebhook.mockResolvedValue({ eventId: 'event', state: 'underpaid' });
-  const req = webhook(), res = response(), next = jest.fn();
+  const req = webhook(),
+    res = response(),
+    next = jest.fn();
   await controller.sepayWebhook(req, res, next);
   expect(service.receiveWebhook).toHaveBeenCalledWith(req.validatedBody);
   expect(res.status).toHaveBeenCalledWith(200);
@@ -238,7 +253,8 @@ test('webhook errors reach centralized handler', async () => {
   const service = require('../src/services/paymentReconciliationService');
   const error = Object.assign(new Error('Unexpected account'), { statusCode: 400 });
   service.receiveWebhook.mockRejectedValue(error);
-  const res = response(), next = jest.fn();
+  const res = response(),
+    next = jest.fn();
   await controller.sepayWebhook(webhook(), res, next);
   expect(next).toHaveBeenCalledWith(error);
   expect(res.json).not.toHaveBeenCalled();

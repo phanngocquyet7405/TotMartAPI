@@ -70,7 +70,7 @@ afterAll(async () => {
   expect(evidence.resource.cleaned).toBe(true);
   expect(evidence.resource.absent).toBe(true);
 });
-test('login returns a safe correlated 5xx before the unchanged 16s client deadline when Mongo find is silent', async () => {
+test('login returns a safe correlated 503 before the unchanged 16s client deadline when Mongo find is silent', async () => {
   const app = express();
   app.use(express.json());
   app.use((req, res, next) => {
@@ -128,7 +128,7 @@ test('login returns a safe correlated 5xx before the unchanged 16s client deadli
   expect(evidence.recovered).toBe(true);
   expect(evidence.after).toEqual(before);
   expect(result.timeout).toBeUndefined();
-  expect([500, 503]).toContain(result.response.status);
+  expect(result.response.status).toBe(503);
   expect(result.response.body).toEqual({
     success: false,
     status: result.response.status,
