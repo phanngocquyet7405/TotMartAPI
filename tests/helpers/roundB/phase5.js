@@ -2,14 +2,19 @@ const fs = require('node:fs');
 const { sourceManifest, sha256 } = require('../../../scripts/evidence-manifest');
 const topology = require('./topology');
 const { candidate } = require('./image-fixture');
-const entry = JSON.parse(fs.readFileSync('artifacts/round-b/entry-current.json'));
-const output = 'artifacts/round-b/phase5.json';
+const context = require('./close-context');
+const entry = JSON.parse(
+  fs.readFileSync(
+    context.directory() ? context.evidence('entry.json') : 'artifacts/round-b/entry-current.json',
+  ),
+);
+const output = context.evidence('phase5.json');
 const report = {
   phase: 5,
   head: entry.head,
   engine: entry.engine,
   candidateImage: candidate.image.id,
-  imageReusedFromA: true,
+  imageReusedFromA: !context.directory(),
   cases: [],
   plannedCases: 12,
   skipped: 0,
@@ -22,7 +27,7 @@ async function main() {
     const manifest = sourceManifest();
     report.sourceManifestSha256 = sha256(JSON.stringify(manifest, null, 2) + '\n');
     fs.writeFileSync(
-      'artifacts/round-b/phase5-source-sha256.json',
+      context.evidence('phase5-source-sha256.json'),
       JSON.stringify(manifest, null, 2) + '\n',
     );
     t = await topology('phase5');

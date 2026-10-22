@@ -1,6 +1,8 @@
 # Đợt B — A1: read checkout ngoài transaction
 
-Cập nhật 22/10/2026: ngoại lệ hai index identityMigrationB03 đã được duyệt và kiểm chứng; B01 full709/709, ledger300007 và A2-0 hai ca đã chạy. Xem [báo cáo lượt tiếp](B-a2-0-verification.md). Các trạng thái BLOCKED/NOT-RUN bên dưới là lịch sử A1; P1 transaction/commit vẫn mở, chưa làm A2-1/A2-2 hoặc Đợt C.
+Lượt đóng Đợt B sau quyết định owner: [B-close-verification](B-close-verification.md), có gate chạy lại trên image cuối và seal do verifier sinh; B-A1-AV01 giữ P2 còn mở. Không sửa evidence A1, không làm A2-1/A2-2 hoặc Đợt C. Các trạng thái Đợt B chưa đạt trong phần lịch sử bên dưới không phải kết luận của lượt đóng mới.
+
+Cập nhật theo owner **Q, 22/10/2026**: **B-A1-AV01 hạ P1→P2, còn mở và chấp nhận có điều kiện**; xem [hồ sơ owner và hạn chấp nhận](BE-open-issues.md). Ngoại lệ hai index identityMigrationB03, B01 full709/709, ledger300007 và A2-0 hai ca đã được kiểm chứng ở [lượt tiếp](B-a2-0-verification.md). Trạng thái BLOCKED/NOT-RUN, P1 và chưa có acceptance bên dưới là lịch sử A1 trước quyết định. Chưa làm A2-1/A2-2 hoặc Đợt C; read ngoài transaction/auth vẫn giữ budget5s.
 
 Trạng thái đang kiểm chứng, chưa kết luận Đợt B đạt. HEAD đầu lượt `62bbb6001728523bf04654bf4aa952f30d99e738`; working tree có thay đổi từ lượt auth và được giữ nguyên. Docker Desktop 4.96.0 / Engine 29.9.1, Linux/WSL2. Không bắt đầu Đợt C, không commit hoặc sinh seal.
 

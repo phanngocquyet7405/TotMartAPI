@@ -1,6 +1,8 @@
-# Đợt B — dừng tại Mongo scenario của PHASE 6
+# Đợt B — đóng với B-A1-AV01 P2 được owner chấp nhận
 
-Cập nhật 22/10/2026: [lượt B01 full/ledger/A2-0](B-a2-0-verification.md) đạt full709/709 và hai ca commit có observer độc lập. Source BE và seal A giữ nguyên trong lượt mới. P1 availability transaction/commit vẫn mở; dừng sau A2-0, A2-1/A2-2 chờ duyệt, chưa vào Đợt C. Các trạng thái phía dưới giữ làm lịch sử.
+Lượt đóng theo yêu cầu owner: xem [báo cáo đóng Đợt B](B-close-verification.md) và seal được verifier sinh trong evidence UUID mới. Strict21/21, Phase5 12/12, bốn fault4/4, code91 hợp đồng1/1, B01 HTTP16/16, full724/724; P2 B-A1-AV01 vẫn mở theo văn bản owner nguyên văn trong BE-open-issues. Không làm A2-1/A2-2, không commit hoặc vào Đợt C. Các trạng thái dừng/chưa đạt phía dưới là hồ sơ lịch sử, không sửa số liệu hoặc seal cũ.
+
+Cập nhật theo owner **Q, 22/10/2026**: **B-A1-AV01 là P2 còn mở, được chấp nhận có điều kiện**, thay cho P1 trước quyết định. Xem [phạm vi, giảm nhẹ và điều kiện hết hạn](BE-open-issues.md). [B01 full/ledger/A2-0](B-a2-0-verification.md) giữ nguyên evidence709/709 và hai ca commit; không phải đã sửa budget. Dừng sau A2-0, A2-1/A2-2 chưa chạy; không tự vào Đợt C. Các trạng thái P1/chưa có owner acceptance phía dưới là lịch sử; acceptance hết hạn trước staging người dùng thật hoặc mở bán.
 
 HEAD thực tế/tag round-a-checkpoint: `62bbb6001728523bf04654bf4aa952f30d99e738`, không đổi. Không commit/push/merge/deploy, sửa FE hoặc migration. Tracked tree ban đầu sạch; báo cáo BLOCKED trước đó đã lưu tại `artifacts/round-b/B-verification-before-current.md.txt`.
 

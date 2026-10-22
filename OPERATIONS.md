@@ -2,6 +2,8 @@
 
 Current local operational evidence: [B07 verification](docs/B07-verification.md), [incident/backup/migration runbook](docs/B07-operations-runbook.md) and [review-only release plan](docs/B07-release-plan.md). Earlier tool/permission/backup notes below are historical; they do not authorize using an existing environment or prove current checks.
 
+Quyết định Q ngày22/10/2026: [B-A1-AV01 là P2 còn mở, chấp nhận có điều kiện](docs/BE-open-issues.md), chỉ cho wait trong transaction/commit; auth/read A1 ngoài transaction vẫn giữ5s. Xem [drain khi Mongo im lặng](docs/B07-operations-runbook.md#mongo-silent-transaction-drain-b-a1-av01). Edge deadline và alert readiness/p99 ở đích chưa xác minh; retry120s không phải hard deadline. Phải đóng issue trước staging người dùng thật/mở bán; xem lại sau DR03/DR05 và phase tải. Không phát sinh quyền thao tác hạ tầng từ ghi chú này.
+
 ## Bổ sung kiểm chứng 2026-10-19
 
 Hợp đồng mới và thứ tự drain/migration/deploy/rollback nằm ở đầu [checkout-attempt-contract.md](docs/checkout-attempt-contract.md); kết quả từng lượt tại [be-handoff-verification.md](docs/be-handoff-verification.md). Không dùng kết quả ngày 18 thay cho trạng thái hiện tại.

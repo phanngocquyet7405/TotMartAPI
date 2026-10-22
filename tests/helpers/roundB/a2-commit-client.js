@@ -4,6 +4,7 @@ const mongoose = require('mongoose');
 const E = require('./mongo-evidence-client');
 const { A } = require('./client');
 const mode = process.argv[2];
+const serverInjected = ['server-unknown-applied', 'server-code91-contract'].includes(mode);
 const row = { mode, requests: [], sourceBEChanged: false };
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function proxy(action, method = 'GET') {
@@ -47,7 +48,7 @@ async function main() {
     row.mongoProcessId = String(
       (await database.admin().command({ hello: 1 })).topologyVersion.processId,
     );
-    if (mode === 'server-unknown-applied') {
+    if (serverInjected) {
       const point = await database.admin().command({
         configureFailPoint: 'failCommand',
         mode: { times: 1 },
@@ -55,8 +56,9 @@ async function main() {
           failCommands: ['commitTransaction'],
           appName: 'totmart-fixture-production',
           writeConcernError: {
-            code: 64,
-            codeName: 'WriteConcernFailed',
+            code: mode === 'server-code91-contract' ? 91 : 64,
+            codeName:
+              mode === 'server-code91-contract' ? 'ShutdownInProgress' : 'WriteConcernFailed',
             errmsg: 'Synthetic commit acknowledgement fault',
           },
           errorLabels: ['UnknownTransactionCommitResult'],
@@ -65,7 +67,7 @@ async function main() {
       row.failpointStartCount = point.count;
     }
     row.stage = 'wire-barrier';
-    await proxy('arm', 'POST');
+    await proxy(mode === 'server-code91-contract' ? 'arm-code91' : 'arm', 'POST');
     pending = E.request(0, state.f.path, 'POST', state.f.body, headers, 45000, mode).then(
       (value) => {
         settled = true;
@@ -82,9 +84,8 @@ async function main() {
     assert(status.holding, 'Server commit response must be held at Mongo wire proxy');
     const held = status.events.find((event) => event.event === 'commit_reply_held');
     assert.equal(held.ok, 1);
-    assert.equal(held.writeConcernError, mode === 'server-unknown-applied');
-    if (mode === 'server-unknown-applied')
-      assert(held.errorLabels.includes('UnknownTransactionCommitResult'));
+    assert.equal(held.writeConcernError, serverInjected);
+    if (serverInjected) assert(held.errorLabels.includes('UnknownTransactionCommitResult'));
     assert.equal(settled, false, 'Original HTTP must remain pending before observer');
     row.stage = 'independent-observer';
     row.observedWhileAckHeld = await E.snapshot('a2-committed-before-ack');
@@ -104,10 +105,13 @@ async function main() {
       originalHttpPending: true,
     };
     row.stage = 'ack-fault';
-    const action = mode === 'server-unknown-applied' ? 'release' : 'drop';
+    const action = serverInjected ? 'release' : 'drop';
     row.proxy = await proxy(action, 'POST');
     row.initial = (await pending).record;
-    if (mode === 'server-unknown-applied') {
+    if (mode === 'server-code91-contract') {
+      row.discoveryRecovery = await proxy('recover-code91', 'POST');
+    }
+    if (serverInjected) {
       const off = await database
         .admin()
         .command({ configureFailPoint: 'failCommand', mode: 'off' });
@@ -115,6 +119,15 @@ async function main() {
       assert.equal(off.count - row.failpointStartCount, 1);
     }
     row.stage = 'same-key-replay';
+    if (mode === 'server-code91-contract') {
+      const until = Date.now() + 15000;
+      do {
+        row.recoveryHealth = (await E.request(0, '/api/home/health')).record;
+        if (row.recoveryHealth.status === 200) break;
+        await sleep(100);
+      } while (Date.now() < until);
+      assert.equal(row.recoveryHealth.status, 200);
+    }
     for (const index of [0, 1, 0]) {
       const replay = await E.request(
         index,
@@ -148,6 +161,11 @@ async function main() {
             request.keyEncrypted === row.initial.keyEncrypted,
         ),
     );
+    if (mode === 'server-code91-contract') {
+      assert.equal(row.initial.status, 503, 'Committed code91 request must return original 503');
+      assert.equal(row.initial.body.requestId, row.initial.xRequestId);
+      assert.equal(row.initial.body.message, 'Lỗi hệ thống. Vui lòng thử lại.');
+    }
     row.passed = true;
   } catch (error) {
     row.passed = false;
@@ -164,6 +182,13 @@ async function main() {
       await proxy('drop', 'POST');
     } catch {
       /* No held reply is the expected normal end. */
+    }
+    if (mode === 'server-code91-contract') {
+      try {
+        await proxy('recover-code91', 'POST');
+      } catch {
+        row.faultRecoveryFailed = true;
+      }
     }
     if (control) {
       try {

@@ -10,6 +10,8 @@ let armed = false,
   held,
   sequence = 0;
 const events = [];
+let holdDiscovery = false;
+const discoveryReplies = [];
 function emit(event, fields = {}) {
   events.push({ event, at: Date.now(), ...fields });
   fs.writeFileSync('/fixture/ack-evidence.json', JSON.stringify(events));
@@ -33,6 +35,14 @@ function frames(socket, consume) {
   });
 }
 function body(frame) {
+  if (frame.readInt32LE(12) === 2004) {
+    const end = frame.indexOf(0, 20),
+      offset = end + 9;
+    if (end < 20) return null;
+    return BSON.deserialize(frame.subarray(offset, offset + frame.readInt32LE(offset)), {
+      promoteLongs: false,
+    });
+  }
   if (frame.readInt32LE(12) !== 2013 || frame[20] !== 0) return null;
   const size = frame.readInt32LE(21);
   return BSON.deserialize(frame.subarray(21, 21 + size), { promoteLongs: false });
@@ -42,8 +52,11 @@ net
     const connection = ++sequence,
       upstream = net.connect(27017, 'mongo');
     const targets = new Map();
+    const discovery = new Set();
     frames(downstream, (frame) => {
       const command = body(frame);
+      if (command && (command.hello || command.isMaster || command.ismaster))
+        discovery.add(frame.readInt32LE(4));
       if (armed && command?.commitTransaction === 1) {
         armed = false;
         const row = {
@@ -59,6 +72,11 @@ net
       upstream.write(frame);
     });
     frames(upstream, (frame) => {
+      if (holdDiscovery && discovery.has(frame.readInt32LE(8))) {
+        discoveryReplies.push({ socket: downstream, frame });
+        emit('discovery_reply_held', { connection, responseTo: frame.readInt32LE(8) });
+        return;
+      }
       const target = targets.get(frame.readInt32LE(8));
       if (target) {
         const reply = body(frame);
@@ -85,9 +103,15 @@ net
   .listen(27017, '0.0.0.0');
 http
   .createServer((req, res) => {
-    if (req.url === '/arm' && req.method === 'POST' && !armed && !held) {
+    if (['/arm', '/arm-code91'].includes(req.url) && req.method === 'POST' && !armed && !held) {
       armed = true;
+      holdDiscovery = req.url === '/arm-code91';
       emit('armed');
+    } else if (req.url === '/recover-code91' && req.method === 'POST') {
+      holdDiscovery = false;
+      for (const reply of discoveryReplies.splice(0))
+        if (!reply.socket.destroyed) reply.socket.write(reply.frame);
+      emit('discovery_recovered');
     } else if (req.url === '/drop' && req.method === 'POST' && held) {
       emit('ack_dropped', held.target);
       held.downstream.destroy();

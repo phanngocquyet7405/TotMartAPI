@@ -35,7 +35,10 @@ result.runtimeSourceHashes = Object.fromEntries(
   ].map((file) => [file, sha256(fs.readFileSync(file))]),
 );
 const save = () =>
-  fs.writeFileSync('artifacts/round-b/candidate.json', JSON.stringify(result, null, 2) + '\n');
+  fs.writeFileSync(
+    require('./close-context').evidence('candidate.json'),
+    JSON.stringify(result, null, 2) + '\n',
+  );
 function docker(args, options = {}) {
   try {
     const value = execFileSync('docker', args, {
@@ -53,7 +56,7 @@ function docker(args, options = {}) {
     throw new Error(`Docker ${args[0]} failed`, { cause: error });
   }
 }
-const tarFile = path.resolve('artifacts/round-b/candidate.image.tar');
+const tarFile = path.resolve(require('./close-context').evidence('candidate.image.tar'));
 let containerId;
 const containerName = `totmart-b-${run}-bcrypt`;
 function verifyContainer() {

@@ -1,8 +1,10 @@
 # BE open issues và quyết định cần owner — 20/10/2026
 
-Cập nhật 22/10/2026: **B-A1-AV01 P1 vẫn mở**. [A2-0](B-a2-0-verification.md) đã chứng minh server-injected unknown commit đã áp dụng và mất ACK Mongo thật; observer trước ACK/replay hai backend giữ đúng một nghĩa vụ. B01 full709/709 và ledger300007 đạt. Chưa đặt budget transaction/commit; A2-1/A2-2 chờ owner duyệt, không vào Đợt C. Kết luận “không thấy P1” lịch sử bên dưới không phải trạng thái hiện hành.
+Lượt đóng Đợt B theo yêu cầu mới: [báo cáo và verifier seal](B-close-verification.md). **B-A1-AV01 vẫn là P2 còn mở**, theo văn bản do owner cung cấp nguyên văn ở cuối hồ sơ; đóng phạm vi kiểm chứng local không phải sửa budget hoặc cho phép staging người dùng thật/mở bán. Các P2 khác không tự được đóng hay chấp nhận thêm.
 
-Phạm vi là candidate B08, self-review/source và bằng chứng local. Không có reviewer độc lập thực sự trong phiên này. Không thấy P0/P1 còn mở được xác nhận trong phạm vi đã rà; điều đó không chứng minh không còn lỗi ngoài phạm vi hoặc production. Không owner nào đã ký nhận rủi ro. Các vai trò dưới đây là đề xuất, chưa phải giao việc hoặc phê duyệt.
+Cập nhật theo quyết định owner **Q, ngày 22/10/2026**: **B-A1-AV01 hạ P1→P2, còn mở; chấp nhận rủi ro có điều kiện** theo hồ sơ cuối trang. Không phải lỗi đã sửa hoặc chấp thuận staging/mở bán. [A2-0](B-a2-0-verification.md) giữ nguyên evidence; A2-1/A2-2 chưa chạy, không tự vào Đợt C.
+
+Phần B08 dưới đây là lịch sử trước quyết định Q ngày22/10/2026: candidate B08, self-review/source và bằng chứng local. Không có reviewer độc lập thực sự trong phiên đó. Kết luận không thấy P0/P1 trong phạm vi đã rà và chưa có owner nhận rủi ro ở thời điểm B08 không thay thế hồ sơ hiện hành B-A1-AV01 cuối trang. Các vai trò đề xuất cho vấn đề khác chưa phải giao việc hoặc phê duyệt.
 
 ## Phát hiện đã đóng trong phần khép B07
 
@@ -56,8 +58,59 @@ Trigger: nhiều tab, response Set-Cookie về sai thứ tự, token consumed qu
 
 Muốn chuyển sang GO phải có bằng chứng mới cho các cổng áp dụng, xử lý mọi P0/P1 nếu phát sinh, review lại rubric và owner quyết định rõ phạm vi còn lại. Không tự ký risk acceptance hoặc đổi ngưỡng85 vì deadline. B08 kết thúc với bàn giao giới hạn chính xác; không bắt đầu FE/staging.
 
-## Bổ sung Đợt B/A1 — availability transaction còn mở
+## B-A1-AV01 — P2 availability transaction/commit, owner chấp nhận có điều kiện
 
-**B-A1-AV01 — P1 availability core checkout, chưa đóng trước FE.** A1 chỉ đặt budget cho read ngoài transaction. `checkoutAttemptService.prepare/resolve`, `checkOutController.checkOut` và subscription create vẫn có transaction/commit không truyền budget driver/session hay maxCommitTimeMS; backend socketTimeoutMS/waitQueueTimeoutMS vẫn 0, không có MongoClient CSOT mặc định. Inventory mở rộng tới transaction cancel/confirm/COD và payment/subscription/expiry ở [B-a1-verification](B-a1-verification.md). Các đoạn chưa đổi từ evidence sau-auth cũ: blockConnection 20s trong transaction/commit giữ HTTP khoảng 20s; phép đo không chứng minh upper bound hoặc mất ACK sau commit thật. Retry window driver không phải deadline ngắt await I/O.
+**Quyết định:** owner **Q**, ngày **22/10/2026**, hạ **P1→P2** và chấp nhận phần rủi ro availability dưới đây tới điều kiện hết hạn. Issue **còn mở**; chưa sửa transaction/commit và không đổi kết quả test, source, contract hoặc baseline để đổi mức. Trạng thái P1/chưa có acceptance trong các báo cáo trước quyết định này là lịch sử.
 
-Không có money/stock P0/P1 được chứng minh từ các phép đo đó; **P1 ở đây là availability của đường mua hàng và recovery khi kết quả commit chưa rõ**, không phải kết luận double money. Không hạ thành P2 để khép B, không biến thiếu budget thành lỗi môi trường. A1 xanh không giải quyết mục này và không phải SLA toàn checkout. Cần duyệt A2 riêng: thiết kế budget transaction/session và cùng-key recovery, test server-injected UnknownTransactionCommitResult cùng ca mất ACK sau commit thật có bằng chứng độc lập commit; không dùng HTTP loss/pre-commit kill để thay thế. Chưa sửa transaction/commit trong A1, chưa owner chấp nhận rủi ro, chưa đủ điều kiện Đợt C.
+**Phạm vi chấp nhận:** khi Mongo im lặng, TCP không đóng, sau khi request mua hàng đã vào transaction hoặc commit, request có thể chờ lâu hơn budget read5s. Driver6.20.0 có cửa sổ retry mặc định khoảng120s, **không phải hard deadline hay upper bound120s của một await I/O đang treo**. `socketTimeoutMS`/`waitQueueTimeoutMS` vẫn0, chưa có MongoClient/session/transaction CSOT hoặc maxCommitTimeMS cho các call này. Read ngoài transaction thuộc A1 và auth/ownership đã có budget từng read5000ms, **không nằm trong ngoại lệ này**. Không dùng acceptance để bỏ budget đã có hoặc bỏ transaction/fencing/unique index/tombstone.
+
+**Bằng chứng dữ liệu trong phạm vi đã chạy:** [A2-0](B-a2-0-verification.md) có server-injected UnknownTransactionCommitResult và mất ACK Mongo thật: observer độc lập thấy commit khi reply còn bị giữ; replay cùng key/body qua hai backend giữ một Checkout/Order/created Attempt, stock99. Ca code91 đã commit, HTTP503 rồi replay201/cùng result, vẫn một nghĩa vụ. Evidence gốc tại `artifacts/round-b/a2-0/6d74d41c-abf9-4ca8-b4d0-c9431a825748/`: `commits-925443db-0dc2-4926-919f-c5e55c8e17ff/` và `commits-bc2b4b3c-f628-4517-8ffa-9accf0828169/`. Không suy bằng chứng COD products một node thành bảo đảm mọi nhánh hoặc mọi fault; không đổi runner1 của ca91 thành pass.
+
+**Hậu quả còn lại và recovery:** request có thể chờ lâu hoặc trả5xx/503/timeout trong khi kết quả commit chưa rõ. Giữ đúng authenticated user/kind/key và body đã lưu; resolve/replay theo [attempt contract](checkout-attempt-contract.md), không tự đổi key từ lỗi mạng/unknown. Chỉ restart recovery sau invalidated + canRestart:true đúng reference. Created phải khôi phục kết quả cũ; không tự tạo nghĩa vụ mới.
+
+**Giảm nhẹ và trạng thái xác minh:**
+
+- Contract “kết quả chưa rõ” và same-key/body recovery: đã có, giữ nguyên.
+- Deadline ở edge: **chưa xác minh/chưa có cấu hình đích được ghi nhận trong repo**; chưa chốt giá trị trong quyết định này. Không lấy deadline client fixture30/45s làm deadline edge. Dù edge ngắt response, không suy ra transaction đã dừng/rollback.
+- Cảnh báo readiness/p99: **chưa xác minh đã triển khai ở đích**. Có readiness probe; health-summary/alert adapter local không chứng minh có cảnh báo readiness hoặc p99 được giao tới người trực. Ngưỡng, sink và on-call cần xác minh riêng; không ghi là đã có.
+- [Runbook drain khi Mongo chập chờn](B07-operations-runbook.md#mongo-silent-transaction-drain-b-a1-av01): đã bổ sung thủ tục, chưa thực hiện trên đích triển khai. Không phát sinh thao tác hạ tầng trong lượt ghi nhận acceptance.
+
+**Điều kiện hết hạn:** phải **đóng issue bằng A2 hoặc quyết định khác có bằng chứng trước khi mở staging cho người dùng thật hoặc mở bán**. Xem lại sau **DR03/DR05 và phase tải**; các mốc này không được đánh dấu đã chạy trong quyết định này. Không tự gia hạn acceptance, đóng toàn Đợt B, sinh seal, cho phép Đợt C hoặc triển khai từ việc hạ severity.
+
+**Backlog P2 chưa có budget:** prepare/resolve/terminate attempt; checkout create và subscription create (commerce transaction/commit); checkout cancel/confirm-COD/resolve-inventory; subscription cancel/fulfillment; payment command; expiry. Đối chiếu `unbudgetedTransactionCalls` của verifier A1 và [inventory A1](B-a1-verification.md); không suy toàn bộ đã fault-test. Field lịch sử `openP1Availability` của verifier phản ánh inventory khi chưa có quyết định owner, không phải severity hiện hành; giữ nguyên raw evidence. A2-1/A2-2 chưa được thực hiện theo acceptance này.
+
+### Văn bản do owner cung cấp — nguyên văn
+
+Đoạn dưới được chép nguyên văn từ phản hồi của owner trong lượt đóng Đợt B; assistant không ký thay và không điền lại các placeholder. Các placeholder về edge/readiness/p99 chưa phải bằng chứng cấu hình hay triển khai. Ghi chú kỹ thuật về retry window không phải hard deadline ở hồ sơ phân tích phía trên vẫn áp dụng; không chỉnh câu chữ của owner bên dưới.
+
+<!-- owner-decision-start -->
+```text
+B-A1-AV01 — hạ P1 xuống P2 theo quyết định của owner.
+Owner chấp nhận: <Q> — ngày <22/10/2026>.
+Phạm vi: khi Mongo im lặng (TCP không đóng) sau khi request mua hàng đã vào transaction hoặc commit, request có thể chờ lâu hơn ngân sách đọc 5s (tới cửa sổ retry driver ~120s). Không áp dụng cho read ngoài transaction (A1, auth đã có budget 5s).
+Bằng chứng không mất/trùng dữ liệu: A2-0 (UnknownTransactionCommitResult server-injected và mất ACK thật: replay cùng key/body ra đúng một nghĩa vụ), ca code 91 (đã commit, 503, replay 201, một nghĩa vụ).
+Hậu quả còn lại: chờ lâu hoặc 5xx/503/timeout với kết quả chưa rõ; recovery bằng cùng key/body theo contract.
+Giảm nhẹ: contract "kết quả chưa rõ"; deadline ở edge: <giá trị, hoặc "chưa cấu hình">; cảnh báo readiness/p99: <đã/chưa>; runbook drain khi Mongo chập chờn.
+Điều kiện hết hạn: phải đóng (A2 hoặc quyết định khác có bằng chứng) trước khi mở staging cho người dùng thật hoặc mở bán; xem lại sau DR03/DR05 và phase tải.
+Danh sách call chưa có budget (backlog P2): prepare/resolve/terminate attempt, checkout cancel/confirm-COD/resolve-inventory, subscription cancel/fulfillment, payment command, expiry (theo unbudgetedTransactionCalls của verifier).
+```
+<!-- owner-decision-end -->
+
+
+### Snapshot backlog P2 khi đóng Đợt B
+
+Owner dưới đây là đề xuất, chưa phải giao việc hoặc owner đã nhận. Inventory cùng predicate với verifier A1; acceptance Q giữ issue mở, không thay read budgets hoặc chứng minh mọi nhánh đã fault-test.
+
+<!-- unbudgeted-close-start -->
+- `src/services/checkoutAttemptService.js:47` — `prepare`, `transaction`; P2 còn mở; owner đề xuất: BE commerce/attempt và database maintainer (đề xuất).
+- `src/services/checkoutAttemptService.js:91` — `resolve`, `transaction`; P2 còn mở; owner đề xuất: BE commerce/attempt và database maintainer (đề xuất).
+- `src/controllers/checkOutController.js:55` — `checkOut`, `withTransaction`; P2 còn mở; owner đề xuất: BE checkout/inventory và database maintainer (đề xuất).
+- `src/controllers/checkOutController.js:260` — `cancelOrder`, `withTransaction`; P2 còn mở; owner đề xuất: BE checkout/inventory và database maintainer (đề xuất).
+- `src/controllers/checkOutController.js:335` — `resolveInventoryHold`, `withTransaction`; P2 còn mở; owner đề xuất: BE checkout/inventory và database maintainer (đề xuất).
+- `src/controllers/checkOutController.js:437` — `changeCod`, `withTransaction`; P2 còn mở; owner đề xuất: BE checkout/inventory và database maintainer (đề xuất).
+- `src/controllers/userSubscriptionController.js:45` — `subscribeToTemplate`, `withTransaction`; P2 còn mở; owner đề xuất: BE subscription và database maintainer (đề xuất).
+- `src/controllers/userSubscriptionController.js:212` — `cancelImmediately`, `withTransaction`; P2 còn mở; owner đề xuất: BE subscription và database maintainer (đề xuất).
+- `src/services/paymentReconciliationService.js:27` — `command`, `transaction`; P2 còn mở; owner đề xuất: BE payment/reconciliation, finance reviewer và database maintainer (đề xuất).
+- `src/services/subscriptionService.js:80` — `transitionFulfillment`, `withTransaction`; P2 còn mở; owner đề xuất: BE subscription/fulfillment và database maintainer (đề xuất).
+- `src/jobs/orderExpiryScheduler.js:13` — `expireCheckout`, `withTransaction`; P2 còn mở; owner đề xuất: BE workers/inventory và database maintainer (đề xuất).
+<!-- unbudgeted-close-end -->

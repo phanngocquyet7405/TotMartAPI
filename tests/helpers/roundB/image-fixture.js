@@ -1,7 +1,9 @@
 const fs = require('node:fs');
 const { execFileSync } = require('node:child_process');
 const { randomUUID, randomBytes } = require('node:crypto');
-const candidate = JSON.parse(fs.readFileSync('artifacts/round-b/candidate.json'));
+const candidate = JSON.parse(
+  fs.readFileSync(process.env.ROUND_B_CLOSE_CANDIDATE_FILE || 'artifacts/round-b/candidate.json'),
+);
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 class Lease {
   constructor(phase) {
@@ -36,7 +38,7 @@ class Lease {
   }
   record() {
     fs.writeFileSync(
-      `artifacts/round-b/${this.phase}-resources.json`,
+      require('./close-context').evidence(`${this.phase}-resources.json`),
       JSON.stringify(
         { run: this.run, resources: this.resources, commands: this.commands },
         null,

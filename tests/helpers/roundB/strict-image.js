@@ -10,7 +10,7 @@ const evidencePhase = onlyMongo
   : process.argv.includes('--final')
     ? 'phase3-final'
     : 'phase3';
-const reportFile = `artifacts/round-b/${evidencePhase}.json`;
+const reportFile = require('./close-context').evidence(`${evidencePhase}.json`);
 const lease = new Lease(evidencePhase);
 const fixtureDatabase = `totmart_b_${lease.run.replaceAll('-', '')}`;
 const report = {

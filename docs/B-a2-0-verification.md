@@ -1,5 +1,9 @@
 # Đợt B — ngoại lệ B03, B01 full, ledger 300007 và A2-0
 
+Lượt đóng mới theo yêu cầu owner được ghi tại [B-close-verification](B-close-verification.md). Ca91 được giữ thành regression hợp đồng riêng (commit đã áp dụng,503 gốc,replay201,một nghĩa vụ; không yêu cầu hai commit). Raw attempt/exit lịch sử A2-0 phía dưới giữ nguyên. Đóng Đợt B với P2 B-A1-AV01 còn mở, không triển khai A2-1/A2-2 hoặc Đợt C.
+
+Cập nhật sau nghiệm thu A2-0: owner **Q, ngày22/10/2026** đã hạ **B-A1-AV01 P1→P2 và chấp nhận rủi ro có điều kiện**, issue còn mở; [hồ sơ quyết định](BE-open-issues.md). Các nhãn P1/chưa có acceptance trong biên bản dưới đây là trạng thái tại lúc chạy, giữ làm lịch sử. Không đổi raw evidence hoặc coi120s là hard deadline. Chưa làm A2-1/A2-2; phải đóng issue trước staging có người dùng thật hoặc mở bán, xem lại sau DR03/DR05 và phase tải.
+
 Ngày 22/10/2026. Cwd đã xác minh đúng TotMartAPI; HEAD `62bbb6001728523bf04654bf4aa952f30d99e738`, tag `round-a-checkpoint`. Không có tag `round-b-checkpoint-2` (lệnh verify tag exit 1). Giữ working tree bàn giao. Không đổi thêm file `src/`, FE, script migration identity hoặc seal A; không commit/push/merge/deploy. **Dừng sau A2-0; P1 availability transaction/commit vẫn mở, Đợt B chưa đạt và không vào Đợt C.**
 
 Evidence lượt này: `artifacts/round-b/a2-0/6d74d41c-abf9-4ca8-b4d0-c9431a825748/`. Node host24.14.1, Docker Engine29.9.1; A2 dùng lại image A1 `sha256:1b99bfd6902d2020ba0d980847f3c80d7b3ca1a2456db97314968428d8c5f991`. Runtime toàn bộ src/package/lockfile trong image được so byte hash với host trước mỗi ca. `entry.json` và `delivery.json` lưu provenance/integrity; không phải seal mới.
