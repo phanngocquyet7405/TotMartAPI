@@ -1,5 +1,7 @@
 # BE open issues và quyết định cần owner — 20/10/2026
 
+Cập nhật 22/10/2026: **B-A1-AV01 P1 vẫn mở**. [A2-0](B-a2-0-verification.md) đã chứng minh server-injected unknown commit đã áp dụng và mất ACK Mongo thật; observer trước ACK/replay hai backend giữ đúng một nghĩa vụ. B01 full709/709 và ledger300007 đạt. Chưa đặt budget transaction/commit; A2-1/A2-2 chờ owner duyệt, không vào Đợt C. Kết luận “không thấy P1” lịch sử bên dưới không phải trạng thái hiện hành.
+
 Phạm vi là candidate B08, self-review/source và bằng chứng local. Không có reviewer độc lập thực sự trong phiên này. Không thấy P0/P1 còn mở được xác nhận trong phạm vi đã rà; điều đó không chứng minh không còn lỗi ngoài phạm vi hoặc production. Không owner nào đã ký nhận rủi ro. Các vai trò dưới đây là đề xuất, chưa phải giao việc hoặc phê duyệt.
 
 ## Phát hiện đã đóng trong phần khép B07
@@ -53,3 +55,9 @@ Trigger: nhiều tab, response Set-Cookie về sai thứ tự, token consumed qu
 - **Hiệu năng/đích triển khai:**40-request/concurrency2 và manager dataset1200 products là thăm dò local, không SLO/production scale. Chưa browser/TLS/proxy thật, provider bank/email/upload, courier evidence hoặc staging được duyệt. Đề xuất owner: product/platform/QA/finance theo phạm vi; cần workload/SLO/accounts/target rõ trước probe. Không gọi provider thật hoặc dùng shared data để lấp khoảng trống.
 
 Muốn chuyển sang GO phải có bằng chứng mới cho các cổng áp dụng, xử lý mọi P0/P1 nếu phát sinh, review lại rubric và owner quyết định rõ phạm vi còn lại. Không tự ký risk acceptance hoặc đổi ngưỡng85 vì deadline. B08 kết thúc với bàn giao giới hạn chính xác; không bắt đầu FE/staging.
+
+## Bổ sung Đợt B/A1 — availability transaction còn mở
+
+**B-A1-AV01 — P1 availability core checkout, chưa đóng trước FE.** A1 chỉ đặt budget cho read ngoài transaction. `checkoutAttemptService.prepare/resolve`, `checkOutController.checkOut` và subscription create vẫn có transaction/commit không truyền budget driver/session hay maxCommitTimeMS; backend socketTimeoutMS/waitQueueTimeoutMS vẫn 0, không có MongoClient CSOT mặc định. Inventory mở rộng tới transaction cancel/confirm/COD và payment/subscription/expiry ở [B-a1-verification](B-a1-verification.md). Các đoạn chưa đổi từ evidence sau-auth cũ: blockConnection 20s trong transaction/commit giữ HTTP khoảng 20s; phép đo không chứng minh upper bound hoặc mất ACK sau commit thật. Retry window driver không phải deadline ngắt await I/O.
+
+Không có money/stock P0/P1 được chứng minh từ các phép đo đó; **P1 ở đây là availability của đường mua hàng và recovery khi kết quả commit chưa rõ**, không phải kết luận double money. Không hạ thành P2 để khép B, không biến thiếu budget thành lỗi môi trường. A1 xanh không giải quyết mục này và không phải SLA toàn checkout. Cần duyệt A2 riêng: thiết kế budget transaction/session và cùng-key recovery, test server-injected UnknownTransactionCommitResult cùng ca mất ACK sau commit thật có bằng chứng độc lập commit; không dùng HTTP loss/pre-commit kill để thay thế. Chưa sửa transaction/commit trong A1, chưa owner chấp nhận rủi ro, chưa đủ điều kiện Đợt C.
