@@ -29,4 +29,24 @@ function inspectMongoResponse(value, { login = false, markers = [] } = {}) {
   }
   return failures;
 }
-module.exports = { inspectMongoResponse };
+function inspectPublishedLogs(logs, { markers = [], requestIds = [] } = {}) {
+  const failures = [];
+  const text = JSON.stringify(logs);
+  if (
+    /mongodb(?:\+srv)?:\/\/|rediss?:\/\/|\bat .*\(.*:\d+:\d+\)|"stack"\s*:/i.test(text) ||
+    markers.some((marker) => marker && text.includes(marker))
+  )
+    failures.push('log disclosed URI/stack/fixture marker');
+  for (const log of logs) {
+    if (log.msg === 'request errored') {
+      if (!requestIdPattern.test(log.req?.id || '')) failures.push('missing pino-http requestId');
+      if (Object.keys(log.err || {}).some((key) => !['type', 'code'].includes(key)))
+        failures.push('unsafe pino-http error field');
+    }
+  }
+  for (const id of requestIds)
+    if (!logs.some((log) => log.msg === 'request errored' && log.req?.id === id))
+      failures.push('missing correlated pino-http error log');
+  return failures;
+}
+module.exports = { inspectMongoResponse, inspectPublishedLogs };

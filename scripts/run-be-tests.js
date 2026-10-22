@@ -42,6 +42,7 @@ async function main() {
     B01_HTTP_RESOURCE_FILE: path.join(output, 'http-resource.json'),
     B05_SERVER_RESOURCE_FILE: path.join(output, 'server-resource.json'),
     B07_RESOURCE_FILE: path.join(output, 'b07-resources.json'),
+    B01_B03_INDEX_RESOURCE_FILE: path.join(output, 'b03-index-resource.json'),
     NODE_OPTIONS: '--require ' + JSON.stringify(path.resolve('tests/helpers/noDotenv.js')),
   };
   for (const key of Object.keys(env)) {
