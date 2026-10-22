@@ -28,11 +28,15 @@ Trigger: exact email miss cần canonical fallback, legacy canonical collision, 
 
 ## P2-03 — Missing preimage rollback thành null
 
+Cập nhật C1, 22/10/2026: script chuyển manifest version2 có physical preimage `{exists,value}`, validation trước transaction, legacy thiếu version/preimage bị từ chối; rollback CAS phục hồi absent/null/false/value trên clone. Có ca crash child sau ghi thật trong transaction và writer chen vào; không ghi đè writer hoặc đụng tài chính/tombstone/session. Xem [C1 verification](C1-verification.md). Lỗi tooling này được sửa và kiểm trên fixture, **chưa rollout migration shared**; owner database/backend vẫn cần review manifest/dataset/backup trước apply. Mô tả trigger và evidence B07 bên dưới là lịch sử, giữ nguyên.
+
 Trigger: commerce-integrity manifest ghi before bằng null cho field vốn absent. Apply rồi rollback ghi `$set:null`; không khôi phục physical field absence. Source `scripts/migrate-commerce-integrity.js`; B07 migration-cas đã assert subscriptionOnly trở thành null, writer edit vẫn được giữ bằng CAS, protected finance/session/tombstones không đổi.
 
 Ảnh hưởng: code/query phụ thuộc `$exists` có thể thấy khác sau rollback trên dataset có field thiếu. Không có shared apply trong phiên. Đề xuất owner: database/backend migration reviewer. Cần quyết định có yêu cầu presence-preserving manifest version mới hay chỉ chấp nhận value semantics cho dataset được duyệt. Phải kiểm preimage/index/consumer trước rollout; không tự thay format lịch sử hoặc bulk unset. Regression nếu làm mới: absent/null/false phân biệt, stale/writer-CAS, transaction interruption và ledger/session/reference fingerprints.
 
 ## P2-04 — Alert adapter chưa được wire production
+
+C1 kiểm thêm persisted pending/restart, lost ACK/dedup, source transport failure và external watchdog tới sink loopback. Adapter hiện **chưa có dead-man tích hợp và chưa có production wiring**; watchdog C1 chỉ là fixture. Summary chưa phủ route latency/p99, in-flight purchase, sustained readiness not_ready hoặc tuổi attempt processing quá ngưỡng; attemptGrowth/capacity không thay thế tuổi attempt. Chỉ đề xuất platform/BE instrumentation + scheduler/state/watchdog độc lập, finance/security theo queue; channel/on-call/threshold/SLO cần owner. Không sửa src để tự thêm các tín hiệu trong C1. Xem [runbook](C1-mongo-silent-runbook.md).
 
 Trigger: backlog/refund/capacity vượt ngưỡng trong deployment mà không có scheduler/source-reader/sink/state-store thực. `scripts/dispatch-operations-alerts.js` là adapter opt-in; `src/server.js` chỉ khởi động năm nhóm business/security workers, không wire alert dispatcher. Local HTTP summary→adapter→sink đã chứng minh firing/recovery/retry/coalescing, không chứng minh người trực nhận được cảnh báo.
 

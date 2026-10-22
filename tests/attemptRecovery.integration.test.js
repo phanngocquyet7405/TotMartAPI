@@ -16,9 +16,66 @@ const User = require('../src/models/User');
 const Order = require('../src/models/Order');
 const Box = require('../src/models/Box');
 const { assertResponse } = require('./helpers/apiContract');
-beforeAll(connect);
+let c1OwnedTarget;
+beforeAll(async () => {
+  await connect();
+  if (process.env.C1_DIRECTORY) {
+    c1OwnedTarget = await require('./helpers/db').captureOwnedMemoryTarget();
+    await c1OwnedTarget.verify();
+    const { run, write } = require('./helpers/roundC1/context');
+    await mongoose.connection.db
+      .collection('c1ownership')
+      .insertOne({ _id: run, processId: c1OwnedTarget.processId });
+    write('native-regression-resource.json', {
+      run,
+      port: c1OwnedTarget.port,
+      database: c1OwnedTarget.database,
+      processId: c1OwnedTarget.processId,
+      closed: false,
+    });
+  }
+});
 afterEach(clearDatabase);
-afterAll(closeDatabase);
+afterAll(async () => {
+  if (c1OwnedTarget) {
+    await c1OwnedTarget.verify();
+    const { run } = require('./helpers/roundC1/context');
+    const marker = await mongoose.connection.db.collection('c1ownership').findOne({ _id: run });
+    if (marker?.processId !== c1OwnedTarget.processId)
+      throw new Error('C1 native fixture marker changed');
+  }
+  await closeDatabase();
+  if (c1OwnedTarget) {
+    await new Promise((resolve, reject) => {
+      const socket = require('node:net').createConnection({
+        host: '127.0.0.1',
+        port: c1OwnedTarget.port,
+      });
+      socket.setTimeout(2000);
+      socket.once('connect', () => {
+        socket.destroy();
+        reject(new Error('C1 native Mongo port remains open'));
+      });
+      socket.once('timeout', () => {
+        socket.destroy();
+        reject(new Error('C1 native Mongo absence unconfirmed'));
+      });
+      socket.once('error', (error) => {
+        if (error.code === 'ECONNREFUSED') resolve();
+        else reject(error);
+      });
+    });
+    const { run, write } = require('./helpers/roundC1/context');
+    write('native-regression-resource.json', {
+      run,
+      port: c1OwnedTarget.port,
+      database: c1OwnedTarget.database,
+      processId: c1OwnedTarget.processId,
+      closed: true,
+      observation: 'ECONNREFUSED',
+    });
+  }
+});
 const auth = (user) => ({ Authorization: `Bearer ${signToken(user)}` });
 const key = 'recovery-behavior-key-123';
 async function fixture() {
@@ -410,7 +467,9 @@ test('migration is dry by default, reports flag conflicts, and supports CAS roll
   await migration.apply(report);
   expect((await Box.findById(box._id)).subscriptionOnly).toBe(true);
   await migration.apply(report, true);
-  expect((await Box.collection.findOne({ _id: box._id })).subscriptionOnly).toBeNull();
+  expect(Object.hasOwn(await Box.collection.findOne({ _id: box._id }), 'subscriptionOnly')).toBe(
+    false,
+  );
   await Box.collection.updateOne({ _id: box._id }, { $set: { subscriptionOnly: false } });
   expect((await migration.plan()).conflicts.some((c) => c.id === String(box._id))).toBe(true);
 });

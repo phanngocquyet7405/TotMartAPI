@@ -1216,7 +1216,9 @@ drill(
     expect(
       (await require('../src/models/Product').findById(product._id)).ownerId.equals(writerOwner),
     ).toBe(true);
-    expect((await Box.collection.findOne({ _id: boxId })).subscriptionOnly).toBeNull(); // Existing manifest represents missing preimage as null; disclosed limitation.
+    expect(Object.hasOwn(await Box.collection.findOne({ _id: boxId }), 'subscriptionOnly')).toBe(
+      false,
+    ); // Manifest v2 restores physical absence.
     const identity = require('../scripts/review-user-identity');
     const users = mongoose.connection.db.collection('users');
     await users.insertMany([
@@ -1239,7 +1241,7 @@ drill(
       identityCollisionGroups: 1,
       identityApplyNotRun:
         'existing tool requires its own separate capability; no index-drop workflow in B07',
-      missingPreimageRestoredAsNull: true,
+      missingPreimageRestoredAsAbsent: true,
       manifestSha256: sha(reviewed),
       changes: reviewed.changes.length,
     });
