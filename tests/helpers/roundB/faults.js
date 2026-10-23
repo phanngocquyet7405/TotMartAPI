@@ -32,6 +32,17 @@ async function main() {
       t.lease.verify(id);
       evidence.resourceId = id;
       evidence.faultAt = Date.now();
+      evidence.deadlineAt = evidence.faultAt + 65000;
+      t.lease.exec(t.client, [
+        'node',
+        '-e',
+        "require('fs').writeFileSync('/fixture/sse-fault-control.json',process.argv[1])",
+        JSON.stringify({
+          run: t.lease.run,
+          faultAt: evidence.faultAt,
+          deadlineAt: evidence.deadlineAt,
+        }),
+      ]);
       try {
         if (name === 'redis-stop-start') t.lease.docker(['stop', '--time', '1', id]);
         else if (name === 'redis-pause-unpause') t.lease.docker(['pause', id]);
@@ -53,12 +64,12 @@ async function main() {
             () => {
               try {
                 return JSON.parse(t.lease.exec(t.client, ['cat', '/fixture/watch-result.json']))
-                  .closed;
+                  .passed;
               } catch {
                 return false;
               }
             },
-            65000,
+            Math.max(1, evidence.deadlineAt - Date.now()),
             'Fault closes SSE',
           );
         evidence.sseClosed = true;

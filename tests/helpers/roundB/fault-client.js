@@ -8,21 +8,60 @@ async function run(command) {
     const f = await purchaseFixture('products');
     const admin = (await F.createUser({ role: 'admin' })).user;
     fs.writeFileSync(file, JSON.stringify({ f, jwt: token(admin), before: await business() }));
-    for (const name of ['watch-ready.json', 'watch-result.json'])
+    for (const name of [
+      'watch-ready.json',
+      'watch-result.json',
+      'sse-fault-control.json',
+      'sse-observer-stop.json',
+    ])
       if (fs.existsSync('/fixture/' + name)) fs.unlinkSync('/fixture/' + name);
     return { armed: true };
   }
   const saved = JSON.parse(fs.readFileSync(file));
   if (command === 'fault-watch') {
-    let state;
+    const { remoteClosure } = require('/fixture/sse-deadline');
+    let state, control;
+    const result = { passed: false, closed: false };
     try {
       state = await stream(saved.jwt);
-      fs.writeFileSync('/fixture/watch-ready.json', JSON.stringify({ opened: true }));
-      await poll(() => state.closed, 60000);
-      fs.writeFileSync('/fixture/watch-result.json', JSON.stringify({ closed: true }));
-      return { closed: true };
+      fs.writeFileSync(
+        '/fixture/watch-ready.json',
+        JSON.stringify({ opened: true, openedAt: state.openedAt }),
+      );
+      await poll(() => fs.existsSync('/fixture/sse-fault-control.json'), 30000);
+      control = JSON.parse(fs.readFileSync('/fixture/sse-fault-control.json'));
+      assert.equal(control.run, process.env.FIXTURE_RUN);
+      assert.equal(control.deadlineAt, control.faultAt + 65000);
+      while (!state.closed && Date.now() <= control.deadlineAt)
+        await new Promise((r) => setTimeout(r, 100));
+      result.passed = remoteClosure(state, control);
+      result.closed = result.passed;
+      Object.assign(result, {
+        ...control,
+        openedAt: state.openedAt,
+        endAt: state.endAt,
+        closeAt: state.closeAt,
+        localDestroyAt: state.localDestroyAt,
+        abortedAt: state.abortedAt,
+        observedAt: Date.now(),
+      });
+      fs.writeFileSync('/fixture/watch-result.json', JSON.stringify(result));
+      // Preserve a failed connection beyond the gate; never turn local teardown into success.
+      while (
+        !result.passed &&
+        !fs.existsSync('/fixture/sse-observer-stop.json') &&
+        Date.now() < control.faultAt + 120000
+      )
+        await new Promise((r) => setTimeout(r, 100));
+      return result;
+    } catch (error) {
+      result.errorType = error.name;
+      throw error;
     } finally {
       state?.destroy();
+      result.localDestroyAt = state?.localDestroyAt;
+      result.finishedAt = Date.now();
+      fs.writeFileSync('/fixture/watch-result.json', JSON.stringify(result));
     }
   }
   if (command === 'fault-observe') {

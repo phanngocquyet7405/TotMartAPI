@@ -3,7 +3,23 @@ const os = require('node:os');
 const path = require('node:path');
 const { Lease, candidate } = require('./image-fixture');
 const certificates = require('./certificates');
-async function topology(phase, { observerSource, failpoints = false, mongoAckProxy = false } = {}) {
+async function topology(
+  phase,
+  {
+    observerSource,
+    proxyObserverSource,
+    notificationSource,
+    failpoints = false,
+    mongoAckProxy = false,
+  } = {},
+) {
+  if (
+    notificationSource &&
+    (!observerSource ||
+      path.resolve(notificationSource) !==
+        path.resolve('src/controllers/notificationController.js'))
+  )
+    throw Error('Unapproved source overlay');
   const lease = new Lease(phase);
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), `totmart-b-${lease.run}-certs-`));
   let cleaned = false;
@@ -112,6 +128,11 @@ async function topology(phase, { observerSource, failpoints = false, mongoAckPro
         NODE_PATH: '/app/node_modules',
         REDIS_URL: `rediss://:${lease.credentials.redisPassword}@redis.totmart.test:6379/0`,
       });
+      if (notificationSource)
+        value.FIXTURE_SSE_SOURCE_SHA256 = require('node:crypto')
+          .createHash('sha256')
+          .update(fs.readFileSync(notificationSource))
+          .digest('hex');
       if (failpoints) value.MONGODB_URI += '&appName=totmart-fixture-' + mode;
       // One-node disposable topology only; directConnection prevents discovery bypassing the wire proxy.
       // Driver/session/transaction timeout and retry options remain the application defaults.
@@ -127,12 +148,18 @@ async function topology(phase, { observerSource, failpoints = false, mongoAckPro
         'sh',
         '-c',
         observerSource
-          ? 'printf \'%s\' "$FIXTURE_CA" > /fixture/ca.pem; while [ ! -f /fixture/mongo-observer.js ]; do sleep 0.1; done; exec node --require /fixture/mongo-observer.js src/server.js'
+          ? 'printf \'%s\' "$FIXTURE_CA" > /fixture/ca.pem; while [ ! -f /fixture/mongo-observer.js ]; do sleep 0.1; done; ' +
+            (notificationSource
+              ? 'while [ ! -f /fixture/notification-controller.js ]; do sleep 0.1; done; '
+              : '') +
+            'exec node --require /fixture/mongo-observer.js src/server.js'
           : 'printf \'%s\' "$FIXTURE_CA" > /fixture/ca.pem; exec node src/server.js',
       ]);
       backends.push(id);
       lease.start(id);
       if (observerSource) lease.copyFile(observerSource, id, '/fixture/mongo-observer.js');
+      if (notificationSource)
+        lease.copyFile(notificationSource, id, '/fixture/notification-controller.js');
       await lease.poll(() => lease.health(id), 60000, `${mode} server.js readiness`);
     }
     const proxyCode = `const fs=require('fs'),https=require('https'),http=require('http');https.createServer({key:fs.readFileSync('/fixture/key.pem'),cert:fs.readFileSync('/fixture/cert.pem')},(req,res)=>{const target=req.headers.host.startsWith('api-prod.')?'production':'staging';const upstream=http.request({hostname:target,port:3001,path:req.url,method:req.method,headers:{...req.headers,'x-forwarded-proto':'https','x-forwarded-for':req.socket.remoteAddress}},r=>{if(req.headers['x-fixture-drop-response']==='1'&&[200,201].includes(r.statusCode)){r.resume();r.on('end',()=>{fs.writeFileSync('/fixture/drop-proof.json',JSON.stringify({path:req.url,status:r.statusCode,upstreamEndedAt:Date.now()}));res.destroy()});return}res.writeHead(r.statusCode,r.headers);r.pipe(res)});upstream.on('error',()=>{if(!res.headersSent)res.writeHead(502,{'Content-Type':'application/json'});res.end(JSON.stringify({success:false,status:'upstream_unavailable'}))});req.pipe(upstream);res.on('close',()=>upstream.destroy())}).listen(8443,'0.0.0.0');`;
@@ -150,7 +177,10 @@ async function topology(phase, { observerSource, failpoints = false, mongoAckPro
       [
         'sh',
         '-c',
-        'printf \'%s\' "$FIXTURE_KEY" > /fixture/key.pem; chmod 600 /fixture/key.pem; printf \'%s\' "$FIXTURE_CERT" > /fixture/cert.pem; exec node -e "$FIXTURE_PROXY_CODE"',
+        'printf \'%s\' "$FIXTURE_KEY" > /fixture/key.pem; chmod 600 /fixture/key.pem; printf \'%s\' "$FIXTURE_CERT" > /fixture/cert.pem; ' +
+          (proxyObserverSource
+            ? 'while [ ! -f /fixture/sse-observer.js ]; do sleep 0.1; done; exec node --require /fixture/sse-observer.js -e "$FIXTURE_PROXY_CODE"'
+            : 'exec node -e "$FIXTURE_PROXY_CODE"'),
       ],
       {
         FIXTURE_KEY: certs['proxy.key'],
@@ -159,6 +189,7 @@ async function topology(phase, { observerSource, failpoints = false, mongoAckPro
       },
     );
     lease.start(proxy);
+    if (proxyObserverSource) lease.copyFile(proxyObserverSource, proxy, '/fixture/sse-observer.js');
     const client = lease.create(
       'client',
       candidate.image.id,
@@ -193,6 +224,7 @@ async function topology(phase, { observerSource, failpoints = false, mongoAckPro
       ['tests/helpers/roundB/adapter.js', 'adapter.js'],
       ['tests/helpers/roundB/client.js', 'client.js'],
       ['tests/helpers/roundB/fault-client.js', 'fault-client.js'],
+      ['tests/helpers/roundC2/sse-deadline.js', 'sse-deadline.js'],
       ['artifacts/round-b/b06-image-source.txt', 'b06.js'],
       ['artifacts/round-b/factories-image.txt', 'factories.js'],
     ]) {

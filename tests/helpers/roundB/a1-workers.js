@@ -4,7 +4,9 @@ const assert = require('node:assert/strict');
 const topology = require('./topology');
 const { candidate } = require('./image-fixture');
 const { inspectPublishedLogs } = require('../roundA/disclosure-guard');
-const root = JSON.parse(fs.readFileSync('artifacts/round-b/a1/current.json')).directory;
+const context = require('./close-context');
+const root =
+  context.directory() || JSON.parse(fs.readFileSync('artifacts/round-b/a1/current.json')).directory;
 const directory = root + '/workers-' + crypto.randomUUID();
 fs.mkdirSync(directory, { recursive: true });
 const observer = directory + '/preload.js.txt';
@@ -48,6 +50,8 @@ async function main() {
         observerSource: observer,
       });
       row.run = t.lease.run;
+      if (context.directory())
+        row.runtime = t.backends.map((id) => require('./close-runtime-check').check(t.lease, id));
       report.resources.push(...t.lease.resources);
       t.lease.copyFile(
         'tests/helpers/roundB/a1-worker-client.js',

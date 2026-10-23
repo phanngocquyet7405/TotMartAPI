@@ -242,16 +242,28 @@ async function stream(jwt) {
         reject(Error('SSE rejected'));
         return;
       }
+      state.openedAt = Date.now();
       res.on('data', (chunk) => {
         if (chunk.toString().includes(': ping')) state.heartbeats++;
       });
       res.on('end', () => {
+        state.endAt = Date.now();
         state.closed = true;
       });
       res.on('close', () => {
+        state.closeAt = Date.now();
         state.closed = true;
       });
-      state.destroy = () => req.destroy();
+      res.on('aborted', () => {
+        state.abortedAt = Date.now();
+      });
+      res.on('error', () => {
+        state.errorAt = Date.now();
+      });
+      state.destroy = () => {
+        state.localDestroyAt = Date.now();
+        req.destroy();
+      };
       resolve();
     });
   });
@@ -526,11 +538,13 @@ async function main() {
       assert(command in commands);
       result = await commands[command]();
     }
+    if (!result || result.passed === false) process.exitCode = 1;
     console.log(
       'ROUND_B_RESULT=' +
         JSON.stringify({ command, passed: true, ...result, requests: A.observations }),
     );
   } catch (error) {
+    process.exitCode = 1;
     console.log(
       'ROUND_B_RESULT=' +
         JSON.stringify({
