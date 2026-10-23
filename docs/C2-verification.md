@@ -1,3 +1,48 @@
+# C2 — hiện hành 23/10/2026: sửa fixture để local và CI chạy cùng điều kiện
+
+Bản sửa test/harness đã qua regression local; **chưa có CI remote trên commit chứa bản sửa, chưa sinh seal mới**. HEAD giữ `3589182f6df967fab57fe766a7a7ae9df301dd31`; các thay đổi hiện hành chưa commit. Không sửa `src/`, FE, script migration nghiệp vụ, dependency hoặc baseline/policy. Không push/deploy, A2 hay Phase10. Seal C2 trước là bằng chứng lịch sử của snapshot cũ, không chứng nhận working tree vừa sửa.
+
+## Vì sao 801 local khác 827 trên GitHub Actions
+
+CI run `39886751624` chạy B01 runner: 827 pass/2 fail, không skip. `test-output.log` local chạy `npm test`: 801 pass/9 fail/19 skip. Chênh 26 pass gồm 19 test Redis bị skip và 7 ca B07 lỗi hoặc bị chặn do thiếu runner Redis fixture. Hai lỗi migration xuất hiện ở cả hai nơi. Không dùng tổng pass để xếp chất lượng giữa các entrypoint.
+
+Phân loại: (1) migration crash timeout là **harness identity**: parent không truyền C1_DIRECTORY, child tạo UUID khác rồi không vượt ownership check; parent không xử lý early exit. Rollback CAS sau đó là lỗi dây chuyền do bước apply trước chưa hoàn thành, không có bằng chứng migration ghi sai. (2) B07 thiếu TEST_REDIS_URL là **prerequisite môi trường do entrypoint**, còn validate sau connect và cleanup ngoài try/finally là **harness**; sáu ca sau halted không phải sáu assertion nghiệp vụ độc lập. (3) Lượt unit nháp đầu có 10 pass/2 fail vì matcher không được Jest hiện tại hỗ trợ; đã đổi sang hai assertion tương đương về số lần và đối số trước final snapshot; failed JSON vẫn giữ.
+
+## Sửa tối thiểu
+
+- `tests/helpers/roundC1/crash-barrier.js`: fork chỉ child do helper tạo, truyền C1_DIRECTORY của parent; xử lý early close/error ngay, giữ barrier 30s; kill đúng child handle và chờ close trước kết quả thành công. Cleanup không đóng được là fail riêng.
+- `tests/commerceMigrationC1.integration.test.js`: dùng helper trên; giữ nguyên mọi assertion transaction/crash, rerun, CAS, physical preimage và nghĩa vụ được bảo vệ.
+- `tests/helpers/redis-bystander.js`: từ chối URL thiếu/không phải loopback rõ port hoặc cùng outage fixture trước khi dựng client; connect/work đều trong try/finally. Không fallback Redis mặc định.
+- `tests/operationsB07.integration.test.js`: dùng wrapper trên, giữ mọi assertion outage/no-late-write/recovery và PONG của fixture khác.
+- `tests/ciFixtureLifecycle.test.js`: 12 test control-flow unit bằng fake child/client, không được tính là chứng minh hạ tầng thật.
+- `tests/helpers/roundC2/run.js`: thêm nhóm kiểm chứng CI không có C1_DIRECTORY kế thừa và giữ inventory thư mục C1 mới. Full runner vẫn cấp Mongo/Redis dùng riêng; không bỏ qua test.
+
+## Evidence và exit code
+
+Run mới: `artifacts/round-c2/72345250-8884-47c2-973f-ac566b5e2712/`. [Kết quả](../artifacts/round-c2/72345250-8884-47c2-973f-ac566b5e2712/fix-result.json), [snapshot](../artifacts/round-c2/72345250-8884-47c2-973f-ac566b5e2712/fix-snapshot.json), [audit](../artifacts/round-c2/72345250-8884-47c2-973f-ac566b5e2712/fix-audit.json).
+
+- Unit cuối: 12/12, exit 0; lượt nháp matcher exit 1 được giữ riêng.
+- Nhóm CI harness với Mongo thật và C1_DIRECTORY bị scrub khỏi env runner: **17/17, 0 fail/skip, exit 0**; gồm 5 ca migration thật và 12 unit lifecycle. Ca crash đạt barrier, child đã đóng; rollback CAS/physical preimage và writer preservation đều đạt.
+- Lint / format:check / validate:api: **0/0/0**. Lint ghi 18 debt errors, violations=[]; không đổi baseline. Không chạy lại lint:all riêng ở lượt này.
+- B01 HTTP: **16/16**, Jest/runner/cleanup **0/0/0**; `http-2vGNFb`.
+- B01 full: **841/841, 81 canonical suite, 0 fail/skip**, Jest/runner/cleanup/coverage **0/0/0/0**; `all-Pvjhdh`. Số test tăng 12 do regression lifecycle mới. Cả chín scenario B07 đã chạy với Redis fixture thật.
+- Coverage gate: **8 module, 0 failure**; lines 78.98%, branches 70.90%, statements 76.71%, functions 75.44%. Source-bound policy không đổi.
+- Snapshot executable không thêm/mất/đổi sau run; SHA256 snapshot `bb97b636a733366de99922b3a825362389bbb83d757120c69710463e17ce9143`. Không build lại hoặc sửa image/runtime source.
+
+## Cleanup, archive và giới hạn nghiệm thu
+
+Audit chỉ đọc: **11 exact container IDs, 0 network mới và 6 volume names absent; 18 port loopback ECONNREFUSED**. Gồm tài nguyên của nhóm migration riêng và full B01. Bốn container cùng mọi image reference lúc entry được giữ nguyên; hai image C2 giữ lại. Không có cleanup mutation bổ sung, prune/FLUSH/name-kill hoặc tác động tài nguyên dùng chung.
+
+Raw archive B01 `all-Pvjhdh/b07-fixture.archive.gz`: 64730 byte, SHA256 `d0e6431d7470cb6a5c8300f6dae3629db208dcedf42c9d80ab557b65b6e1f71c`. Verifier B01 và audit đọc lại bytes, restore chain/runId/empty destination/count/index/relations/session replay/RPO0; không chỉ tin valid=true. Không phải PITR/offsite hay nghiệm thu production.
+
+[Full files và ba nhóm diff hiện hành](../artifacts/round-c2/72345250-8884-47c2-973f-ac566b5e2712/export-current.json). Hành vi BE rỗng; các sửa test/harness/docs thuộc tooling. Lịch sử fail và seal/manifests cũ giữ nguyên checksum. Không chạy lại strict/Phase5/fault/worker hoặc sinh seal mới trong lượt sửa này; không tự mở rộng compatibility để nhận thay đổi shared C1 harness. Cần owner review/commit/push và CI xanh trên commit đó trước kết luận bàn giao cuối; nếu yêu cầu seal mới phải nghiệm thu chuỗi liên kết cho snapshot mới bằng verifier. P2 B-A1-AV01 vẫn mở đúng quyết định owner.
+
+Lệnh nghiệm thu đầy đủ phải là `npm run test:b01:http` rồi `npm run test:b01`; không tự gán URL DB/Redis có sẵn để làm npm test xanh. Kết quả CI cũ vẫn FAIL; bản sửa chưa được commit hoặc chạy remote.
+
+Production: cần nghiệm thu riêng. Dừng sau báo cáo, chờ owner review.
+
+## Lịch sử — giữ nguyên hồ sơ C2 trước bản sửa CI fixture
+
 # C2 — hiện hành 23/10/2026: nghiệm thu local trên snapshot mới
 
 Các gate local và preflight đã đạt trên snapshot **`964baa25ee69e7f38e7e0a7c6c5125ce9d8440929ef806acfd615cc5506ae21f`**. Kết quả xác nhận cuối do verifier xuất tại [verification.json](../artifacts/round-c2/edf18918-a781-4b78-bf44-22412d2a9390/verification.json), [seal command](../artifacts/round-c2/edf18918-a781-4b78-bf44-22412d2a9390/seal-latest.txt) và [check command](../artifacts/round-c2/edf18918-a781-4b78-bf44-22412d2a9390/check-latest.txt). **Bàn giao FE ở mức local có hiệu lực khi seal và check đều exit 0 trên manifest này.** CI remote còn chờ owner review và tự commit; production cần nghiệm thu riêng. Không coi test BE là browser E2E hoặc quyền deploy.

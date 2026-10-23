@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
-const { fork } = require('node:child_process');
-const { mongo, write, sha, run } = require('./helpers/roundC1/context');
+const { mongo, write, sha, run, root } = require('./helpers/roundC1/context');
+const { crashMigrationChild } = require('./helpers/roundC1/crash-barrier');
 const script = require('../scripts/migrate-commerce-integrity');
 const { BSON } = mongoose.mongo;
 let fixture, db, original, manifest, ids, sourceDb, sourceSnapshot;
@@ -148,34 +148,11 @@ test('C1 refuses legacy and malformed manifests before any write', async () => {
 });
 test('C1 actual child crash after first transactional write leaves clone unchanged; rerun applies', async () => {
   const protectedBefore = await hash(protectedNames);
-  const child = fork(require.resolve('./helpers/roundC1/migration-crash'), [], {
-    env: { ...process.env, C1_MONGO_URI: fixture.uri(db.databaseName) },
-    stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
-    windowsHide: true,
+  const crash = await crashMigrationChild({
+    directory: root,
+    uri: fixture.uri(db.databaseName),
   });
-  const pid = child.pid;
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      child.kill();
-      reject(new Error('C1 crash barrier deadline'));
-    }, 30000);
-    child.once('error', reject);
-    child.once('message', async (message) => {
-      if (message.event !== 'first-write-held') return;
-      clearTimeout(timer);
-      child.once('exit', (code, signal) => {
-        write('migration-crash.json', {
-          pid,
-          exitCode: code,
-          signal,
-          barrier: message.event,
-          exactChildHandle: true,
-        });
-        resolve();
-      });
-      child.kill('SIGKILL');
-    });
-  });
+  write('migration-crash.json', crash);
   expect(await hash(['products', 'boxes', ...protectedNames])).toBe(original);
   await script.apply(manifest);
   expect((await script.plan()).changes).toHaveLength(0);

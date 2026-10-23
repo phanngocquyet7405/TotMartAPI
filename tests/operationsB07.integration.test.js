@@ -8,6 +8,7 @@ const mongoose = require('mongoose');
 require('../src/app');
 const { disposableMongo } = require('./helpers/disposableMongo');
 const { disposableRedis } = require('./helpers/disposableRedis');
+const { withRedisBystander } = require('./helpers/redis-bystander');
 const {
   createUser,
   createBrand,
@@ -434,15 +435,8 @@ drill(
 drill(
   'B07 failed Redis-backed mutations have no late business write after stop/pause recovery',
   async () => {
-    const bystander = require('redis').createClient({
-      url: process.env.TEST_REDIS_URL,
-      socket: { connectTimeout: 2000, reconnectStrategy: false },
-    });
-    bystander.on('error', () => {});
-    await bystander.connect();
-    expect(new URL(process.env.TEST_REDIS_URL).port).not.toBe(new URL(redis.url).port);
     const observations = [];
-    try {
+    await withRedisBystander(process.env.TEST_REDIS_URL, redis.url, async (bystander) => {
       for (const fault of ['pause', 'stop']) {
         const before = await business(),
           t = Date.now();
@@ -475,9 +469,7 @@ drill(
           noLateBusinessWrite: true,
         });
       }
-    } finally {
-      if (bystander.isOpen) bystander.destroy();
-    }
+    });
     record('redis-mutation-outage', {
       observations,
       otherOwnedFixturePong: true,

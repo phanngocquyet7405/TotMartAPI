@@ -155,6 +155,18 @@ if (stepName === 'entry') {
     phase5: ['node', ['tests/helpers/roundB/phase5.js']],
     faults: ['node', ['tests/helpers/roundB/close-faults.js']],
     'mongo-sse': ['node', ['tests/helpers/roundC2/mongo-sse.js']],
+    'ci-harness-tests': [
+      'node',
+      [
+        '--experimental-vm-modules',
+        'node_modules/jest/bin/jest.js',
+        '--runInBand',
+        '--runTestsByPath',
+        'tests/ciFixtureLifecycle.test.js',
+        'tests/commerceMigrationC1.integration.test.js',
+      ],
+    ],
+    ops: ['npm', ['run', 'test:b07']],
     'sse-tests': [
       'node',
       [
@@ -230,6 +242,7 @@ if (stepName === 'entry') {
     fs.writeFileSync(c1Directory + '/c2-owner.json', JSON.stringify({ root, step: directory }));
   }
   const before = fs.existsSync('artifacts/b01') ? fs.readdirSync('artifacts/b01') : [];
+  const beforeC1 = fs.existsSync('artifacts/round-c1') ? fs.readdirSync('artifacts/round-c1') : [];
   let discovery;
   if (['http', 'full'].includes(stepName)) {
     const { listTests, assertCanonicalDiscovery } = require('./jest-discovery');
@@ -261,7 +274,7 @@ if (stepName === 'entry') {
     start = Date.now();
   const beforeManifest = executable(manifest());
   if (stepName === 'sse-tests') env.B07_RESOURCE_FILE = path.join(directory, 'sse-resources.json');
-  if (['verifier-tests', 'sse-tests'].includes(stepName))
+  if (['verifier-tests', 'sse-tests', 'ci-harness-tests'].includes(stepName))
     args.push('--json', '--outputFile', path.join(directory, 'unit-jest.json'));
   let child;
   try {
@@ -347,7 +360,7 @@ if (stepName === 'entry') {
       signal,
       elapsedMs: Date.now() - start,
       outputBytes: bytes,
-      ...(['verifier-tests', 'sse-tests'].includes(stepName) &&
+      ...(['verifier-tests', 'sse-tests', 'ci-harness-tests'].includes(stepName) &&
       fs.existsSync(directory + '/unit-jest.json')
         ? {
             unit: ((result) => ({
@@ -359,6 +372,10 @@ if (stepName === 'entry') {
           }
         : {}),
       c1Directory,
+      generatedC1Directories: (fs.existsSync('artifacts/round-c1')
+        ? fs.readdirSync('artifacts/round-c1')
+        : []
+      ).filter((name) => !beforeC1.includes(name)),
       b01Directories,
       sourceManifest: manifest(),
       beforeManifest,
