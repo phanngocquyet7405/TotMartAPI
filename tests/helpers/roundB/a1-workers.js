@@ -38,7 +38,6 @@ const report = {
   ],
   cleanupExitCode: 0,
 };
-const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function main() {
   let t;
   try {
@@ -131,10 +130,20 @@ async function main() {
         row.steps.push({ action: 'restart-ready', at: Date.now() });
       };
       const waitUntil = async (at) => {
-        while (Date.now() < at) {
-          console.log(JSON.stringify({ kind, naturalWaitRemainingMs: at - Date.now() }));
-          await delay(Math.min(10000, at - Date.now()));
-        }
+        const observation = JSON.parse(
+          t.lease.exec(
+            t.client,
+            [
+              'node',
+              '-e',
+              "const at=Number(process.argv[1]);require('/fixture/sse-deadline').waitUntil(at).then(observedAt=>console.log(JSON.stringify({at,observedAt})))",
+              String(at),
+            ],
+            90000,
+          ),
+        );
+        assert(observation.observedAt >= at, 'Fixture lease/backoff has actually elapsed');
+        row.steps.push({ action: 'fixture-wait-until', clock: 'fixture-client', ...observation });
       };
       if (kind === 'security') {
         t.lease.docker([

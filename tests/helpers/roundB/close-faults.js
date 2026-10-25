@@ -84,14 +84,22 @@ async function main() {
         );
         const id = name.startsWith('redis') ? t.redis : t.mongo;
         row.targetId = t.lease.verify(id).id;
-        row.faultAt = Date.now();
-        row.deadlineAt = row.faultAt + 65000;
-        t.lease.exec(t.client, [
-          'node',
-          '-e',
-          "require('fs').writeFileSync('/fixture/sse-fault-control.json',process.argv[1])",
-          JSON.stringify({ run: t.lease.run, faultAt: row.faultAt, deadlineAt: row.deadlineAt }),
-        ]);
+        // Windows and the Docker VM need not share a wall clock. Stamp control
+        // in the same fixture process environment as the watcher event times.
+        const hostStarted = performance.now();
+        row.hostFaultAt = Date.now();
+        const control = JSON.parse(
+          t.lease.exec(t.client, [
+            'node',
+            '-e',
+            "const value=require('/fixture/sse-deadline').faultControl(process.env.FIXTURE_RUN);require('fs').writeFileSync('/fixture/sse-fault-control.json',JSON.stringify(value));console.log(JSON.stringify(value))",
+          ]),
+        );
+        assert.equal(control.run, t.lease.run);
+        row.clock = 'fixture-client';
+        row.faultAt = control.faultAt;
+        row.deadlineAt = control.deadlineAt;
+        row.hostControlReceivedAt = Date.now();
         try {
           if (name === 'redis-stop-start') t.lease.docker(['stop', '--time', '1', id]);
           else if (name === 'redis-pause-unpause') t.lease.docker(['pause', id]);
@@ -111,13 +119,15 @@ async function main() {
           await t.lease.poll(
             () => {
               try {
-                return JSON.parse(t.lease.exec(t.client, ['cat', '/fixture/watch-result.json']))
-                  .passed;
+                row.watcher = JSON.parse(
+                  t.lease.exec(t.client, ['cat', '/fixture/watch-result.json']),
+                );
+                return row.watcher.passed;
               } catch {
                 return false;
               }
             },
-            Math.max(1, row.deadlineAt - Date.now()),
+            Math.max(1, 65000 - (performance.now() - hostStarted)),
             'SSE closure',
           );
           row.sseClosed = true;

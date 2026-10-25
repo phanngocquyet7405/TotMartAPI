@@ -1,3 +1,21 @@
+// Invoke inside the fixture: stream events and the fault control share one clock.
+function faultControl(run, clock = Date.now) {
+  const faultAt = clock();
+  return { run, faultAt, deadlineAt: faultAt + 65000 };
+}
+// Lease/backoff timestamps originate in the Docker fixture, never on the host.
+async function waitUntil(
+  at,
+  clock = Date.now,
+  sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+) {
+  let now = clock();
+  while (now < at) {
+    await sleep(Math.min(10000, at - now));
+    now = clock();
+  }
+  return now;
+}
 function remoteClosure(state, control) {
   return (
     Number.isFinite(control?.faultAt) &&
@@ -23,4 +41,4 @@ function boundedReadFailure(start, end) {
     end.at - start.at < 7500
   );
 }
-module.exports = { remoteClosure, watcherExit, boundedReadFailure };
+module.exports = { faultControl, waitUntil, remoteClosure, watcherExit, boundedReadFailure };
