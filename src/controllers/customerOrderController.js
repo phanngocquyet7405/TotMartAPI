@@ -11,7 +11,7 @@ exports.list = async (req, res, next) => {
       1,
       Math.min(50, parseInt(req.query.limit, 10) || 10),
     );
-    const filter = { userId: req.userId };
+    const filter = { userId: req.userId, $nor: [{ paymentMethod: 'online', paymentStatus: { $ne: 'paid' } }] };
     const [data, total] = await Promise.all([
       Order.find(filter)
         .select(fields)
@@ -39,7 +39,7 @@ exports.detail = async (req, res, next) => {
     })
       .select(fields)
       .lean();
-    if (!data)
+    if (!data || (data.paymentMethod === 'online' && data.paymentStatus !== 'paid'))
       return res
         .status(404)
         .json({ success: false, message: "Order not found" });

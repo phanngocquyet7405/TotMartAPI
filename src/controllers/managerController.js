@@ -161,7 +161,7 @@ module.exports = {
   },
   async orderDetail(req, res) {
     const order = await Order.findOne({ _id: req.params.id, merchantId: req.userId });
-    if (!order) catalog.fail('Đơn không tồn tại trong cửa hàng', 404);
+    if (!order || (order.paymentMethod === 'online' && order.paymentStatus !== 'paid')) catalog.fail('Đơn không tồn tại trong cửa hàng', 404);
     res.json({ success: true, data: presentOrder(order) });
   },
   async orderStatus(req, res) {

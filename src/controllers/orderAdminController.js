@@ -11,7 +11,9 @@ const orderAdminController = {
     try {
       const { page = 1, limit = 20, status, paymentMethod, search } = req.query;
 
-      const filter = {};
+      const filter = {
+        $nor: [{ paymentMethod: 'online', paymentStatus: { $ne: 'paid' } }],
+      };
       if (status) filter.status = status;
       if (paymentMethod) filter.paymentMethod = paymentMethod;
       if (search) {
@@ -58,7 +60,7 @@ const orderAdminController = {
       const order = await Order.findById(req.params._id)
         .populate("userId", "name email phone")
         .populate("products.brand", "name");
-      if (!order) {
+      if (!order || (order.paymentMethod === "online" && order.paymentStatus !== "paid")) {
         const err = new Error("Đơn hàng không tồn tại");
         err.statusCode = 404;
         throw err;

@@ -22,7 +22,11 @@ async function expireCheckout(code, now) {
       }
       if (checkout.subscriptionId) await Subscription.updateOne({ _id: checkout.subscriptionId, status: 'pending_payment' }, { status: 'cancelled', nextDeliveries: null }, { session });
       await queueUnpaidRefund(checkout, session, 'Hết hạn checkout đã nhận tiền thiếu');
-      await releaseCoupon(checkout, session); checkout.state = 'cancelled'; await checkout.save({ session });
+      await releaseCoupon(checkout, session, 'expired');
+      if (checkout.state !== 'expired') {
+        checkout.state = 'expired';
+        await checkout.save({ session });
+      }
     });
   } finally { await session.endSession(); }
 }
