@@ -10,6 +10,9 @@ const {
 } = require("./helpers/factories");
 const Order = require("../src/models/Order");
 const Product = require("../src/models/Product");
+const Checkout = require("../src/models/Checkout");
+const NotificationOutbox = require("../src/models/NotificationOutbox");
+const ReceiptRefund = require("../src/models/ReceiptRefund");
 
 beforeAll(async () => {
   await connect();
@@ -163,7 +166,11 @@ describe("POST /api/checkout/sepay-webhook", () => {
     expect(res.body.data.remainingAmount).toBe(10000);
 
     const order = await Order.findOne({ paymentCode });
-    expect(order.paymentStatus).toBe("pending");
+    expect(order).toBeNull();
+
+    const checkout = await Checkout.findOne({ paymentCode });
+    expect(checkout.state).toBe("pending");
+    expect(checkout.receivedAmount).toBe(grandTotalAmount - 10000);
 
     const updatedProduct = await Product.findById(product._id);
     expect(updatedProduct.stock).toBe(5);
@@ -186,7 +193,7 @@ describe("POST /api/checkout/sepay-webhook", () => {
 
     expect(res.status).toBe(200);
     const order = await Order.findOne({ paymentCode });
-    expect(order.paymentStatus).toBe("pending");
+    expect(order).toBeNull();
   });
 
   test("a fully paid order can be cancelled and is flagged for refund", async () => {
@@ -222,7 +229,7 @@ describe("POST /api/checkout/sepay-webhook", () => {
     expect(cancelled.refundAmount).toBe(order.totalAmount);
   });
   test("marks the order paid but flags it if the user transfers more than the grandTotalAmount", async () => {
-    const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({
+    const { paymentCode, grandTotalAmount } = await placeOnlineOrder({
       stock: 5,
       quantity: 1,
     });
@@ -276,5 +283,47 @@ describe("POST /api/checkout/sepay-webhook", () => {
     const order = await Order.findOne({ paymentCode });
     expect(order).not.toBeNull();
     expect(order.paymentStatus).toBe("paid");
+
+    const outbox = await NotificationOutbox.findOne({ orderId: order._id, type: "payment_received" });
+    expect(outbox).not.toBeNull();
+  });
+
+  test("an expired session receiving payment does NOT create an order and queues an auto-refund", async () => {
+    const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({
+      stock: 5,
+      quantity: 1,
+    });
+
+    // Backdate expiresAt to simulate expired session
+    await Checkout.updateOne(
+      { paymentCode },
+      { $set: { expiresAt: new Date(Date.now() - 60000) } },
+    );
+
+    const res = await request(app)
+      .post("/api/checkout/sepay-webhook")
+      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .send(
+        webhookPayload({
+          paymentCode,
+          amount: grandTotalAmount,
+          referenceCode: "REF-EXPIRED-PAY",
+        }),
+      );
+
+    expect(res.status).toBe(200);
+
+    // No order is created
+    const order = await Order.findOne({ paymentCode });
+    expect(order).toBeNull();
+
+    // Stock is untouched
+    const updatedProduct = await Product.findById(product._id);
+    expect(updatedProduct.stock).toBe(5);
+
+    // Refund is queued in ReceiptRefund
+    const refund = await ReceiptRefund.findOne({ amount: grandTotalAmount, purpose: "receipt" });
+    expect(refund).not.toBeNull();
+    expect(refund.status).toBe("pending");
   });
 });
