@@ -11,6 +11,8 @@ const {
 } = require("../middleware/rateLimiter");
 const {
   checkoutSchema,
+  createSessionSchema,
+  sessionIdParamSchema,
   sepayWebhookSchema,
   idParamSchema,
   paymentCodeParamSchema,
@@ -20,6 +22,31 @@ router.post("/quote", authMiddleware.authenticate, validationHandler.validate(qu
 router.post("/resolve-inventory/:_id", authMiddleware.authenticate, validationHandler.validate(idParamSchema, "params"), authMiddleware.requireAdmin, checkOutController.resolveInventoryHold);
 router.get("/payment-events", authMiddleware.authenticate, authMiddleware.requireAdmin, checkOutController.listPaymentEvents);
 
+// ==== Checkout Sessions (Online SePay QR) ====
+router.post(
+  "/sessions",
+  checkoutLimiter,
+  authMiddleware.authenticate,
+  authMiddleware.customerCheckoutMiddleware,
+  validationHandler.validate(createSessionSchema, "body"),
+  (req, res, next) => checkOutController.createSession(req, res, next),
+);
+
+router.get(
+  "/sessions/:id",
+  authMiddleware.authenticate,
+  validationHandler.validate(sessionIdParamSchema, "params"),
+  (req, res, next) => checkOutController.getSession(req, res, next),
+);
+
+router.post(
+  "/sessions/:id/cancel",
+  authMiddleware.authenticate,
+  validationHandler.validate(sessionIdParamSchema, "params"),
+  validationHandler.validate(cancelSchema),
+  (req, res, next) => checkOutController.cancelSession(req, res, next),
+);
+
 // ==== User đặt hàng (COD hoặc online) ====
 router.post(
   "/check-out",
@@ -27,7 +54,7 @@ router.post(
   authMiddleware.authenticate,
   authMiddleware.customerCheckoutMiddleware,
   validationHandler.validate(checkoutSchema, "body"),
-  checkOutController.checkOut,
+  (req, res, next) => checkOutController.checkOut(req, res, next),
 );
 
 // ==== User: polling trạng thái thanh toán ở màn QR SePay ====
@@ -35,7 +62,7 @@ router.get(
   "/order-status/:paymentCode",
   authMiddleware.authenticate,
   validationHandler.validate(paymentCodeParamSchema, "params"),
-  checkOutController.getOrderStatus,
+  (req, res, next) => checkOutController.getOrderStatus(req, res, next),
 );
 
 router.post(
@@ -43,7 +70,16 @@ router.post(
   webhookLimiter,
   sepayAuth.verifyApiKey,
   validationHandler.validate(sepayWebhookSchema, "body"),
-  checkOutController.sepayWebhook,
+  (req, res, next) => checkOutController.sepayWebhook(req, res, next),
+);
+
+// ==== User huỷ phiên thanh toán online chưa hoàn tất (legacy path) ====
+router.post(
+  "/cancel-session/:paymentCode",
+  authMiddleware.authenticate,
+  validationHandler.validate(paymentCodeParamSchema, "params"),
+  validationHandler.validate(cancelSchema),
+  (req, res, next) => checkOutController.cancelSession(req, res, next),
 );
 
 // ==== User huỷ đơn của mình / admin huỷ bất kỳ đơn nào (check quyền trong controller) ====
@@ -52,7 +88,7 @@ router.post(
   authMiddleware.authenticate,
   validationHandler.validate(idParamSchema, "params"),
   validationHandler.validate(cancelSchema),
-  checkOutController.cancelOrder,
+  (req, res, next) => checkOutController.cancelOrder(req, res, next),
 );
 
 // ==== Admin xác nhận đơn COD trước khi giao ====
@@ -61,7 +97,7 @@ router.post(
   authMiddleware.authenticate,
   validationHandler.validate(idParamSchema, "params"),
   authMiddleware.requireAdmin,
-  checkOutController.confirmCodOrder,
+  (req, res, next) => checkOutController.confirmCodOrder(req, res, next),
 );
 
 // ==== Admin/shipper xác nhận đã giao và đã thu tiền COD ====
@@ -70,7 +106,7 @@ router.post(
   authMiddleware.authenticate,
   validationHandler.validate(idParamSchema, "params"),
   authMiddleware.requireAdmin,
-  checkOutController.markCodDelivered,
+  (req, res, next) => checkOutController.markCodDelivered(req, res, next),
 );
 
 // ==== Admin: danh sách đơn đang chờ hoàn tiền ====
@@ -78,7 +114,7 @@ router.get(
   "/pending-refunds",
   authMiddleware.authenticate,
   authMiddleware.requireAdmin,
-  checkOutController.getPendingRefunds,
+  (req, res, next) => checkOutController.getPendingRefunds(req, res, next),
 );
 
 // ==== Admin: đánh dấu đã hoàn tiền xong ====
@@ -88,7 +124,7 @@ router.post(
   validationHandler.validate(idParamSchema, "params"),
   authMiddleware.requireAdmin,
   validationHandler.validate(refundSchema),
-  checkOutController.completeRefund,
+  (req, res, next) => checkOutController.completeRefund(req, res, next),
 );
 
 module.exports = router;

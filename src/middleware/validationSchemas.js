@@ -291,6 +291,19 @@ const subscribeToTemplateSchema = joi.object({
     .required(),
 });
 
+const createSessionSchema = joi.object({
+  addressHash: joi.string().hex().length(64).optional(),
+  addressId: joi.string().hex().length(24).required(),
+  paymentMethod: joi.string().valid("online").default("online").optional(),
+  note: joi.string().max(500).allow("").optional(),
+  quoteFingerprint: joi.string().hex().length(64).optional(),
+  couponCode: joi.string().trim().uppercase().min(3).max(30).optional(),
+});
+
+const sessionIdParamSchema = joi.object({
+  id: joi.string().trim().min(1).max(100).required(),
+});
+
 const checkoutSchema = joi.object({
   addressHash: joi.string().hex().length(64).optional(),
   addressId: joi.string().hex().length(24).required(),
@@ -406,6 +419,8 @@ module.exports = { adjustStockSchema, subscriptionCartSchema, quoteSchema, refun
   updateSubscriptionTemplateSchema,
   subscribeToTemplateSchema,
   checkoutSchema,
+  createSessionSchema,
+  sessionIdParamSchema,
   sepayWebhookSchema,
   syncCartSchema,
   addToCartSchema,

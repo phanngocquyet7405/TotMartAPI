@@ -147,6 +147,7 @@ function resolveEnvironment(env) {
     },
     email: { apiKey: text(env, 'BREVO_API_KEY'), from: text(env, 'FROM_EMAIL') },
     orderExpiryHours: number(env, 'ORDER_EXPIRY_HOURS', 24, Number.MIN_VALUE, 2400000000),
+    checkoutSessionExpiryMinutes: number(env, 'CHECKOUT_SESSION_EXPIRY_MINUTES', 15, 5, 60),
     bcryptCost: number(env, 'BCRYPT_COST', 12, 10, 15),
     logLevel: text(env, 'LOG_LEVEL', nodeEnv === 'production' ? 'info' : 'debug'),
     provided: Object.fromEntries(

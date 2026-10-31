@@ -1,19 +1,17 @@
 const attempts = require('../services/checkoutAttemptService');
 const reconciliation = require('../services/paymentReconciliationService');
-const { deliverySnapshot } = require("../services/deliverySnapshot");
 const mongoose = require("mongoose");
 const crypto = require("crypto");
 const Order = require("../models/Order");
 const Cart = require("../models/Cart");
 const User = require("../models/User");
 const Checkout = require("../models/Checkout");
+const Coupon = require("../models/Coupon");
 const PaymentEvent = require("../models/PaymentEvent");
-const Subscription = require("../models/UserSubscription");
 const { buildQuote, allocate, fail } = require("../services/pricingService");
 const {
   deductStock,
   restoreStock,
-  reserveOrder,
 } = require("../services/inventoryService");
 const {
   requestHash,
@@ -24,24 +22,81 @@ const {
   qrUrl,
 } = require("../services/checkoutLifecycle");
 const { enqueue, drain } = require("../jobs/notificationOutboxScheduler");
-const { activateSubscription } = require("../services/subscriptionService");
 const config = require("../config/environment");
 const logger = require("../utils/logger");
 
 const requestKey = require('../utils/idempotencyKey');
 const flush = () =>
   drain().catch((err) => logger.error({ err }, "Outbox delivery deferred"));
+
+/**
+ * Build the per-merchant order groups from a quote.
+ * Used by COD checkout (to create Orders immediately) and stored in the
+ * Checkout snapshot for online (Orders created later by settle()).
+ */
+function buildOrderGroups(quote, shippingAddress, user, paymentMethod, note, code) {
+  const grouped = new Map();
+  for (const p of quote.products) {
+    const id = String(p.merchantId);
+    if (!grouped.has(id)) grouped.set(id, []);
+    grouped.get(id).push(p);
+  }
+  const groups = [...grouped.entries()].sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  const discounts = allocate(
+    quote.discountAmount,
+    groups.map(([, products]) =>
+      products.reduce((sum, p) => sum + p.totalPrice, 0),
+    ),
+  );
+  return groups.map(([merchantId, products], index) => {
+    const subtotal = products.reduce((sum, p) => sum + p.totalPrice, 0);
+    const shippingFee = index === 0 ? quote.shippingFee : 0;
+    const boxes = index === 0 ? quote.boxes : [];
+    const giftFee = products.reduce((sum, p) => sum + p.giftFee, 0);
+    const bulkDiscountAmount = products.reduce((sum, p) => sum + p.bulkDiscountAmount, 0);
+    return {
+      merchantId,
+      customerEmail: user.email,
+      products,
+      boxes,
+      totalAmount: subtotal - discounts[index] + shippingFee + giftFee,
+      giftFee,
+      bulkDiscountAmount,
+      pricingPolicyVersion: quote.policyVersion,
+      shippingFee,
+      shippingPayment: quote.shippingPayment,
+      shippingMode: quote.shippingMode,
+      discountAmount: discounts[index],
+      couponCode: quote.couponCode,
+      shippingAddress,
+      paymentMethod,
+      note,
+      paymentCode: code,
+    };
+  });
+}
+
 class CheckOutController {
   async quote(req, res, next) {
     try {
       const { items, couponCode } = req.validatedBody;
       const quote = await buildQuote(items, couponCode);
-      const { products, boxes, ...data } = quote;
+      const data = { ...quote };
+      delete data.products;
+      delete data.boxes;
       res.json({ success: true, data });
     } catch (err) {
       next(err);
     }
   }
+
+  async createSession(req, res, next) {
+    req.validatedBody.paymentMethod = "online";
+    return this.checkOut(req, res, next);
+  }
+
   async checkOut(req, res, next) {
     let session, key, hash, result;
     try {
@@ -59,7 +114,7 @@ class CheckOutController {
           result = existing.result;
           return;
         }
-        const { addressId, paymentMethod, note, couponCode, quoteFingerprint } =
+        const { paymentMethod, note, couponCode, quoteFingerprint } =
           req.validatedBody;
         const user = await User.findById(req.userId).session(session);
         const shippingAddress = attempt.address;
@@ -75,89 +130,160 @@ class CheckOutController {
           );
         if (paymentMethod === "online" && quote.totalAmount <= 0)
           fail("Thanh toán online cần số tiền lớn hơn 0");
-        const grouped = new Map();
-        for (const p of quote.products) {
-          const id = String(p.merchantId);
-          if (!grouped.has(id)) grouped.set(id, []);
-          grouped.get(id).push(p);
-        }
-        const groups = [...grouped.entries()].sort(([a], [b]) =>
-          a.localeCompare(b),
-        );
-        const discounts = allocate(
-          quote.discountAmount,
-          groups.map(([, products]) =>
-            products.reduce((sum, p) => sum + p.totalPrice, 0),
-          ),
-        );
-        const code = paymentCode(),
-          created = [];
-        for (const [index, [merchantId, products]] of groups.entries()) {
-          const subtotal = products.reduce((sum, p) => sum + p.totalPrice, 0);
-          const shippingFee = index === 0 ? quote.shippingFee : 0;
-          const boxes = index === 0 ? quote.boxes : [];
-          const giftFee = products.reduce((sum, p) => sum + p.giftFee, 0);
-          const bulkDiscountAmount = products.reduce((sum, p) => sum + p.bulkDiscountAmount, 0);
-          const [order] = await Order.create(
+
+        const code = paymentCode();
+
+        if (paymentMethod === "online") {
+          // ── ONLINE: create Checkout session only, NO Order, NO Cart delete ──
+          // Duplicate prevention & lazy-expire of stale pending session
+          const pendingSession = await Checkout.findOne({
+            userId: req.userId,
+            paymentMethod: 'online',
+            state: 'pending',
+          }).session(session);
+
+          if (pendingSession) {
+            const now = new Date();
+            if (pendingSession.expiresAt <= now) {
+              // Stale pending session -> lazy-expire it and release coupon
+              await releaseCoupon(pendingSession, session, 'expired');
+              if (pendingSession.state !== 'expired') {
+                pendingSession.state = 'expired';
+                await pendingSession.save({ session });
+              }
+            } else {
+              // Still active
+              // Same cart & quote fingerprint -> reuse existing session
+              if (
+                pendingSession.snapshot?.fingerprint &&
+                pendingSession.snapshot.fingerprint === quote.fingerprint
+              ) {
+                // Reusing active session: undo the duplicate coupon increment from buildQuote
+                if (quote.couponCode) {
+                  await Coupon.updateOne(
+                    { code: quote.couponCode, usedCount: { $gt: 0 } },
+                    { $inc: { usedCount: -1 } },
+                    { session },
+                  );
+                }
+                result = pendingSession.result;
+                return;
+              }
+              // Cart or quote changed -> cancel old session and release its coupon
+              await releaseCoupon(pendingSession, session);
+              if (pendingSession.state !== 'cancelled') {
+                pendingSession.state = 'cancelled';
+                await pendingSession.save({ session });
+              }
+            }
+          }
+
+          const orderGroups = buildOrderGroups(quote, shippingAddress, user, paymentMethod, note, code);
+          const expiresAt = new Date(
+            Date.now() + config.checkoutSessionExpiryMinutes * 60000,
+          );
+          const sessionQrUrl = qrUrl(code, quote.totalAmount);
+
+          result = {
+            paymentCode: code,
+            orderCode: code,
+            totalAmount: quote.totalAmount,
+            shippingPayment: quote.shippingPayment,
+            qrUrl: sessionQrUrl,
+            expiresAt,
+            status: 'pending_payment',
+          };
+
+          const [createdCheckout] = await Checkout.create(
             [
               {
                 userId: req.userId,
-                merchantId,
+                requestKey: key,
+                requestHash: hash,
                 paymentCode: code,
-                customerEmail: user.email,
-                products,
-                boxes,
-                orderId:
-                  "ORD" + crypto.randomBytes(12).toString("hex").toUpperCase(),
-                totalAmount: subtotal - discounts[index] + shippingFee + giftFee,
-                giftFee, bulkDiscountAmount, pricingPolicyVersion: quote.policyVersion,
-                shippingFee,
+                totalAmount: quote.totalAmount,
                 shippingPayment: quote.shippingPayment,
-                shippingMode: quote.shippingMode,
-                discountAmount: discounts[index],
-                couponCode: quote.couponCode,
-                shippingAddress,
                 paymentMethod,
-                note,
-                stockDeducted: paymentMethod === "cod",
+                expiresAt,
+                couponCode: quote.couponCode,
+                result,
+                snapshot: {
+                  orderGroups,
+                  fingerprint: quote.fingerprint,
+                },
               },
             ],
             { session },
           );
-          if (paymentMethod === "cod") {
-            await deductStock(products, session, boxes);
+          result.sessionId = String(createdCheckout._id);
+          await Checkout.updateOne({ _id: createdCheckout._id }, { $set: { result } }, { session });
+          await attempts.complete(req.userId, 'products', key, result, session);
+          // Cart is NOT deleted — user can cancel and change payment method
+        } else {
+          // ── COD: create Orders immediately (existing behaviour) ──
+          const orderGroups = buildOrderGroups(quote, shippingAddress, user, paymentMethod, note, code);
+          const created = [];
+          for (const group of orderGroups) {
+            const [order] = await Order.create(
+              [
+                {
+                  userId: req.userId,
+                  merchantId: group.merchantId,
+                  paymentCode: code,
+                  customerEmail: group.customerEmail,
+                  products: group.products,
+                  boxes: group.boxes,
+                  orderId:
+                    "ORD" + crypto.randomBytes(12).toString("hex").toUpperCase(),
+                  totalAmount: group.totalAmount,
+                  giftFee: group.giftFee, bulkDiscountAmount: group.bulkDiscountAmount,
+                  pricingPolicyVersion: group.pricingPolicyVersion,
+                  shippingFee: group.shippingFee,
+                  shippingPayment: group.shippingPayment,
+                  shippingMode: group.shippingMode,
+                  discountAmount: group.discountAmount,
+                  couponCode: group.couponCode,
+                  shippingAddress: group.shippingAddress,
+                  paymentMethod,
+                  note: group.note,
+                  stockDeducted: true,
+                },
+              ],
+              { session },
+            );
+            await deductStock(group.products, session, group.boxes);
             await enqueue(order, "new_order", session);
+            created.push(order);
           }
-          created.push(order);
+          result = {
+            orderId: String(created[0]._id),
+            orderCode: code,
+            totalAmount: quote.totalAmount,
+            shippingPayment: quote.shippingPayment,
+          };
+          await Checkout.create(
+            [
+              {
+                userId: req.userId,
+                requestKey: key,
+                requestHash: hash,
+                paymentCode: code,
+                orderIds: created.map((o) => o._id),
+                totalAmount: quote.totalAmount,
+                shippingPayment: quote.shippingPayment,
+                paymentMethod,
+                expiresAt: new Date(
+                  Date.now() + config.orderExpiryHours * 3600000,
+                ),
+                couponCode: quote.couponCode,
+                result,
+              },
+            ],
+            { session },
+          );
+          await attempts.complete(req.userId, 'products', key, result, session);
+          await Cart.deleteOne({ _id: cart._id }, { session });
         }
-        result = {
-          orderId: String(created[0]._id),
-          orderCode: code,
-          totalAmount: quote.totalAmount,
-          shippingPayment: quote.shippingPayment,
-        };
-        await Checkout.create(
-          [
-            {
-              userId: req.userId,
-              requestKey: key,
-              requestHash: hash,
-              paymentCode: code,
-              orderIds: created.map((o) => o._id),
-              totalAmount: quote.totalAmount,
-              shippingPayment: quote.shippingPayment,
-              paymentMethod,
-              expiresAt: new Date(
-                Date.now() + config.orderExpiryHours * 3600000,
-              ),
-              couponCode: quote.couponCode,
-              result,
-            },
-          ],
-          { session },
-        );
-        await attempts.complete(req.userId, 'products', key, result, session);
-        await Cart.deleteOne({ _id: cart._id }, { session });
       });
       res.status(201).json({ success: true, data: result });
       void flush();
@@ -179,6 +305,7 @@ class CheckOutController {
       if (session) await session.endSession();
     }
   }
+
   async sepayWebhook(req, res, next) {
     try {
       const result = await reconciliation.receiveWebhook(req.validatedBody);
@@ -187,6 +314,86 @@ class CheckOutController {
       void flush();
     } catch (err) { next(err); }
   }
+
+  async getSession(req, res, next) {
+    try {
+      const id = req.params.id;
+      const filter = mongoose.isObjectIdOrHexString(id)
+        ? { _id: id }
+        : { paymentCode: id };
+      const checkout = await Checkout.findOne(filter);
+      if (!checkout) fail("Không tìm thấy phiên thanh toán", 404);
+      if (req.user.role !== "admin" && String(checkout.userId) !== req.userId)
+        fail("Không có quyền xem phiên thanh toán này", 403);
+
+      const now = new Date();
+      let state = checkout.state;
+      if (state === 'pending' && checkout.expiresAt <= now) {
+        state = 'expired';
+        // Lazy-expire: persist state and release coupon
+        let session;
+        try {
+          session = await mongoose.startSession();
+          await session.withTransaction(async () => {
+            const locked = await lockCheckout(checkout.paymentCode, session);
+            if (locked && locked.state === 'pending' && locked.expiresAt <= now) {
+              await releaseCoupon(locked, session, 'expired');
+              if (locked.state !== 'expired') {
+                locked.state = 'expired';
+                await locked.save({ session });
+              }
+              checkout.state = 'expired';
+            }
+          });
+        } catch (err) {
+          logger.error({ err, paymentCode: checkout.paymentCode }, 'Lazy-expire failed in getSession');
+        } finally {
+          if (session) await session.endSession();
+        }
+      }
+
+      const orders = checkout.orderIds?.length
+        ? await Order.find({ _id: { $in: checkout.orderIds } }).select(
+            "orderId status paymentStatus totalAmount",
+          )
+        : await Order.find({ paymentCode: checkout.paymentCode }).select(
+            "orderId status paymentStatus totalAmount",
+          );
+
+      const paid =
+        state === "paid" ||
+        (orders.length > 0 && orders.every((o) => o.paymentStatus === "paid"));
+      const totalAmount = checkout.totalAmount;
+      const receivedAmount = checkout.receivedAmount || 0;
+      const remaining = Math.max(0, totalAmount - receivedAmount);
+
+      const data = {
+        sessionId: String(checkout._id),
+        paymentCode: checkout.paymentCode,
+        orderCode: checkout.paymentCode,
+        state: paid ? "paid" : state,
+        status: paid ? "paid" : state,
+        totalAmount,
+        receivedAmount,
+        remainingAmount: remaining,
+        expiresAt: checkout.expiresAt,
+        shippingPayment: checkout.shippingPayment || "platform",
+        orders: orders.map((o) => ({
+          orderId: o.orderId,
+          status: o.status,
+          paymentStatus: o.paymentStatus,
+          totalAmount: o.totalAmount,
+        })),
+      };
+      if (state === "pending" && !paid && remaining > 0) {
+        data.qrUrl = qrUrl(checkout.paymentCode, remaining);
+      }
+      res.json({ success: true, data });
+    } catch (err) {
+      next(err);
+    }
+  }
+
   async getOrderStatus(req, res, next) {
     try {
       const checkout = await Checkout.findOne({
@@ -200,7 +407,7 @@ class CheckOutController {
       if (!checkout && !orders.length) fail("Không tìm thấy đơn hàng", 404);
       if (
         req.user.role !== "admin" &&
-        String(checkout?.userId || orders[0].userId) !== req.userId
+        String(checkout?.userId || orders[0]?.userId) !== req.userId
       )
         fail("Không có quyền xem đơn hàng này", 403);
       const paid =
@@ -208,7 +415,7 @@ class CheckOutController {
         (orders.length > 0 && orders.every((o) => o.paymentStatus === "paid"));
       const online = (checkout?.paymentMethod || orders[0]?.paymentMethod) === 'online';
       const invalid =
-        checkout?.state === "cancelled" ||
+        ['cancelled', 'expired'].includes(checkout?.state) ||
         (online && checkout?.expiresAt <= new Date() && !paid) ||
         orders.some((o) => ["cancelled", "returned"].includes(o.status));
 
@@ -217,9 +424,9 @@ class CheckOutController {
         online &&
         !paid &&
         !invalid &&
-        orders.every(
+        (orders.length === 0 || orders.every(
           (o) => o.status === "pending" && o.paymentStatus === "pending",
-        );
+        ));
       const totalAmount =
         checkout?.totalAmount ??
         orders.reduce((sum, o) => sum + o.totalAmount, 0);
@@ -247,12 +454,78 @@ class CheckOutController {
       next(err);
     }
   }
+
+  async cancelSession(req, res, next) {
+    let session;
+    try {
+      session = await mongoose.startSession();
+      let cancelled;
+      await session.withTransaction(async () => {
+        const id = req.params.id || req.params.paymentCode;
+        const filter = mongoose.isObjectIdOrHexString(id)
+          ? { _id: id }
+          : { paymentCode: id };
+        const checkout = await lockCheckout(filter, session);
+        if (!checkout) fail("Phiên thanh toán không tồn tại", 404);
+        if (req.user.role !== "admin" && String(checkout.userId) !== req.userId)
+          fail("Không có quyền huỷ phiên này", 403);
+        if (checkout.state !== "pending")
+          fail("Phiên không thể huỷ ở trạng thái hiện tại", 409);
+
+        // Check if expired
+        if (checkout.expiresAt <= new Date()) {
+          await releaseCoupon(checkout, session, 'expired');
+          if (checkout.state !== 'expired') {
+            checkout.state = 'expired';
+            await checkout.save({ session });
+          }
+          fail("Phiên thanh toán đã hết hạn", 409);
+        }
+
+        // Atomic transition from 'pending' to 'cancelled'
+        // If orders were created (e.g. race/legacy), cancel and restore stock
+        const orders = await Order.find({ paymentCode: checkout.paymentCode }).session(session);
+        for (const order of orders) {
+          if (!["pending", "processing", "on_hold"].includes(order.status)) continue;
+          if (order.stockDeducted) {
+            await restoreStock(order.products, session, order.boxes);
+            order.stockDeducted = false;
+          }
+          order._statusChangedBy = req.userId;
+          order.cancelReason = req.validatedBody?.reason || "Khách huỷ phiên thanh toán";
+          order.cancelledBy = req.userId;
+          order.status = "cancelled";
+          await order.save({ session });
+        }
+
+        await releaseCoupon(checkout, session);
+        if (checkout.state !== "cancelled") {
+          checkout.state = "cancelled";
+          await checkout.save({ session });
+        }
+        cancelled = {
+          sessionId: String(checkout._id),
+          paymentCode: checkout.paymentCode,
+          state: "cancelled",
+          totalAmount: checkout.totalAmount,
+        };
+      });
+      res.json({ success: true, message: "Đã huỷ phiên thanh toán", data: cancelled });
+    } catch (err) {
+      next(err);
+    } finally {
+      if (session) await session.endSession();
+    }
+  }
+
   async confirmCodOrder(req, res, next) {
     return changeCod(req, res, next, false);
   }
+
   async markCodDelivered(req, res, next) {
     return changeCod(req, res, next, true);
   }
+
   async cancelOrder(req, res, next) {
     let session, cancelled;
     try {
@@ -328,6 +601,7 @@ class CheckOutController {
       if (session) await session.endSession();
     }
   }
+
   async resolveInventoryHold(req, res, next) {
     let session, order;
     try {
@@ -372,6 +646,7 @@ class CheckOutController {
       if (session) await session.endSession();
     }
   }
+
   async getPendingRefunds(req, res, next) {
     try {
       const page = Math.max(1, parseInt(req.query.page, 10) || 1),
@@ -397,10 +672,12 @@ class CheckOutController {
       next(err);
     }
   }
+
   async completeRefund(req, res, next) {
     // Old endpoint must not bypass the audited workflow.
     return next(Object.assign(new Error('Dùng /api/admin/reconciliation/refunds/:id/complete kèm bằng chứng chuyển tiền'), { statusCode: 409 }));
   }
+
   async listPaymentEvents(req, res, next) {
     try {
       const page = Math.max(1, parseInt(req.query.page, 10) || 1),
@@ -430,6 +707,7 @@ class CheckOutController {
     }
   }
 }
+
 async function changeCod(req, res, next, delivered) {
   let session, result;
   try {
@@ -477,4 +755,6 @@ async function changeCod(req, res, next, delivered) {
     if (session) await session.endSession();
   }
 }
+
 module.exports = new CheckOutController();
+module.exports.buildOrderGroups = buildOrderGroups;

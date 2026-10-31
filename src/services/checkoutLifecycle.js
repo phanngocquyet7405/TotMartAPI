@@ -10,11 +10,14 @@ function requestHash(body) {
 function paymentCode() {
   return 'TMART' + Date.now() + crypto.randomBytes(6).toString('hex').toUpperCase();
 }
-async function lockCheckout(code, session) {
+async function lockCheckout(codeOrFilter, session) {
   // Every writer touches this common document inside the same transaction.
   // Payment, cancellation and expiry therefore cannot commit conflicting snapshots.
+  const filter = typeof codeOrFilter === 'string'
+    ? { paymentCode: codeOrFilter }
+    : codeOrFilter;
   return Checkout.findOneAndUpdate(
-    { paymentCode: code },
+    filter,
     { $inc: { revision: 1 } },
     { session, new: true },
   );
@@ -29,7 +32,7 @@ async function replay(userId, key, hash, session = null, kind = null) {
     fail('Idempotency-Key đã được dùng với nội dung khác', 409);
   return checkout;
 }
-async function releaseCoupon(checkout, session) {
+async function releaseCoupon(checkout, session, finalState = 'cancelled') {
   if (!checkout?.couponCode || checkout.couponReleased) return;
   const remaining = await Order.exists({
     paymentCode: checkout.paymentCode,
@@ -42,7 +45,7 @@ async function releaseCoupon(checkout, session) {
     { session },
   );
   checkout.couponReleased = true;
-  checkout.state = 'cancelled';
+  checkout.state = finalState;
   await checkout.save({ session });
 }
 function qrUrl(code, amount) {
