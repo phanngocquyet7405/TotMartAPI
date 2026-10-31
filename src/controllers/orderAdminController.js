@@ -1,9 +1,8 @@
-const Order = require("../models/Order");
+const Order = require('../models/Order');
 
 const GENERIC_TRANSITIONS = {
-  processing: ["shipped"],
-  shipped: ["delivered"],
-
+  processing: ['shipped'],
+  shipped: ['delivered'],
 };
 
 const orderAdminController = {
@@ -17,13 +16,11 @@ const orderAdminController = {
       if (status) filter.status = status;
       if (paymentMethod) filter.paymentMethod = paymentMethod;
       if (search) {
-        const escaped = String(search).slice(0,100).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const escaped = String(search)
+          .slice(0, 100)
+          .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const regex = { $regex: escaped, $options: 'i' };
-        filter.$or = [
-          { orderId: regex },
-          { paymentCode: regex },
-          { customerEmail: regex },
-        ];
+        filter.$or = [{ orderId: regex }, { paymentCode: regex }, { customerEmail: regex }];
       }
 
       const pageNum = Math.max(1, parseInt(page, 10) || 1);
@@ -31,8 +28,8 @@ const orderAdminController = {
 
       const [orders, total] = await Promise.all([
         Order.find(filter)
-          .populate("userId", "name email phone")
-          .populate("products.brand", "name")
+          .populate('userId', 'name email phone')
+          .populate('products.brand', 'name')
           .sort({ createdAt: -1 })
           .skip((pageNum - 1) * limitNum)
           .limit(limitNum),
@@ -58,10 +55,10 @@ const orderAdminController = {
   async getOrderById(req, res, next) {
     try {
       const order = await Order.findById(req.params._id)
-        .populate("userId", "name email phone")
-        .populate("products.brand", "name");
-      if (!order || (order.paymentMethod === "online" && order.paymentStatus !== "paid")) {
-        const err = new Error("Đơn hàng không tồn tại");
+        .populate('userId', 'name email phone')
+        .populate('products.brand', 'name');
+      if (!order || (order.paymentMethod === 'online' && order.paymentStatus !== 'paid')) {
+        const err = new Error('Đơn hàng không tồn tại');
         err.statusCode = 404;
         throw err;
       }
@@ -79,7 +76,7 @@ const orderAdminController = {
 
       const order = await Order.findById(req.params._id);
       if (!order) {
-        const err = new Error("Đơn hàng không tồn tại");
+        const err = new Error('Đơn hàng không tồn tại');
         err.statusCode = 404;
         throw err;
       }
@@ -97,7 +94,7 @@ const orderAdminController = {
       // "shipped" -> "delivered" chỉ an toàn ở đây cho đơn ONLINE (đã
       // paymentStatus = "paid" từ webhook). Đơn COD "đã giao" phải qua
       // markCodDelivered() để đồng thời ghi nhận đã thu tiền mặt.
-      if (nextStatus === "delivered" && order.paymentMethod === "cod") {
+      if (nextStatus === 'delivered' && order.paymentMethod === 'cod') {
         const err = new Error(
           'Đơn COD "đã giao" phải xác nhận qua action riêng (có thu tiền COD), không dùng action này.',
         );
@@ -106,13 +103,20 @@ const orderAdminController = {
       }
 
       order._statusChangedBy = req.userId;
-      if (!order.stockDeducted || (order.paymentMethod === "online" && order.paymentStatus !== "paid")) { const err = new Error("Đơn chưa đủ điều kiện tồn kho/thanh toán"); err.statusCode = 409; throw err; }
+      if (
+        !order.stockDeducted ||
+        (order.paymentMethod === 'online' && order.paymentStatus !== 'paid')
+      ) {
+        const err = new Error('Đơn chưa đủ điều kiện tồn kho/thanh toán');
+        err.statusCode = 409;
+        throw err;
+      }
       order.status = nextStatus;
       await order.save();
 
       res.status(200).json({
         success: true,
-        message: "Đã cập nhật trạng thái đơn hàng",
+        message: 'Đã cập nhật trạng thái đơn hàng',
         data: order,
       });
     } catch (error) {

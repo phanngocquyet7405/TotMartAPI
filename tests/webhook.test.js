@@ -1,18 +1,18 @@
-const request = require("supertest");
-const app = require("../src/app");
-const { connect, closeDatabase, clearDatabase } = require("./helpers/db");
+const request = require('supertest');
+const app = require('../src/app');
+const { connect, closeDatabase, clearDatabase } = require('./helpers/db');
 const {
   createUser,
   signToken,
   createBrand,
   createProduct,
   createCartWithItems,
-} = require("./helpers/factories");
-const Order = require("../src/models/Order");
-const Product = require("../src/models/Product");
-const Checkout = require("../src/models/Checkout");
-const NotificationOutbox = require("../src/models/NotificationOutbox");
-const ReceiptRefund = require("../src/models/ReceiptRefund");
+} = require('./helpers/factories');
+const Order = require('../src/models/Order');
+const Product = require('../src/models/Product');
+const Checkout = require('../src/models/Checkout');
+const NotificationOutbox = require('../src/models/NotificationOutbox');
+const ReceiptRefund = require('../src/models/ReceiptRefund');
 
 beforeAll(async () => {
   await connect();
@@ -26,15 +26,10 @@ afterAll(async () => {
   await closeDatabase();
 });
 
-function webhookPayload({
-  paymentCode,
-  amount,
-  referenceCode,
-  transferType = "in",
-}) {
+function webhookPayload({ paymentCode, amount, referenceCode, transferType = 'in' }) {
   return {
     id: Math.floor(Math.random() * 1000000),
-    gateway: "TestBank",
+    gateway: 'TestBank',
     transactionDate: new Date().toISOString(),
     accountNumber: process.env.SEPAY_BANK_ACCOUNT,
     content: `Chuyen khoan ${paymentCode}`,
@@ -58,11 +53,11 @@ async function placeOnlineOrder(overrides = {}) {
   ]);
 
   const res = await request(app)
-    .post("/api/checkout/check-out")
-    .set("Authorization", `Bearer ${token}`)
+    .post('/api/checkout/check-out')
+    .set('Authorization', `Bearer ${token}`)
     .send({
       addressId: user.addresses[0]._id.toString(),
-      paymentMethod: "online",
+      paymentMethod: 'online',
     });
 
   return {
@@ -73,34 +68,34 @@ async function placeOnlineOrder(overrides = {}) {
   };
 }
 
-describe("POST /api/checkout/sepay-webhook", () => {
-  test("rejects a call with no API key", async () => {
+describe('POST /api/checkout/sepay-webhook', () => {
+  test('rejects a call with no API key', async () => {
     const res = await request(app)
-      .post("/api/checkout/sepay-webhook")
+      .post('/api/checkout/sepay-webhook')
       .send(
         webhookPayload({
-          paymentCode: "TMARTX",
+          paymentCode: 'TMARTX',
           amount: 1000,
-          referenceCode: "R1",
+          referenceCode: 'R1',
         }),
       );
     expect(res.status).toBe(401);
   });
 
-  test("marks the matching order paid, deducts stock at payment time, and is reflected via the order status", async () => {
+  test('marks the matching order paid, deducts stock at payment time, and is reflected via the order status', async () => {
     const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({
       stock: 5,
       quantity: 1,
     });
 
     const res = await request(app)
-      .post("/api/checkout/sepay-webhook")
-      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .post('/api/checkout/sepay-webhook')
+      .set('Authorization', `Apikey ${process.env.SEPAY_API_KEY}`)
       .send(
         webhookPayload({
           paymentCode,
           amount: grandTotalAmount,
-          referenceCode: "REF-PAID-1",
+          referenceCode: 'REF-PAID-1',
         }),
       );
 
@@ -108,15 +103,15 @@ describe("POST /api/checkout/sepay-webhook", () => {
     expect(res.body.success).toBe(true);
 
     const order = await Order.findOne({ paymentCode });
-    expect(order.paymentStatus).toBe("paid");
-    expect(order.status).toBe("processing");
+    expect(order.paymentStatus).toBe('paid');
+    expect(order.status).toBe('processing');
     expect(order.stockDeducted).toBe(true);
 
     const updatedProduct = await Product.findById(product._id);
     expect(updatedProduct.stock).toBe(4);
   });
 
-  test("is idempotent — replaying the same reference code does not reprocess the order", async () => {
+  test('is idempotent — replaying the same reference code does not reprocess the order', async () => {
     const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({
       stock: 5,
       quantity: 1,
@@ -124,18 +119,18 @@ describe("POST /api/checkout/sepay-webhook", () => {
     const payload = webhookPayload({
       paymentCode,
       amount: grandTotalAmount,
-      referenceCode: "REF-DUP-1",
+      referenceCode: 'REF-DUP-1',
     });
 
     const first = await request(app)
-      .post("/api/checkout/sepay-webhook")
-      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .post('/api/checkout/sepay-webhook')
+      .set('Authorization', `Apikey ${process.env.SEPAY_API_KEY}`)
       .send(payload);
     expect(first.status).toBe(200);
 
     const second = await request(app)
-      .post("/api/checkout/sepay-webhook")
-      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .post('/api/checkout/sepay-webhook')
+      .set('Authorization', `Apikey ${process.env.SEPAY_API_KEY}`)
       .send(payload);
     expect(second.status).toBe(200);
     expect(second.body.message).toMatch(/already processed/i);
@@ -145,20 +140,20 @@ describe("POST /api/checkout/sepay-webhook", () => {
     expect(updatedProduct.stock).toBe(4);
   });
 
-  test("flags an underpaid transfer for manual review instead of marking the order paid", async () => {
+  test('flags an underpaid transfer for manual review instead of marking the order paid', async () => {
     const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({
       stock: 5,
       quantity: 1,
     });
 
     const res = await request(app)
-      .post("/api/checkout/sepay-webhook")
-      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .post('/api/checkout/sepay-webhook')
+      .set('Authorization', `Apikey ${process.env.SEPAY_API_KEY}`)
       .send(
         webhookPayload({
           paymentCode,
           amount: grandTotalAmount - 10000,
-          referenceCode: "REF-UNDERPAY-1",
+          referenceCode: 'REF-UNDERPAY-1',
         }),
       );
 
@@ -169,25 +164,25 @@ describe("POST /api/checkout/sepay-webhook", () => {
     expect(order).toBeNull();
 
     const checkout = await Checkout.findOne({ paymentCode });
-    expect(checkout.state).toBe("pending");
+    expect(checkout.state).toBe('pending');
     expect(checkout.receivedAmount).toBe(grandTotalAmount - 10000);
 
     const updatedProduct = await Product.findById(product._id);
     expect(updatedProduct.stock).toBe(5);
   });
 
-  test("ignores outgoing transfers", async () => {
+  test('ignores outgoing transfers', async () => {
     const { paymentCode, grandTotalAmount } = await placeOnlineOrder();
 
     const res = await request(app)
-      .post("/api/checkout/sepay-webhook")
-      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .post('/api/checkout/sepay-webhook')
+      .set('Authorization', `Apikey ${process.env.SEPAY_API_KEY}`)
       .send(
         webhookPayload({
           paymentCode,
           amount: grandTotalAmount,
-          referenceCode: "REF-OUT-1",
-          transferType: "out",
+          referenceCode: 'REF-OUT-1',
+          transferType: 'out',
         }),
       );
 
@@ -196,65 +191,65 @@ describe("POST /api/checkout/sepay-webhook", () => {
     expect(order).toBeNull();
   });
 
-  test("a fully paid order can be cancelled and is flagged for refund", async () => {
+  test('a fully paid order can be cancelled and is flagged for refund', async () => {
     const { paymentCode, grandTotalAmount } = await placeOnlineOrder({
       stock: 5,
       quantity: 1,
     });
     await request(app)
-      .post("/api/checkout/sepay-webhook")
-      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .post('/api/checkout/sepay-webhook')
+      .set('Authorization', `Apikey ${process.env.SEPAY_API_KEY}`)
       .send(
         webhookPayload({
           paymentCode,
           amount: grandTotalAmount,
-          referenceCode: "REF-REFUND-1",
+          referenceCode: 'REF-REFUND-1',
         }),
       );
 
     const order = await Order.findOne({ paymentCode });
-    const User = require("../src/models/User");
+    const User = require('../src/models/User');
     const user = await User.findById(order.userId);
     const token = signToken(user);
 
     const res = await request(app)
       .post(`/api/checkout/cancel/${order._id}`)
-      .set("Authorization", `Bearer ${token}`)
-      .send({ reason: "Khách đổi ý sau khi đã thanh toán" });
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Khách đổi ý sau khi đã thanh toán' });
 
     expect(res.status).toBe(200);
     const cancelled = await Order.findById(order._id);
-    expect(cancelled.status).toBe("cancelled");
-    expect(cancelled.refundStatus).toBe("pending");
+    expect(cancelled.status).toBe('cancelled');
+    expect(cancelled.refundStatus).toBe('pending');
     expect(cancelled.refundAmount).toBe(order.totalAmount);
   });
-  test("marks the order paid but flags it if the user transfers more than the grandTotalAmount", async () => {
+  test('marks the order paid but flags it if the user transfers more than the grandTotalAmount', async () => {
     const { paymentCode, grandTotalAmount } = await placeOnlineOrder({
       stock: 5,
       quantity: 1,
     });
 
     const res = await request(app)
-      .post("/api/checkout/sepay-webhook")
-      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .post('/api/checkout/sepay-webhook')
+      .set('Authorization', `Apikey ${process.env.SEPAY_API_KEY}`)
       .send(
         webhookPayload({
           paymentCode,
           amount: grandTotalAmount + 50000,
-          referenceCode: "REF-OVERPAY-1",
+          referenceCode: 'REF-OVERPAY-1',
         }),
       );
 
     expect(res.status).toBe(200);
 
     const order = await Order.findOne({ paymentCode });
-    expect(order.paymentStatus).toBe("paid");
+    expect(order.paymentStatus).toBe('paid');
     expect(order.overpaidAmount).toBe(0);
     const refund = await require('../src/models/ReceiptRefund').findOne({ purpose: 'surplus' });
     expect(refund.amount).toBe(50000);
   });
 
-  test("extracts order code correctly even with messy transfer content (case-insensitive, extra spaces)", async () => {
+  test('extracts order code correctly even with messy transfer content (case-insensitive, extra spaces)', async () => {
     const { paymentCode, grandTotalAmount } = await placeOnlineOrder({
       stock: 5,
       quantity: 1,
@@ -266,15 +261,15 @@ describe("POST /api/checkout/sepay-webhook", () => {
       ...webhookPayload({
         paymentCode,
         amount: grandTotalAmount,
-        referenceCode: "REF-MESSY-1",
+        referenceCode: 'REF-MESSY-1',
       }),
       content: messyContent,
       code: null,
     };
 
     const res = await request(app)
-      .post("/api/checkout/sepay-webhook")
-      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .post('/api/checkout/sepay-webhook')
+      .set('Authorization', `Apikey ${process.env.SEPAY_API_KEY}`)
       .send(payload);
 
     expect(res.status).toBe(200);
@@ -282,13 +277,16 @@ describe("POST /api/checkout/sepay-webhook", () => {
 
     const order = await Order.findOne({ paymentCode });
     expect(order).not.toBeNull();
-    expect(order.paymentStatus).toBe("paid");
+    expect(order.paymentStatus).toBe('paid');
 
-    const outbox = await NotificationOutbox.findOne({ orderId: order._id, type: "payment_received" });
+    const outbox = await NotificationOutbox.findOne({
+      orderId: order._id,
+      type: 'payment_received',
+    });
     expect(outbox).not.toBeNull();
   });
 
-  test("an expired session receiving payment does NOT create an order and queues an auto-refund", async () => {
+  test('an expired session receiving payment does NOT create an order and queues an auto-refund', async () => {
     const { paymentCode, grandTotalAmount, product } = await placeOnlineOrder({
       stock: 5,
       quantity: 1,
@@ -301,13 +299,13 @@ describe("POST /api/checkout/sepay-webhook", () => {
     );
 
     const res = await request(app)
-      .post("/api/checkout/sepay-webhook")
-      .set("Authorization", `Apikey ${process.env.SEPAY_API_KEY}`)
+      .post('/api/checkout/sepay-webhook')
+      .set('Authorization', `Apikey ${process.env.SEPAY_API_KEY}`)
       .send(
         webhookPayload({
           paymentCode,
           amount: grandTotalAmount,
-          referenceCode: "REF-EXPIRED-PAY",
+          referenceCode: 'REF-EXPIRED-PAY',
         }),
       );
 
@@ -322,8 +320,8 @@ describe("POST /api/checkout/sepay-webhook", () => {
     expect(updatedProduct.stock).toBe(5);
 
     // Refund is queued in ReceiptRefund
-    const refund = await ReceiptRefund.findOne({ amount: grandTotalAmount, purpose: "receipt" });
+    const refund = await ReceiptRefund.findOne({ amount: grandTotalAmount, purpose: 'receipt' });
     expect(refund).not.toBeNull();
-    expect(refund.status).toBe("pending");
+    expect(refund.status).toBe('pending');
   });
 });

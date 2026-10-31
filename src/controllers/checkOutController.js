@@ -1,18 +1,15 @@
 const attempts = require('../services/checkoutAttemptService');
 const reconciliation = require('../services/paymentReconciliationService');
-const mongoose = require("mongoose");
-const crypto = require("crypto");
-const Order = require("../models/Order");
-const Cart = require("../models/Cart");
-const User = require("../models/User");
-const Checkout = require("../models/Checkout");
-const Coupon = require("../models/Coupon");
-const PaymentEvent = require("../models/PaymentEvent");
-const { buildQuote, allocate, fail } = require("../services/pricingService");
-const {
-  deductStock,
-  restoreStock,
-} = require("../services/inventoryService");
+const mongoose = require('mongoose');
+const crypto = require('crypto');
+const Order = require('../models/Order');
+const Cart = require('../models/Cart');
+const User = require('../models/User');
+const Checkout = require('../models/Checkout');
+const Coupon = require('../models/Coupon');
+const PaymentEvent = require('../models/PaymentEvent');
+const { buildQuote, allocate, fail } = require('../services/pricingService');
+const { deductStock, restoreStock } = require('../services/inventoryService');
 const {
   requestHash,
   paymentCode,
@@ -20,14 +17,13 @@ const {
   replay,
   releaseCoupon,
   qrUrl,
-} = require("../services/checkoutLifecycle");
-const { enqueue, drain } = require("../jobs/notificationOutboxScheduler");
-const config = require("../config/environment");
-const logger = require("../utils/logger");
+} = require('../services/checkoutLifecycle');
+const { enqueue, drain } = require('../jobs/notificationOutboxScheduler');
+const config = require('../config/environment');
+const logger = require('../utils/logger');
 
 const requestKey = require('../utils/idempotencyKey');
-const flush = () =>
-  drain().catch((err) => logger.error({ err }, "Outbox delivery deferred"));
+const flush = () => drain().catch((err) => logger.error({ err }, 'Outbox delivery deferred'));
 
 /**
  * Build the per-merchant order groups from a quote.
@@ -41,14 +37,10 @@ function buildOrderGroups(quote, shippingAddress, user, paymentMethod, note, cod
     if (!grouped.has(id)) grouped.set(id, []);
     grouped.get(id).push(p);
   }
-  const groups = [...grouped.entries()].sort(([a], [b]) =>
-    a.localeCompare(b),
-  );
+  const groups = [...grouped.entries()].sort(([a], [b]) => a.localeCompare(b));
   const discounts = allocate(
     quote.discountAmount,
-    groups.map(([, products]) =>
-      products.reduce((sum, p) => sum + p.totalPrice, 0),
-    ),
+    groups.map(([, products]) => products.reduce((sum, p) => sum + p.totalPrice, 0)),
   );
   return groups.map(([merchantId, products], index) => {
     const subtotal = products.reduce((sum, p) => sum + p.totalPrice, 0);
@@ -93,7 +85,7 @@ class CheckOutController {
   }
 
   async createSession(req, res, next) {
-    req.validatedBody.paymentMethod = "online";
+    req.validatedBody.paymentMethod = 'online';
     return this.checkOut(req, res, next);
   }
 
@@ -103,8 +95,7 @@ class CheckOutController {
       key = requestKey(req);
       hash = requestHash(req.validatedBody);
       const previous = await replay(req.userId, key, hash, null, 'products');
-      if (previous)
-        return res.status(201).json({ success: true, data: previous.result });
+      if (previous) return res.status(201).json({ success: true, data: previous.result });
       await attempts.prepare(req.userId, 'products', key, hash, req.validatedBody);
       session = await mongoose.startSession();
       await session.withTransaction(async () => {
@@ -114,8 +105,7 @@ class CheckOutController {
           result = existing.result;
           return;
         }
-        const { paymentMethod, note, couponCode, quoteFingerprint } =
-          req.validatedBody;
+        const { paymentMethod, note, couponCode, quoteFingerprint } = req.validatedBody;
         const user = await User.findById(req.userId).session(session);
         const shippingAddress = attempt.address;
         const cart = await Cart.findOne({
@@ -124,16 +114,13 @@ class CheckOutController {
         }).session(session);
         const quote = await buildQuote(cart?.items, couponCode, session, true);
         if (quoteFingerprint && quoteFingerprint !== quote.fingerprint)
-          fail(
-            "Giá hoặc giỏ hàng đã thay đổi. Vui lòng kiểm tra lại báo giá.",
-            409,
-          );
-        if (paymentMethod === "online" && quote.totalAmount <= 0)
-          fail("Thanh toán online cần số tiền lớn hơn 0");
+          fail('Giá hoặc giỏ hàng đã thay đổi. Vui lòng kiểm tra lại báo giá.', 409);
+        if (paymentMethod === 'online' && quote.totalAmount <= 0)
+          fail('Thanh toán online cần số tiền lớn hơn 0');
 
         const code = paymentCode();
 
-        if (paymentMethod === "online") {
+        if (paymentMethod === 'online') {
           // ── ONLINE: create Checkout session only, NO Order, NO Cart delete ──
           // Duplicate prevention & lazy-expire of stale pending session
           const pendingSession = await Checkout.findOne({
@@ -178,10 +165,15 @@ class CheckOutController {
             }
           }
 
-          const orderGroups = buildOrderGroups(quote, shippingAddress, user, paymentMethod, note, code);
-          const expiresAt = new Date(
-            Date.now() + config.checkoutSessionExpiryMinutes * 60000,
+          const orderGroups = buildOrderGroups(
+            quote,
+            shippingAddress,
+            user,
+            paymentMethod,
+            note,
+            code,
           );
+          const expiresAt = new Date(Date.now() + config.checkoutSessionExpiryMinutes * 60000);
           const sessionQrUrl = qrUrl(code, quote.totalAmount);
 
           result = {
@@ -221,7 +213,14 @@ class CheckOutController {
           // Cart is NOT deleted — user can cancel and change payment method
         } else {
           // ── COD: create Orders immediately (existing behaviour) ──
-          const orderGroups = buildOrderGroups(quote, shippingAddress, user, paymentMethod, note, code);
+          const orderGroups = buildOrderGroups(
+            quote,
+            shippingAddress,
+            user,
+            paymentMethod,
+            note,
+            code,
+          );
           const created = [];
           for (const group of orderGroups) {
             const [order] = await Order.create(
@@ -233,10 +232,10 @@ class CheckOutController {
                   customerEmail: group.customerEmail,
                   products: group.products,
                   boxes: group.boxes,
-                  orderId:
-                    "ORD" + crypto.randomBytes(12).toString("hex").toUpperCase(),
+                  orderId: 'ORD' + crypto.randomBytes(12).toString('hex').toUpperCase(),
                   totalAmount: group.totalAmount,
-                  giftFee: group.giftFee, bulkDiscountAmount: group.bulkDiscountAmount,
+                  giftFee: group.giftFee,
+                  bulkDiscountAmount: group.bulkDiscountAmount,
                   pricingPolicyVersion: group.pricingPolicyVersion,
                   shippingFee: group.shippingFee,
                   shippingPayment: group.shippingPayment,
@@ -252,7 +251,7 @@ class CheckOutController {
               { session },
             );
             await deductStock(group.products, session, group.boxes);
-            await enqueue(order, "new_order", session);
+            await enqueue(order, 'new_order', session);
             created.push(order);
           }
           result = {
@@ -272,9 +271,7 @@ class CheckOutController {
                 totalAmount: quote.totalAmount,
                 shippingPayment: quote.shippingPayment,
                 paymentMethod,
-                expiresAt: new Date(
-                  Date.now() + config.orderExpiryHours * 3600000,
-                ),
+                expiresAt: new Date(Date.now() + config.orderExpiryHours * 3600000),
                 couponCode: quote.couponCode,
                 result,
               },
@@ -291,15 +288,13 @@ class CheckOutController {
       if (err.code === 11000 && key) {
         try {
           const previous = await replay(req.userId, key, hash, null, 'products');
-          if (previous)
-            return res
-              .status(201)
-              .json({ success: true, data: previous.result });
+          if (previous) return res.status(201).json({ success: true, data: previous.result });
         } catch (replayError) {
           return next(replayError);
         }
       }
-      if (key && hash) await attempts.reject(req.userId, 'products', key, hash, err).catch(() => {});
+      if (key && hash)
+        await attempts.reject(req.userId, 'products', key, hash, err).catch(() => {});
       next(err);
     } finally {
       if (session) await session.endSession();
@@ -309,22 +304,25 @@ class CheckOutController {
   async sepayWebhook(req, res, next) {
     try {
       const result = await reconciliation.receiveWebhook(req.validatedBody);
-      res.status(200).json({ success: true,
-        message: result.replayed ? 'Payment already processed' : 'Receipt accepted', data: result });
+      res.status(200).json({
+        success: true,
+        message: result.replayed ? 'Payment already processed' : 'Receipt accepted',
+        data: result,
+      });
       void flush();
-    } catch (err) { next(err); }
+    } catch (err) {
+      next(err);
+    }
   }
 
   async getSession(req, res, next) {
     try {
       const id = req.params.id;
-      const filter = mongoose.isObjectIdOrHexString(id)
-        ? { _id: id }
-        : { paymentCode: id };
+      const filter = mongoose.isObjectIdOrHexString(id) ? { _id: id } : { paymentCode: id };
       const checkout = await Checkout.findOne(filter);
-      if (!checkout) fail("Không tìm thấy phiên thanh toán", 404);
-      if (req.user.role !== "admin" && String(checkout.userId) !== req.userId)
-        fail("Không có quyền xem phiên thanh toán này", 403);
+      if (!checkout) fail('Không tìm thấy phiên thanh toán', 404);
+      if (req.user.role !== 'admin' && String(checkout.userId) !== req.userId)
+        fail('Không có quyền xem phiên thanh toán này', 403);
 
       const now = new Date();
       let state = checkout.state;
@@ -346,7 +344,10 @@ class CheckOutController {
             }
           });
         } catch (err) {
-          logger.error({ err, paymentCode: checkout.paymentCode }, 'Lazy-expire failed in getSession');
+          logger.error(
+            { err, paymentCode: checkout.paymentCode },
+            'Lazy-expire failed in getSession',
+          );
         } finally {
           if (session) await session.endSession();
         }
@@ -354,15 +355,14 @@ class CheckOutController {
 
       const orders = checkout.orderIds?.length
         ? await Order.find({ _id: { $in: checkout.orderIds } }).select(
-            "orderId status paymentStatus totalAmount",
+            'orderId status paymentStatus totalAmount',
           )
         : await Order.find({ paymentCode: checkout.paymentCode }).select(
-            "orderId status paymentStatus totalAmount",
+            'orderId status paymentStatus totalAmount',
           );
 
       const paid =
-        state === "paid" ||
-        (orders.length > 0 && orders.every((o) => o.paymentStatus === "paid"));
+        state === 'paid' || (orders.length > 0 && orders.every((o) => o.paymentStatus === 'paid'));
       const totalAmount = checkout.totalAmount;
       const receivedAmount = checkout.receivedAmount || 0;
       const remaining = Math.max(0, totalAmount - receivedAmount);
@@ -371,13 +371,13 @@ class CheckOutController {
         sessionId: String(checkout._id),
         paymentCode: checkout.paymentCode,
         orderCode: checkout.paymentCode,
-        state: paid ? "paid" : state,
-        status: paid ? "paid" : state,
+        state: paid ? 'paid' : state,
+        status: paid ? 'paid' : state,
         totalAmount,
         receivedAmount,
         remainingAmount: remaining,
         expiresAt: checkout.expiresAt,
-        shippingPayment: checkout.shippingPayment || "platform",
+        shippingPayment: checkout.shippingPayment || 'platform',
         orders: orders.map((o) => ({
           orderId: o.orderId,
           status: o.status,
@@ -385,7 +385,7 @@ class CheckOutController {
           totalAmount: o.totalAmount,
         })),
       };
-      if (state === "pending" && !paid && remaining > 0) {
+      if (state === 'pending' && !paid && remaining > 0) {
         data.qrUrl = qrUrl(checkout.paymentCode, remaining);
       }
       res.json({ success: true, data });
@@ -401,46 +401,42 @@ class CheckOutController {
       });
       const orders = await Order.find({
         paymentCode: req.params.paymentCode,
-      }).select(
-        "orderId userId status paymentStatus totalAmount paymentMethod",
-      );
-      if (!checkout && !orders.length) fail("Không tìm thấy đơn hàng", 404);
-      if (
-        req.user.role !== "admin" &&
-        String(checkout?.userId || orders[0]?.userId) !== req.userId
-      )
-        fail("Không có quyền xem đơn hàng này", 403);
+      }).select('orderId userId status paymentStatus totalAmount paymentMethod');
+      if (!checkout && !orders.length) fail('Không tìm thấy đơn hàng', 404);
+      if (req.user.role !== 'admin' && String(checkout?.userId || orders[0]?.userId) !== req.userId)
+        fail('Không có quyền xem đơn hàng này', 403);
       const paid =
-        checkout?.state === "paid" ||
-        (orders.length > 0 && orders.every((o) => o.paymentStatus === "paid"));
+        checkout?.state === 'paid' ||
+        (orders.length > 0 && orders.every((o) => o.paymentStatus === 'paid'));
       const online = (checkout?.paymentMethod || orders[0]?.paymentMethod) === 'online';
       const invalid =
         ['cancelled', 'expired'].includes(checkout?.state) ||
         (online && checkout?.expiresAt <= new Date() && !paid) ||
-        orders.some((o) => ["cancelled", "returned"].includes(o.status));
+        orders.some((o) => ['cancelled', 'returned'].includes(o.status));
 
       const payable =
         checkout?.paymentLedgerVersion === 2 &&
         online &&
         !paid &&
         !invalid &&
-        (orders.length === 0 || orders.every(
-          (o) => o.status === "pending" && o.paymentStatus === "pending",
-        ));
+        (orders.length === 0 ||
+          orders.every((o) => o.status === 'pending' && o.paymentStatus === 'pending'));
       const totalAmount =
-        checkout?.totalAmount ??
-        orders.reduce((sum, o) => sum + o.totalAmount, 0);
-      const receivedAmount = checkout?.paymentLedgerVersion === 2 ? checkout.receivedAmount : (paid ? totalAmount : 0);
+        checkout?.totalAmount ?? orders.reduce((sum, o) => sum + o.totalAmount, 0);
+      const receivedAmount =
+        checkout?.paymentLedgerVersion === 2 ? checkout.receivedAmount : paid ? totalAmount : 0;
       const remainingAmount = Math.max(0, totalAmount - receivedAmount);
       const data = {
-        receivedAmount, remainingAmount,
-        paymentStatus: paid ? "paid" : invalid ? "cancelled" : "pending",
+        receivedAmount,
+        remainingAmount,
+        paymentStatus: paid ? 'paid' : invalid ? 'cancelled' : 'pending',
         payable,
         totalAmount,
         shippingPayment: checkout?.shippingPayment || 'platform',
-        shippingMode: checkout?.shippingPayment === 'customer_to_carrier' ? 'separate' : 'legacy_fixed',
+        shippingMode:
+          checkout?.shippingPayment === 'customer_to_carrier' ? 'separate' : 'legacy_fixed',
         expiresAt: checkout?.expiresAt,
-        kind: checkout?.kind || "products",
+        kind: checkout?.kind || 'products',
         orders: orders.map((o) => ({
           orderId: o.orderId,
           status: o.status,
@@ -448,7 +444,8 @@ class CheckOutController {
           totalAmount: o.totalAmount,
         })),
       };
-      if (payable && remainingAmount > 0) data.qrUrl = qrUrl(req.params.paymentCode, remainingAmount);
+      if (payable && remainingAmount > 0)
+        data.qrUrl = qrUrl(req.params.paymentCode, remainingAmount);
       res.json({ success: true, data });
     } catch (err) {
       next(err);
@@ -462,15 +459,12 @@ class CheckOutController {
       let cancelled;
       await session.withTransaction(async () => {
         const id = req.params.id || req.params.paymentCode;
-        const filter = mongoose.isObjectIdOrHexString(id)
-          ? { _id: id }
-          : { paymentCode: id };
+        const filter = mongoose.isObjectIdOrHexString(id) ? { _id: id } : { paymentCode: id };
         const checkout = await lockCheckout(filter, session);
-        if (!checkout) fail("Phiên thanh toán không tồn tại", 404);
-        if (req.user.role !== "admin" && String(checkout.userId) !== req.userId)
-          fail("Không có quyền huỷ phiên này", 403);
-        if (checkout.state !== "pending")
-          fail("Phiên không thể huỷ ở trạng thái hiện tại", 409);
+        if (!checkout) fail('Phiên thanh toán không tồn tại', 404);
+        if (req.user.role !== 'admin' && String(checkout.userId) !== req.userId)
+          fail('Không có quyền huỷ phiên này', 403);
+        if (checkout.state !== 'pending') fail('Phiên không thể huỷ ở trạng thái hiện tại', 409);
 
         // Check if expired
         if (checkout.expiresAt <= new Date()) {
@@ -479,38 +473,38 @@ class CheckOutController {
             checkout.state = 'expired';
             await checkout.save({ session });
           }
-          fail("Phiên thanh toán đã hết hạn", 409);
+          fail('Phiên thanh toán đã hết hạn', 409);
         }
 
         // Atomic transition from 'pending' to 'cancelled'
         // If orders were created (e.g. race/legacy), cancel and restore stock
         const orders = await Order.find({ paymentCode: checkout.paymentCode }).session(session);
         for (const order of orders) {
-          if (!["pending", "processing", "on_hold"].includes(order.status)) continue;
+          if (!['pending', 'processing', 'on_hold'].includes(order.status)) continue;
           if (order.stockDeducted) {
             await restoreStock(order.products, session, order.boxes);
             order.stockDeducted = false;
           }
           order._statusChangedBy = req.userId;
-          order.cancelReason = req.validatedBody?.reason || "Khách huỷ phiên thanh toán";
+          order.cancelReason = req.validatedBody?.reason || 'Khách huỷ phiên thanh toán';
           order.cancelledBy = req.userId;
-          order.status = "cancelled";
+          order.status = 'cancelled';
           await order.save({ session });
         }
 
         await releaseCoupon(checkout, session);
-        if (checkout.state !== "cancelled") {
-          checkout.state = "cancelled";
+        if (checkout.state !== 'cancelled') {
+          checkout.state = 'cancelled';
           await checkout.save({ session });
         }
         cancelled = {
           sessionId: String(checkout._id),
           paymentCode: checkout.paymentCode,
-          state: "cancelled",
+          state: 'cancelled',
           totalAmount: checkout.totalAmount,
         };
       });
-      res.json({ success: true, message: "Đã huỷ phiên thanh toán", data: cancelled });
+      res.json({ success: true, message: 'Đã huỷ phiên thanh toán', data: cancelled });
     } catch (err) {
       next(err);
     } finally {
@@ -532,68 +526,73 @@ class CheckOutController {
       session = await mongoose.startSession();
       await session.withTransaction(async () => {
         const target = await Order.findById(req.params._id).session(session);
-        if (!target) fail("Đơn hàng không tồn tại", 404);
-        if (req.user.role !== "admin" && String(target.userId) !== req.userId)
-          fail("Không có quyền huỷ đơn hàng này", 403);
-        if (!["pending", "processing", "on_hold"].includes(target.status))
-          fail("Đơn không thể hủy ở trạng thái hiện tại");
+        if (!target) fail('Đơn hàng không tồn tại', 404);
+        if (req.user.role !== 'admin' && String(target.userId) !== req.userId)
+          fail('Không có quyền huỷ đơn hàng này', 403);
+        if (!['pending', 'processing', 'on_hold'].includes(target.status))
+          fail('Đơn không thể hủy ở trạng thái hiện tại');
         const checkout = await lockCheckout(target.paymentCode, session);
         const siblings = await Order.find({
           paymentCode: target.paymentCode,
         }).session(session);
         const groupCancel =
-          (target.paymentMethod === "online" &&
-            target.paymentStatus !== "paid") ||
+          (target.paymentMethod === 'online' && target.paymentStatus !== 'paid') ||
           siblings.some((o) => o.boxes?.length);
-        const targets = groupCancel
-          ? siblings.filter((o) => o.status !== "cancelled")
-          : [target];
-        if (
-          targets.some(
-            (o) => !["pending", "processing", "on_hold"].includes(o.status),
-          )
-        )
-          fail("Một phần đơn đã giao; cần xử lý hoàn/trả riêng", 409);
+        const targets = groupCancel ? siblings.filter((o) => o.status !== 'cancelled') : [target];
+        if (targets.some((o) => !['pending', 'processing', 'on_hold'].includes(o.status)))
+          fail('Một phần đơn đã giao; cần xử lý hoàn/trả riêng', 409);
         for (const order of targets) {
           if (order.stockDeducted) {
             await restoreStock(order.products, session, order.boxes);
             order.stockDeducted = false;
           }
-          if (order.paymentStatus === "paid") {
-            order.refundStatus = "pending";
+          if (order.paymentStatus === 'paid') {
+            order.refundStatus = 'pending';
             order.refundAmount =
-              order.totalAmount + (checkout?.paymentLedgerVersion === 2 ? 0 : (order.overpaidAmount || 0));
-            if (order.refundAmount > 0) await reconciliation.queueRefund({ key: `order:${order._id}`, checkoutId: checkout?._id,
-              orderId: order._id, purpose: 'order', amount: order.refundAmount,
-              reason: 'Hủy đơn đã thanh toán' }, session, req.userId);
+              order.totalAmount +
+              (checkout?.paymentLedgerVersion === 2 ? 0 : order.overpaidAmount || 0);
+            if (order.refundAmount > 0)
+              await reconciliation.queueRefund(
+                {
+                  key: `order:${order._id}`,
+                  checkoutId: checkout?._id,
+                  orderId: order._id,
+                  purpose: 'order',
+                  amount: order.refundAmount,
+                  reason: 'Hủy đơn đã thanh toán',
+                },
+                session,
+                req.userId,
+              );
             else order.refundStatus = 'not_applicable';
           }
           order._statusChangedBy = req.userId;
-          order.cancelReason =
-            req.validatedBody?.reason || req.body?.reason || "Không có lý do";
+          order.cancelReason = req.validatedBody?.reason || req.body?.reason || 'Không có lý do';
           order.cancelledBy = req.userId;
-          order.status = "cancelled";
+          order.status = 'cancelled';
           await order.save({ session });
-          await enqueue(order, "order_cancelled", session);
+          await enqueue(order, 'order_cancelled', session);
         }
         // The target fetched before locking is a different document instance.
         const allCancelled = siblings.every(
-          (o) =>
-            targets.some((t) => String(t._id) === String(o._id)) ||
-            o.status === "cancelled",
+          (o) => targets.some((t) => String(t._id) === String(o._id)) || o.status === 'cancelled',
         );
         if (checkout && allCancelled && checkout.state !== 'paid') {
-          await reconciliation.queueUnpaidRefund(checkout, session, 'Hủy checkout đã nhận tiền thiếu', req.userId);
+          await reconciliation.queueUnpaidRefund(
+            checkout,
+            session,
+            'Hủy checkout đã nhận tiền thiếu',
+            req.userId,
+          );
         }
         await releaseCoupon(checkout, session);
         if (checkout && allCancelled) {
-          checkout.state = "cancelled";
+          checkout.state = 'cancelled';
           await checkout.save({ session });
         }
-        cancelled =
-          targets.find((o) => String(o._id) === String(target._id)) || target;
+        cancelled = targets.find((o) => String(o._id) === String(target._id)) || target;
       });
-      res.json({ success: true, message: "Đã hủy đơn hàng", data: cancelled });
+      res.json({ success: true, message: 'Đã hủy đơn hàng', data: cancelled });
       void flush();
     } catch (err) {
       next(err);
@@ -609,31 +608,26 @@ class CheckOutController {
       await session.withTransaction(async () => {
         order = await Order.findOne({
           _id: req.params._id,
-          status: "on_hold",
-          paymentStatus: "paid",
+          status: 'on_hold',
+          paymentStatus: 'paid',
           stockDeducted: false,
         }).session(session);
-        if (!order) fail("Đơn không cần xử lý thiếu hàng", 409);
+        if (!order) fail('Đơn không cần xử lý thiếu hàng', 409);
         await lockCheckout(order.paymentCode, session);
         const siblings = await Order.find({
           paymentCode: order.paymentCode,
         }).session(session);
-        const targets = siblings.some((o) => o.boxes?.length)
-          ? siblings
-          : [order];
+        const targets = siblings.some((o) => o.boxes?.length) ? siblings : [order];
         if (
           targets.some(
-            (o) =>
-              o.status !== "on_hold" ||
-              o.paymentStatus !== "paid" ||
-              o.stockDeducted,
+            (o) => o.status !== 'on_hold' || o.paymentStatus !== 'paid' || o.stockDeducted,
           )
         )
-          fail("Nhóm hộp không ở trạng thái có thể giữ kho", 409);
+          fail('Nhóm hộp không ở trạng thái có thể giữ kho', 409);
         for (const target of targets) {
           await deductStock(target.products, session, target.boxes);
           target.stockDeducted = true;
-          target.status = "processing";
+          target.status = 'processing';
           target._statusChangedBy = req.userId;
           await target.save({ session });
         }
@@ -652,11 +646,11 @@ class CheckOutController {
       const page = Math.max(1, parseInt(req.query.page, 10) || 1),
         limit = Math.max(1, Math.min(100, parseInt(req.query.limit, 10) || 20));
       const [data, total] = await Promise.all([
-        Order.find({ refundStatus: "pending" })
+        Order.find({ refundStatus: 'pending' })
           .sort({ cancelledAt: -1 })
           .skip((page - 1) * limit)
           .limit(limit),
-        Order.countDocuments({ refundStatus: "pending" }),
+        Order.countDocuments({ refundStatus: 'pending' }),
       ]);
       res.json({
         success: true,
@@ -675,16 +669,19 @@ class CheckOutController {
 
   async completeRefund(req, res, next) {
     // Old endpoint must not bypass the audited workflow.
-    return next(Object.assign(new Error('Dùng /api/admin/reconciliation/refunds/:id/complete kèm bằng chứng chuyển tiền'), { statusCode: 409 }));
+    return next(
+      Object.assign(
+        new Error('Dùng /api/admin/reconciliation/refunds/:id/complete kèm bằng chứng chuyển tiền'),
+        { statusCode: 409 },
+      ),
+    );
   }
 
   async listPaymentEvents(req, res, next) {
     try {
       const page = Math.max(1, parseInt(req.query.page, 10) || 1),
         limit = 50;
-      const filter = req.query.state
-        ? { state: req.query.state }
-        : { state: { $ne: "processed" } };
+      const filter = req.query.state ? { state: req.query.state } : { state: { $ne: 'processed' } };
       const [data, total] = await Promise.all([
         PaymentEvent.find(filter)
           .sort({ createdAt: -1 })
@@ -716,35 +713,45 @@ async function changeCod(req, res, next, delivered) {
       result = await Order.findById(req.params._id).session(session);
       if (
         !result ||
-        result.paymentMethod !== "cod" ||
-        !(delivered ? ["processing", "shipped", "delivered"] : ["pending"]).includes(
-          result.status,
-        )
+        result.paymentMethod !== 'cod' ||
+        !(delivered ? ['processing', 'shipped', 'delivered'] : ['pending']).includes(result.status)
       )
-        fail("Đơn COD không hợp lệ", 409);
+        fail('Đơn COD không hợp lệ', 409);
       if (delivered && result.paymentStatus === 'paid') return;
       await lockCheckout(result.paymentCode, session);
-      result.status = delivered ? "delivered" : "processing";
+      result.status = delivered ? 'delivered' : 'processing';
       result._statusChangedBy = req.userId;
       if (delivered) {
-        result.paymentStatus = "paid";
-        result.codCollectionStatus = "confirmed";
+        result.paymentStatus = 'paid';
+        result.codCollectionStatus = 'confirmed';
         // Delivery may already have been reported by the merchant. Preserve the operational history,
         // and record the separate admin settlement even if status no longer changes.
-        if (!result.isModified('status')) result.statusHistory.push({ status: 'delivered', changedBy: req.userId,
-          note: 'Admin xác nhận đã thu và đối soát tiền COD' });
+        if (!result.isModified('status'))
+          result.statusHistory.push({
+            status: 'delivered',
+            changedBy: req.userId,
+            note: 'Admin xác nhận đã thu và đối soát tiền COD',
+          });
       }
       await result.save({ session });
       if (delivered) {
-        const checkout = await Checkout.findOne({ paymentCode: result.paymentCode }).session(session);
+        const checkout = await Checkout.findOne({ paymentCode: result.paymentCode }).session(
+          session,
+        );
         if (checkout) {
           const siblings = await Order.find({ paymentCode: result.paymentCode }).session(session);
-          const settled = siblings.filter(o => o.paymentStatus === 'paid');
+          const settled = siblings.filter((o) => o.paymentStatus === 'paid');
           checkout.receivedAmount = settled.reduce((sum, o) => sum + o.totalAmount, 0);
-          await Checkout.updateOne({ _id: checkout._id }, { $set: {
-            receivedAmount: checkout.receivedAmount,
-            state: settled.length === siblings.length ? 'paid' : checkout.state,
-          } }, { session, runValidators: true });
+          await Checkout.updateOne(
+            { _id: checkout._id },
+            {
+              $set: {
+                receivedAmount: checkout.receivedAmount,
+                state: settled.length === siblings.length ? 'paid' : checkout.state,
+              },
+            },
+            { session, runValidators: true },
+          );
         }
       }
     });

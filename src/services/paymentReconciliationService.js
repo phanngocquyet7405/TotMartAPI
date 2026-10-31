@@ -98,8 +98,7 @@ async function settle(checkout, orders, session, referenceCode) {
   } else {
     // If orders were not created at checkout (online session flow), create them now from snapshot
     if (!orders.length) {
-      if (!checkout.snapshot?.orderGroups?.length)
-        fail('Thiếu snapshot để tạo đơn hàng');
+      if (!checkout.snapshot?.orderGroups?.length) fail('Thiếu snapshot để tạo đơn hàng');
       const created = [];
       for (const group of checkout.snapshot.orderGroups) {
         const [order] = await Order.create(

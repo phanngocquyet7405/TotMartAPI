@@ -13,14 +13,8 @@ function paymentCode() {
 async function lockCheckout(codeOrFilter, session) {
   // Every writer touches this common document inside the same transaction.
   // Payment, cancellation and expiry therefore cannot commit conflicting snapshots.
-  const filter = typeof codeOrFilter === 'string'
-    ? { paymentCode: codeOrFilter }
-    : codeOrFilter;
-  return Checkout.findOneAndUpdate(
-    filter,
-    { $inc: { revision: 1 } },
-    { session, new: true },
-  );
+  const filter = typeof codeOrFilter === 'string' ? { paymentCode: codeOrFilter } : codeOrFilter;
+  return Checkout.findOneAndUpdate(filter, { $inc: { revision: 1 } }, { session, new: true });
 }
 async function replay(userId, key, hash, session = null, kind = null) {
   const query = Checkout.findOne({ userId, requestKey: key }).session(session);
