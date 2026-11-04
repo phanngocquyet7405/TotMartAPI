@@ -270,7 +270,7 @@ beforeAll(async () => {
     coupon,
     body: {
       addressId: String(user.addresses[0]._id),
-      paymentMethod: 'online',
+      paymentMethod: 'cod',
       couponCode: coupon.code,
     },
   };
