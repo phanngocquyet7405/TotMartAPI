@@ -270,7 +270,9 @@ beforeAll(async () => {
     coupon,
     body: {
       addressId: String(user.addresses[0]._id),
-      paymentMethod: 'cod',
+      // The B07 worker drills apply SePay receipts and therefore need an online
+      // checkout. A COD checkout correctly rejects payment allocation.
+      paymentMethod: 'online',
       couponCode: coupon.code,
     },
   };
@@ -582,7 +584,7 @@ drill(
     const pending = await Checkout.findOne({ requestKey: 'b07-server-unknown-commit' });
     await Checkout.updateOne({ _id: pending._id }, { expiresAt: new Date(0) });
     const beforeExpiry = await business();
-    await command(0, 'fail-expiry-write-once');
+    await command(0, 'fail-expiry-once');
     await command(0, 'drain', 'expiry');
     expect(await business()).toEqual(beforeExpiry);
     await stop(0, true);
@@ -604,7 +606,7 @@ drill(
       { $set: { leaseUntil: new Date(0), nextAttempt: new Date(0) } },
     );
     await start(0);
-    await command(0, 'fail-notification-publish-once');
+    await command(0, 'fail-notification-once');
     await command(0, 'drain', 'notification');
     expect(await Outbox.countDocuments({ state: 'pending' })).toBeGreaterThan(0);
     await Outbox.updateMany({ state: 'pending' }, { $set: { nextAttempt: new Date(0) } });
