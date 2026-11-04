@@ -88,7 +88,7 @@ test('late receipt goes to audited refund queue instead of paying cancelled orde
   await receiveWebhook(late);
   expect((await Refund.findOne({ purpose: 'receipt' })).amount).toBe(100000);
   expect(await Refund.countDocuments()).toBe(1);
-  expect((await Order.findOne({ paymentCode: code })).paymentStatus).toBe('pending');
+  expect(await Order.findOne({ paymentCode: code })).toBeNull();
 });
 test('surplus and order principal refunds are separate and sum to received funds', async () => {
   const { user, code } = await checkout();
@@ -130,7 +130,6 @@ test.each(['expiry', 'cancel'])(
   async (mode) => {
     const { user, code, product } = await checkout(),
       payload = receipt(code, 100000);
-    const order = await Order.findOne({ paymentCode: code });
     if (mode === 'expiry')
       await Checkout.updateOne({ paymentCode: code }, { expiresAt: new Date(0) });
     const webhook = () =>
@@ -142,14 +141,14 @@ test.each(['expiry', 'cancel'])(
       mode === 'expiry'
         ? expireCheckout(code, new Date())
         : request(app)
-            .post(`/api/checkout/cancel/${order._id}`)
+            .post(`/api/checkout/sessions/${code}/cancel`)
             .set('Authorization', `Bearer ${signToken(user)}`)
             .send({});
     const [paid] = await Promise.all([webhook(), stopping]);
     expect(paid.status).toBe(200);
     expect((await webhook()).status).toBe(200);
     const checkoutDoc = await Checkout.findOne({ paymentCode: code }),
-      finalOrder = await Order.findById(order._id);
+      finalOrder = await Order.findOne({ paymentCode: code });
     const events = await Event.find({ paymentCode: code }),
       allocations = await Allocation.find({ checkoutId: checkoutDoc._id }),
       refunds = await Refund.find({ checkoutId: checkoutDoc._id });
@@ -161,19 +160,17 @@ test.each(['expiry', 'cancel'])(
         state: 'created',
       }),
     ).toBe(1);
-    expect(checkoutDoc.orderIds.map(String)).toContain(String(order._id));
     const refundTotal = refunds.reduce((sum, r) => sum + r.amount, 0);
-    if (checkoutDoc.state === 'paid' && finalOrder.status !== 'cancelled') {
+    if (checkoutDoc.state === 'paid' && finalOrder && finalOrder.status !== 'cancelled') {
       expect(finalOrder.paymentStatus).toBe('paid');
       expect(refundTotal).toBe(0);
       expect((await Product.findById(product._id)).stock).toBe(4);
     } else {
-      expect(finalOrder.status).toBe('cancelled');
       expect(refundTotal).toBe(100000);
       expect((await Product.findById(product._id)).stock).toBe(5);
     }
     expect(
-      (checkoutDoc.state === 'paid' && finalOrder.status !== 'cancelled' ? 100000 : 0) +
+      (checkoutDoc.state === 'paid' && finalOrder && finalOrder.status !== 'cancelled' ? 100000 : 0) +
         refundTotal,
     ).toBe(100000);
   },

@@ -125,11 +125,11 @@ test('B06 multi-merchant receipt/refund equations conserve VND, coupon and stock
   expect((await create()).body.data).toEqual(first.body.data);
   const code = first.body.data.orderCode;
   let checkout = await Checkout.findOne({ paymentCode: code });
-  let orders = await Order.find({ paymentCode: code });
-  expect(orders).toHaveLength(2);
+  const groups = checkout.snapshot?.orderGroups || [];
+  expect(groups).toHaveLength(2);
   expect(checkout.totalAmount).toBe(200002);
-  expect(sum(orders, 'totalAmount')).toBe(checkout.totalAmount);
-  expect(sum(orders, 'discountAmount')).toBe(1);
+  expect(sum(groups, 'totalAmount')).toBe(checkout.totalAmount);
+  expect(sum(groups, 'discountAmount')).toBe(1);
   expect((await Coupon.findById(coupon._id)).usedCount).toBe(1);
   const partial = await webhook(code, 60000);
   expect(partial.response.status).toBe(200);
@@ -142,6 +142,10 @@ test('B06 multi-merchant receipt/refund equations conserve VND, coupon and stock
   await assertReceiptPartition();
   const payment = await webhook(code, 140009);
   expect(payment.response.status).toBe(200);
+  let orders = await Order.find({ paymentCode: code });
+  expect(orders).toHaveLength(2);
+  expect(sum(orders, 'totalAmount')).toBe(checkout.totalAmount);
+  expect(sum(orders, 'discountAmount')).toBe(1);
   checkout = await Checkout.findById(checkout._id);
   expect(checkout.receivedAmount).toBe(200009);
   expect(checkout.overpaidAmount).toBe(7);
@@ -253,10 +257,9 @@ test('B06 partial receipt expiry/cancel race preserves all received money as one
   const code = first.body.data.orderCode;
   expect((await webhook(code, 60000)).response.status).toBe(200);
   await Checkout.updateOne({ paymentCode: code }, { expiresAt: new Date(0) });
-  const order = await Order.findOne({ paymentCode: code });
   await Promise.all([
     expireCheckout(code, new Date()),
-    request(app).post(`/api/checkout/cancel/${order._id}`).set(auth(user)).send({}),
+    request(app).post(`/api/checkout/sessions/${code}/cancel`).set(auth(user)).send({}),
   ]);
   await expireCheckout(code, new Date());
   const refunds = await Refund.find();
@@ -264,7 +267,7 @@ test('B06 partial receipt expiry/cancel race preserves all received money as one
   expect(refunds[0].amount).toBe(60000);
   expect(refunds[0].status).toBe('pending');
   expect((await Product.findById(product._id)).stock).toBe(10);
-  expect((await Order.findById(order._id)).status).toBe('cancelled');
+  expect((await Checkout.findOne({ paymentCode: code })).state).toMatch(/expired|cancelled/);
   await assertReceiptPartition();
 });
 
@@ -451,7 +454,7 @@ test('B06 pinned subscription and product obligations survive catalog/profile dr
     .post('/api/checkout/check-out')
     .set(auth(user))
     .set('Idempotency-Key', 'b06-order-snapshot-key')
-    .send({ addressId: String(user.addresses[0]._id), paymentMethod: 'online' });
+    .send({ addressId: String(user.addresses[0]._id), paymentMethod: 'cod' });
   expect(purchased.status).toBe(201);
   const sub = await Subscription.findById(bought.body.data._id).lean(),
     order = await Order.findById(purchased.body.data.orderId).lean();

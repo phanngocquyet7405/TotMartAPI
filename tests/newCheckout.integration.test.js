@@ -27,13 +27,18 @@ test('two consecutive subscription purchases are independent and old key replays
 test('concurrent checkout retries cannot create two orders',async()=>{
   const {user,product}=await fixture();await createCartWithItems(user._id,[{productId:product._id,quantity:1}]);
   const send=()=>request(app).post('/api/checkout/check-out').set(auth(user)).set('Idempotency-Key','concurrent-checkout-key-123').send(body(user));
-  const responses=await Promise.all([send(),send()]);expect(responses.map(r=>r.status)).toEqual([201,201]);expect(responses[0].body).toEqual(responses[1].body);expect(await Checkout.countDocuments()).toBe(1);expect(await Order.countDocuments()).toBe(1);
+  const responses=await Promise.all([send(),send()]);expect(responses.map(r=>r.status)).toEqual([201,201]);expect(responses[0].body).toEqual(responses[1].body);expect(await Checkout.countDocuments()).toBe(1);
+  await pay(responses[0].body.data.orderCode,100001);
+  expect(await Order.countDocuments()).toBe(1);
 });
 test('two customers competing for the final coupon cannot both claim it',async()=>{
   const {user,product}=await fixture(),{user:second}=await createUser(),coupon=await createCoupon({usageLimit:1});
   for(const customer of [user,second])await createCartWithItems(customer._id,[{productId:product._id,quantity:1}]);
   const responses=await Promise.all([user,second].map(customer=>request(app).post('/api/checkout/check-out').set(auth(customer)).send({...body(customer),couponCode:coupon.code})));
-  expect(responses.map(r=>r.status).sort()).toEqual([201,409]);expect((await Coupon.findById(coupon._id)).usedCount).toBe(1);expect(await Order.countDocuments()).toBe(1);
+  expect(responses.map(r=>r.status).sort()).toEqual([201,409]);expect((await Coupon.findById(coupon._id)).usedCount).toBe(1);
+  const success=responses.find(r=>r.status===201);
+  await pay(success.body.data.orderCode,success.body.data.totalAmount);
+  expect(await Order.countDocuments()).toBe(1);
 });
 test('subscription rejects a stale displayed total before creating payment records',async()=>{
   const {user,product}=await fixture(),box=await boxFor(product),template=await Template.create({name:'Plan',boxId:box._id,planType:'3_month',basePrice:600000,discountPercent:0,discountPrice:600000});
@@ -46,7 +51,9 @@ test('retry creates one checkout, consumes coupon once, rejects key reuse with c
   const payload={...body(user),couponCode:coupon.code}, key='checkout-retry-key-12345';
   const first=await request(app).post('/api/checkout/check-out').set(auth(user)).set('Idempotency-Key',key).send(payload);
   const second=await request(app).post('/api/checkout/check-out').set(auth(user)).set('Idempotency-Key',key).send(payload);
-  expect(first.status).toBe(201); expect(second.body).toEqual(first.body); expect(await Checkout.countDocuments()).toBe(1); expect(await Order.countDocuments()).toBe(1); expect((await Coupon.findById(coupon._id)).usedCount).toBe(1);
+  expect(first.status).toBe(201); expect(second.body).toEqual(first.body); expect(await Checkout.countDocuments()).toBe(1);
+  await pay(first.body.data.orderCode,first.body.data.totalAmount);
+  expect(await Order.countDocuments()).toBe(1); expect((await Coupon.findById(coupon._id)).usedCount).toBe(1);
   expect((await request(app).post('/api/checkout/check-out').set(auth(user)).set('Idempotency-Key',key).send({...payload,note:'changed'})).status).toBe(409);
 });
 test('box checkout uses box price, reserves components, and refunds stock on cancellation',async()=>{
@@ -60,8 +67,8 @@ test('box checkout uses box price, reserves components, and refunds stock on can
 });
 test('cancelled checkout has no QR; a late transfer remains visible for reconciliation',async()=>{
   const {user,product}=await fixture(); await createCartWithItems(user._id,[{productId:product._id,quantity:1}]);
-  const placed=await request(app).post('/api/checkout/check-out').set(auth(user)).send(body(user)), order=await Order.findOne();
-  await request(app).post(`/api/checkout/cancel/${order._id}`).set(auth(user)).send({});
+  const placed=await request(app).post('/api/checkout/check-out').set(auth(user)).send(body(user));
+  await request(app).post(`/api/checkout/sessions/${placed.body.data.orderCode}/cancel`).set(auth(user)).send({});
   const status=await request(app).get(`/api/checkout/order-status/${placed.body.data.orderCode}`).set(auth(user)); expect(status.body.data.payable).toBe(false); expect(status.body.data.qrUrl).toBeUndefined();
   expect((await pay(placed.body.data.orderCode,placed.body.data.totalAmount)).status).toBe(200); expect((await Event.findOne()).state).toBe('not_payable');
 });

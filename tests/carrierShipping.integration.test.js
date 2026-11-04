@@ -16,11 +16,27 @@ test('COD and QR collect only merchandise; shipping choice is snapshotted and re
   const key=`carrier-policy-${paymentMethod}`;
   const placed=await request(app).post('/api/checkout/check-out').set(auth).set('Idempotency-Key',key).send(payload);
   expect(placed.status).toBe(201);expect(placed.body.data.totalAmount).toBe(100000);
-  const order=await Order.findById(placed.body.data.orderId);expect(order.shippingPayment).toBe('customer_to_carrier');expect(order.shippingFee).toBe(0);
   // A historical amount remains immutable even after new catalog prices arrive.
   await product.updateOne({price:200000});
   const retry=await request(app).post('/api/checkout/check-out').set(auth).set('Idempotency-Key',key).send(payload);
   expect(retry.status).toBe(201);expect(retry.body.data).toEqual(placed.body.data);
+  if (paymentMethod === 'online') {
+    await request(app)
+      .post('/api/checkout/sepay-webhook')
+      .set('Authorization', `Apikey ${process.env.SEPAY_API_KEY}`)
+      .send({
+        id: Math.floor(Math.random() * 1000000),
+        gateway: 'TestBank',
+        transactionDate: new Date().toISOString(),
+        accountNumber: process.env.SEPAY_BANK_ACCOUNT,
+        content: placed.body.data.orderCode,
+        code: placed.body.data.orderCode,
+        transferType: 'in',
+        transferAmount: 100000,
+        referenceCode: `REF-${paymentMethod}-${Date.now()}`,
+      });
+  }
+  const order=await Order.findOne({userId:user._id});expect(order.shippingPayment).toBe('customer_to_carrier');expect(order.shippingFee).toBe(0);
   expect(await Order.countDocuments({userId:user._id})).toBe(1);
  }
 });

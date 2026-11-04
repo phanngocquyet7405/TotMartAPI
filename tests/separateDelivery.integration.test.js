@@ -15,6 +15,22 @@ test.each(['cod','online'])('%s checkout charges merchandise without a fixed del
   expect(quote.body.data).toMatchObject({shippingFee:0,shippingMode:'separate',subtotal:100000,totalAmount:100000});
   const res=await request(app).post('/api/checkout/check-out').set('Authorization',`Bearer ${signToken(user)}`).send({...payload,paymentMethod,quoteFingerprint:quote.body.data.fingerprint});
   expect(res.status).toBe(201);expect(res.body.data.totalAmount).toBe(100000);
+  if (paymentMethod === 'online') {
+    await request(app)
+      .post('/api/checkout/sepay-webhook')
+      .set('Authorization', `Apikey ${process.env.SEPAY_API_KEY}`)
+      .send({
+        id: Math.floor(Math.random() * 1000000),
+        gateway: 'TestBank',
+        transactionDate: new Date().toISOString(),
+        accountNumber: process.env.SEPAY_BANK_ACCOUNT,
+        content: res.body.data.orderCode,
+        code: res.body.data.orderCode,
+        transferType: 'in',
+        transferAmount: 100000,
+        referenceCode: 'REF-' + Date.now(),
+      });
+  }
   const order=await Order.findOne();expect(order.shippingFee).toBe(0);expect(order.shippingMode).toBe('separate');expect(order.totalAmount).toBe(100000);
 });
 test('retry preserves previously agreed totals instead of repricing a historical order',async()=>{
