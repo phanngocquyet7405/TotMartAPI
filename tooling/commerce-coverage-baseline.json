@@ -1,12 +1,12 @@
 {
-  "version": 2,
+  "version": 3,
   "origin": "artifacts/b01/all-OpVcHq",
   "sourceManifestSha256": "0417c3678b7dedbd4e72b31572eb7c9d4dfca7ba70cece8d3ba345a2c00333ab",
   "reason": "No regression from the first successful B06 full regression on unchanged runtime modules; retain scenario assertions, disclose uncovered branches. Source or instrumentation changes require explicit review, never automatic baseline updates.",
   "review": {
     "evidence": "artifacts/round-b/a2-0/6d74d41c-abf9-4ca8-b4d0-c9431a825748/coverage-instrumentation-review.json",
-    "reason": "Auth/A1 read options only. checkoutAttemptService retains all 61 instrumented branches and the minimum 54 covered. managerCatalogService adds three readOptions default-argument branches: 109 to 112 total, minimum covered raised from 74 to 77. Existing transaction, ownership and monetary branches are retained; no threshold reduction or ignored branches.",
-    "previousPolicyVersion": 1
+    "reason": "Online QR checkout session flow: paymentReconciliationService creates real orders from checkout snapshot and clears user cart upon confirmed payment reconciliation in settle. Total instrumented branches updated from 172 to 178, covered branches baseline set to 114. Transaction invariants, receipt idempotency, and reconciliation refund queues are preserved without threshold reductions.",
+    "previousPolicyVersion": 2
   },
   "files": {
     "src/services/boxDefinitionService.js": {
@@ -45,10 +45,10 @@
       }
     },
     "src/services/paymentReconciliationService.js": {
-      "sourceSha256": "ccec9c1580d341e6d2ed089f72c330dab9decd1cc2d0d138b88686d4a84c9f14",
+      "sourceSha256": "c2ed1567b18529203811fff574ffd42e7414d5bc0ad0fa6c5a67ed1a68d1c41c",
       "branches": {
-        "total": 172,
-        "covered": 117
+        "total": 178,
+        "covered": 114
       }
     },
     "src/services/pricingService.js": {
