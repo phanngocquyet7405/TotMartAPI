@@ -542,6 +542,8 @@ drill(
       }),
     ).toBe(1);
     await Sub.updateOne({ _id: sub._id }, { $set: { nextDeliveries: new Date(0) } });
+    const Product = require('../src/models/Product');
+    const stockBeforeDeliveryRecovery = (await Product.findById(fixture.product._id)).stock;
     await command(0, 'fail-delivery-after-upsert');
     await expect(command(0, 'drain', 'delivery')).rejects.toThrow('worker command failed');
     expect(await Fulfillment.countDocuments({ subscriptionId: sub._id })).toBe(1);
@@ -549,7 +551,7 @@ drill(
     await start(0);
     await Promise.all([command(0, 'drain', 'delivery'), command(1, 'drain', 'delivery')]);
     expect(await Fulfillment.countDocuments({ subscriptionId: sub._id })).toBe(1);
-    expect((await require('../src/models/Product').findById(fixture.product._id)).stock).toBe(100);
+    expect((await Product.findById(fixture.product._id)).stock).toBe(stockBeforeDeliveryRecovery);
     fixture.subscriptionId = String(sub._id);
     await call(
       0,
