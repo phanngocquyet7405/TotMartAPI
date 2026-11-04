@@ -118,6 +118,7 @@ test('checkout returns HTTP 201 with payment fields and shipping policy after cr
     populate: () => query(product),
     session: async () => product,
   });
+  Product.findOneAndUpdate.mockResolvedValue(product);
   User.findById.mockReturnValue(
     query({
       name: 'Customer',
@@ -142,7 +143,7 @@ test('checkout returns HTTP 201 with payment fields and shipping policy after cr
   await controller.checkOut(
     {
       userId: 'user',
-      validatedBody: { addressId: 'address', paymentMethod: 'online' },
+      validatedBody: { addressId: 'address', paymentMethod: 'cod' },
     },
     res,
     next,

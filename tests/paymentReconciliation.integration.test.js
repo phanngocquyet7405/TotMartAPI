@@ -170,8 +170,9 @@ test.each(['expiry', 'cancel'])(
       expect((await Product.findById(product._id)).stock).toBe(5);
     }
     expect(
-      (checkoutDoc.state === 'paid' && finalOrder && finalOrder.status !== 'cancelled' ? 100000 : 0) +
-        refundTotal,
+      (checkoutDoc.state === 'paid' && finalOrder && finalOrder.status !== 'cancelled'
+        ? 100000
+        : 0) + refundTotal,
     ).toBe(100000);
   },
 );
