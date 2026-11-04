@@ -42,7 +42,7 @@
     "express-mongo-sanitize": "^2.2.0",
     "express-rate-limit": "^8.7.0",
     "helmet": "^8.3.0",
-    "joi": "^17.0.0",
+    "joi": "17.13.9",
     "jsonwebtoken": "^9.0.0",
     "mongoose": "^8.24.4",
     "mongoose-slug-updater": "^3.3.0",
