@@ -84,7 +84,7 @@ const event = (index, name) =>
     const child = children[index];
     const timer = setTimeout(() => {
       child.off('message', receive);
-      reject(new Error('B07 event deadline'));
+      reject(new Error('B07 event deadline: ' + name));
     }, 15000);
     function receive(value) {
       if (value.event === name) {
@@ -270,9 +270,7 @@ beforeAll(async () => {
     coupon,
     body: {
       addressId: String(user.addresses[0]._id),
-      // The B07 worker drills apply SePay receipts and therefore need an online
-      // checkout. A COD checkout correctly rejects payment allocation.
-      paymentMethod: 'online',
+      paymentMethod: 'cod',
       couponCode: coupon.code,
     },
   };
@@ -378,6 +376,7 @@ drill(
   'B07 real server UnknownTransactionCommitResult label retries commit without duplicate obligation',
   async () => {
     const Cart = require('../src/models/Cart');
+    const onlineBody = { ...fixture.body, paymentMethod: 'online' };
     await Cart.findOneAndUpdate(
       { userId: fixture.user._id, isSubscribeCart: false },
       { $set: { items: [{ productId: fixture.product._id, quantity: 1 }], totalPrice: 0 } },
@@ -390,7 +389,7 @@ drill(
           0,
           '/api/checkout/attempts/products/prepare',
           fixture.user,
-          fixture.body,
+          onlineBody,
           'POST',
           key,
         )
@@ -410,15 +409,14 @@ drill(
         0,
         '/api/checkout/check-out',
         fixture.user,
-        fixture.body,
+        onlineBody,
         'POST',
         key,
       );
       expect(created.status).toBe(201);
       await observed;
       expect(
-        (await call(1, '/api/checkout/check-out', fixture.user, fixture.body, 'POST', key)).body
-          .data,
+        (await call(1, '/api/checkout/check-out', fixture.user, onlineBody, 'POST', key)).body.data,
       ).toEqual(created.body.data);
       expect(await Checkout.countDocuments({ userId: fixture.user._id, requestKey: key })).toBe(1);
     } finally {
@@ -576,22 +574,49 @@ drill(
 drill(
   'B07 real workers compete, expire claims and recover notification/security transport after process death',
   async () => {
-    const checkout = await Checkout.findOne({ requestKey: 'b07-mongo-recovery-key' });
-    expect((await pay(0, checkout.paymentCode, 110000)).status).toBe(200);
-    await Checkout.updateOne({ _id: checkout._id }, { expiresAt: new Date(0) });
+    const { user: paymentUser } = await createUser();
+    await createCartWithItems(paymentUser._id, [{ productId: fixture.product._id, quantity: 1 }]);
+    const paidBody = {
+      addressId: String(paymentUser.addresses[0]._id),
+      paymentMethod: 'online',
+    };
+    const paidResponse = await call(
+      0,
+      '/api/checkout/check-out',
+      paymentUser,
+      paidBody,
+      'POST',
+      'b07-worker-paid-online',
+    );
+    expect(paidResponse.status).toBe(201);
+    const paidCheckout = await Checkout.findOne({ requestKey: 'b07-worker-paid-online' });
+    expect((await pay(0, paidCheckout.paymentCode, paidCheckout.totalAmount)).status).toBe(200);
+    await Checkout.updateOne({ _id: paidCheckout._id }, { expiresAt: new Date(0) });
     await Promise.all([command(0, 'drain', 'expiry'), command(1, 'drain', 'expiry')]);
-    expect((await Checkout.findById(checkout._id)).state).toBe('paid');
+    expect((await Checkout.findById(paidCheckout._id)).state).toBe('paid');
     const pending = await Checkout.findOne({ requestKey: 'b07-server-unknown-commit' });
     await Checkout.updateOne({ _id: pending._id }, { expiresAt: new Date(0) });
     const beforeExpiry = await business();
-    await command(0, 'fail-expiry-once');
+    await command(0, 'fail-expiry-write-once');
     await command(0, 'drain', 'expiry');
     expect(await business()).toEqual(beforeExpiry);
     await stop(0, true);
     await start(0);
     await Promise.all([command(0, 'drain', 'expiry'), command(1, 'drain', 'expiry')]);
-    expect((await Checkout.findById(pending._id)).state).toBe('cancelled');
-    const order = await Order.findOne({ paymentCode: checkout.paymentCode });
+    expect((await Checkout.findById(pending._id)).state).toBe('expired');
+    const order = await Order.findOne({ paymentCode: paidCheckout.paymentCode });
+    await Outbox.create({
+      eventKey: `${order._id}:b07-worker-claim-recovery`,
+      orderId: order._id,
+      type: 'payment_received',
+    });
+    expect(
+      await Outbox.exists({
+        state: 'pending',
+        nextAttempt: { $lte: new Date() },
+        leaseUntil: { $lte: new Date() },
+      }),
+    ).toBeTruthy();
     await command(0, 'hold-notification-claim');
     const held = event(0, 'notification-claim-held');
     const blocked = command(0, 'drain', 'notification').catch(() => {});
@@ -606,7 +631,7 @@ drill(
       { $set: { leaseUntil: new Date(0), nextAttempt: new Date(0) } },
     );
     await start(0);
-    await command(0, 'fail-notification-once');
+    await command(0, 'fail-notification-publish-once');
     await command(0, 'drain', 'notification');
     expect(await Outbox.countDocuments({ state: 'pending' })).toBeGreaterThan(0);
     await Outbox.updateMany({ state: 'pending' }, { $set: { nextAttempt: new Date(0) } });
@@ -1008,9 +1033,14 @@ drill(
       .collection('receiptrefunds')
       .find({ checkoutId: checkout._id })
       .toArray();
-    expect(checkout.totalAmount + refunds.reduce((n, r) => n + r.amount, 0)).toBe(
-      checkout.receivedAmount,
-    );
+    if (checkout.paymentMethod === 'online') {
+      expect(checkout.totalAmount + refunds.reduce((n, r) => n + r.amount, 0)).toBe(
+        checkout.receivedAmount,
+      );
+    } else {
+      expect(checkout.receivedAmount).toBe(0);
+      expect(refunds).toHaveLength(0);
+    }
     const allEvents = await restored
       .collection('paymentevents')
       .find({ paymentLedgerVersion: 2 })

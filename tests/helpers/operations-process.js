@@ -86,8 +86,8 @@ process.on('message', async (message) => {
         Model.create = original;
         throw Object.assign(new Error('B07 controlled allocation failure'), { statusCode: 503 });
       };
-    } else if (action === 'fail-expiry-write-once' || action === 'fail-expiry-once') {
-      const prototype = require('../../src/models/Order').prototype,
+    } else if (action === 'fail-expiry-write-once') {
+      const prototype = require('../../src/models/Checkout').prototype,
         original = prototype.save;
       prototype.save = async function (...args) {
         prototype.save = original;
@@ -102,7 +102,7 @@ process.on('message', async (message) => {
         await original.apply(this, args);
         throw new Error('B07 fulfillment upsert acknowledgement loss');
       };
-    } else if (action === 'fail-notification-publish-once' || action === 'fail-notification-once') {
+    } else if (action === 'fail-notification-publish-once') {
       const original = redis.getClient;
       redis.getClient = () => ({
         ...original(),
