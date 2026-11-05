@@ -1,148 +1,171 @@
-[Current contracts, tooling and historical verification index](docs/README.md)
-
-## Merchant compatibility update — 2026-10-17
-
-[Upgrade and verification](docs/UPGRADE-MERCHANT.md) · [Manager API contract](docs/MANAGER-API-CONTRACT.md) · [Operational permissions](docs/MERCHANT-OPERATING-MODEL.md)
+[Current contracts, tooling and historical verification index](docs/README.md) · [Route naming debt and modernization roadmap](docs/route-naming-debt.md)
 
 # TotMart API
 
-Backend for **TotMart**, a Vietnamese organic-products e-commerce platform. Node.js + Express + MongoDB (Mongoose), MVC architecture. The companion frontend (Next.js) lives in a separate repository.
+Backend API for **TotMart**, a Vietnamese organic-products e-commerce platform. Built with Node.js 24, Express 5, and Mongoose 8 on a MongoDB replica set with Redis 7.4 shared caching and state synchronization.
 
-## ⚠️ Payment provider note
+Companion frontend (Next.js) lives in a separate repository.
 
-This backend integrates **SePay** (bank-transfer QR code + webhook), not VNPay. If your frontend or documentation elsewhere references VNPay, that integration does not exist in this codebase — either it needs to be built, or the reference is stale and should be corrected. Confirm which is the case before go-live; shipping with a frontend that expects a VNPay redirect against this backend will break the online-payment flow.
+---
 
-## Project structure
+## Architecture & Technology Stack
+
+- **Runtime**: Node.js `>=24 <25` (tested on Node 24).
+- **Framework**: Express 5.
+- **Database**: MongoDB 7.0+ (requires **Replica Set** for multi-document ACID transactions).
+- **Cache & Shared State**: Redis 7.4 (fail-closed rate limiting, session revocation, and cluster concurrency control).
+- **Payment Gateway**: **SePay** VietQR bank transfer with real-time webhook reconciliation and idempotent double-entry ledger.
+- **Logging**: Pino / Pino-HTTP with strict automated redaction of tokens, credentials, and sensitive markers.
+
+---
+
+## Project Structure
 
 ```
 src/
-├── config/
-│   ├── database.js        # MongoDB connection
-│   └── environment.js     # Env vars, with required-var validation in production
-├── controllers/           # Business logic (checkout, cart, products, users, ...)
-├── models/                # Mongoose schemas
-├── routes/                # Express routers, one per resource
-├── middleware/
-│   ├── authMiddleware.js     # JWT auth (authMiddleware + adminMiddleware)
-│   ├── sepayAuth.js          # API-key auth for the SePay webhook (timing-safe compare)
-│   ├── rateLimiter.js        # Rate limits for auth / checkout / webhook routes
-│   ├── validationHandler.js  # Joi request validation
-│   └── errorHandler.js       # Centralized error formatting
-├── jobs/
-│   ├── orderExpiryScheduler.js  # Auto-cancels unpaid online orders after ORDER_EXPIRY_HOURS
-│   └── deliveryScheduler.js     # Processes due subscription-box deliveries
-├── utils/
-├── app.js                 # Express app (middleware + route wiring)
-└── server.js              # Entry point — connects DB, starts schedulers, listens
+├── config/                  # Configuration & startup validation
+│   ├── database.js          # Mongo replica set connection with bounded timeouts
+│   ├── environment.js       # Environment configuration loading
+│   ├── environmentChecks.js # Production boot preflight checks (TRUST_PROXY, secrets, etc.)
+│   ├── redis.js             # Redis client and Pub/Sub connection
+│   ├── resolveEnvironment.js# Environment variable resolution with safe defaults
+│   └── sessionPolicy.js     # Shared store session enforcement policy
+├── controllers/             # HTTP controller handlers
+│   ├── adminCommerceController.js # Admin order fulfillment & inventory hold endpoints
+│   ├── authController.js    # Authentication, password reset, and session control
+│   ├── cartController.js    # Optimistic concurrency-protected cart operations
+│   ├── checkOutController.js# COD & Online checkout orchestrations
+│   ├── managerController.js # Merchant catalog & brand management
+│   ├── reconciliationController.js # Payment reconciliation & manual ledger settlement
+│   └── ...
+├── jobs/                    # Periodic scheduled background workers
+│   ├── deliveryScheduler.js     # Processes due subscription box deliveries
+│   ├── notificationOutboxScheduler.js # Dispatches async notification events
+│   ├── orderExpiryScheduler.js  # Cancels unpaid online checkout sessions
+│   └── securityOutboxScheduler.js # Drains and revokes invalidated auth sessions
+├── middleware/              # Express middlewares
+│   ├── authMiddleware.js    # JWT verification, active user checks & live DB session validation
+│   ├── cookieCsrf.js        # SameSite cookie CSRF protection
+│   ├── errorHandler.js      # Centralized error handler with strict error disclosure prevention
+│   ├── rateLimiter.js       # Redis-backed fail-closed rate limiters (auth, checkout, two-tier webhook)
+│   ├── sepayAuth.js         # Constant-time timing-safe SePay API key validation
+│   ├── validationHandler.js # Joi request validation (body, query, params)
+│   └── validationSchemas.js # Joi schemas for commerce, auth, and catalog
+├── models/                  # Mongoose models with strict indexes and revision fencing
+├── routes/                  # Express route definitions
+├── services/                # Pure business logic services
+│   ├── boxDefinitionService.js  # Combo box versioning & immutable snapshot pinning
+│   ├── checkoutAttemptService.js# Attempt fencing, admission quota & recovery tombstones
+│   ├── inventoryService.js      # Atomic conditional stock reservations & adjustments
+│   ├── managerCatalogService.js # Merchant-scoped catalog management
+│   ├── merchantScope.js         # Authenticated identity merchant isolation
+│   ├── orderFactory.js          # Unified order creation factory for COD & Online settlement
+│   ├── paymentReconciliationService.js # SePay payment reconciliation & double-entry ledger
+│   ├── pricingService.js        # Quote builder, bulk discount tiers & quota fingerprints
+│   └── subscriptionService.js   # Subscription template & fulfillment lifecycle
+├── utils/                   # System utilities (transaction wrapper, logger, safe redaction)
+├── app.js                   # Express application setup
+└── server.js                # Server entrypoint with topology check & worker bootstrap
 
-tests/
-├── env.setup.js           # Test env vars (loaded before any module via jest setupFiles)
-├── helpers/
-│   ├── db.js               # In-memory MongoDB replica set lifecycle (connect/clear/close)
-│   └── factories.js        # Test data builders (user, brand, product, cart, coupon)
-├── security.test.js        # Auth/CORS/helmet/webhook-auth tests — no DB required
-├── rateLimiter.test.js     # Rate-limit behavior — no DB required
-├── checkout.test.js        # Order-placement integration tests — requires MongoDB
-└── webhook.test.js         # SePay webhook integration tests — requires MongoDB
+tests/                       # 89 test suites, 919 automated tests
+├── helpers/                 # Test helpers (ephemeral Mongo replica set, disposable Redis runner)
+├── cartConcurrencyAndValidation.test.js # Cart concurrency & validation verification
+├── cartSync.test.js         # LocalStorage cart synchronization tests
+├── checkout.test.js         # Order creation & checkout attempt tests
+├── checkoutSessionFlow.test.js # End-to-end checkout session and webhook tests
+├── commerceInvariants.integration.test.js # Atomic stock, ledger, and attempt invariants
+├── orderCharacterization.integration.test.js # Parity test between COD and Online settle
+├── proxyAndWebhookRateLimit.test.js # Trust proxy validation & two-tier rate limiting
+├── transactionTimeout.integration.test.js # Mongo timeout bounds and 503 recovery
+└── ...
 ```
+
+---
 
 ## Prerequisites
 
-- Node.js 24.x (release runtime; Node 22 is not supported by this release)
-- MongoDB **replica set** (required — `checkOutController` uses multi-document transactions via `session.withTransaction()`, which MongoDB only supports on a replica set, not a standalone `mongod`). A single-node replica set is enough for local dev.
-- A SePay account with a webhook configured (Api_Key auth type) if you need to exercise the online-payment path end to end.
+- **Node.js**: Version `>=24 <25`.
+- **MongoDB**: Replica set deployment required (standalone `mongod` does not support multi-document transactions). A local single-node replica set is provided automatically by test helpers via `MongoMemoryReplSet`.
+- **Redis**: Redis 7.4+ (required in production/staging for shared rate limiting, session revocation, and account locking).
+- **SePay Account**: For online VietQR payments and webhook confirmation.
 
-## Installation
+---
+
+## Installation & Setup
 
 ```bash
+# 1. Install dependencies
 npm ci
+
+# 2. Copy and configure environment variables
 cp .env.example .env
-# fill in .env — see the "Environment variables" section below
+
+# 3. Start local development server (Node watch mode)
 npm run dev
 ```
 
-## Environment variables
+---
 
-| Variable | Required | Notes |
-|---|---|---|
-| `PORT` | no | Defaults to 3000 |
-| `NODE_ENV` | no | `development` / `production` / `test`. Production enforces the required-vars check below. |
-| `MONGODB_URI` | **yes (prod)** | Must point at a replica-set-enabled deployment |
-| `JWT_SECRET` / `JWT_EXPIRES_IN` | **yes (prod)** | Access token signing |
-| `JWT_REFRESH_SECRET` / `JWT_REFRESH_EXPIRES_IN` | **yes (prod)** | Refresh token signing |
-| `FRONTEND_URL` | **yes (prod)** | Used to build reset-password links, and as the CORS fallback if `CORS_ORIGINS` is unset |
-| `CORS_ORIGINS` | no | Comma-separated allowlist of origins permitted to call this API. Falls back to `FRONTEND_URL` if unset. **Do not leave this open to everyone in production.** |
-| `BREVO_API_KEY` / `FROM_EMAIL` | no | Transactional email (password reset) |
-| `CLOUDINARY_*` | no | Image uploads |
-| `SEPAY_API_KEY` | **yes (prod)** | Shared secret the SePay webhook must send as `Authorization: Apikey <value>` |
-| `SEPAY_BANK_ACCOUNT` / `SEPAY_BANK_NAME` | **yes (prod)** | Used to build the payment QR code URL |
-| `ORDER_EXPIRY_HOURS` | no | Hours an unpaid online order is kept before auto-cancel (default 24) |
+## Environment Variables
 
-`src/config/environment.js` throws on startup if `NODE_ENV=production` and any required var above is missing — the app refuses to boot rather than run with unsafe defaults.
+| Variable                       |    Required    |    Default    | Description                                                              |
+| :----------------------------- | :------------: | :-----------: | :----------------------------------------------------------------------- |
+| `PORT`                         |       No       |    `3000`     | HTTP listening port                                                      |
+| `NODE_ENV`                     |       No       | `development` | `development`, `production`, or `test`                                   |
+| `MONGODB_URI`                  | **Yes (prod)** |       —       | MongoDB connection string (must point to a replica set)                  |
+| `MONGO_SOCKET_TIMEOUT_MS`      |       No       |    `45000`    | Bounded socket read/write timeout in ms                                  |
+| `MONGO_WAIT_QUEUE_TIMEOUT_MS`  |       No       |    `5000`     | Pool connection wait queue timeout in ms                                 |
+| `MONGO_MAX_COMMIT_TIME_MS`     |       No       |    `10000`    | Transaction commit deadline in ms                                        |
+| `MONGO_TRANSACTION_TIMEOUT_MS` |       No       |    `15000`    | Overall transaction execution deadline in ms                             |
+| `JWT_SECRET`                   | **Yes (prod)** |       —       | HMAC secret for access token signing                                     |
+| `JWT_EXPIRES_IN`               |       No       |     `15m`     | Access token lifespan                                                    |
+| `JWT_REFRESH_SECRET`           | **Yes (prod)** |       —       | Secret for refresh token signing                                         |
+| `JWT_REFRESH_EXPIRES_IN`       |       No       |     `7d`      | Refresh token lifespan                                                   |
+| `BCRYPT_COST`                  |       No       |     `10`      | Salt rounds for native bcrypt hashing (10–14)                            |
+| `FRONTEND_URL`                 | **Yes (prod)** |       —       | Primary web URL for password reset links & default CORS                  |
+| `CORS_ORIGINS`                 |       No       |       —       | Comma-separated allowlist of permitted origins                           |
+| `TRUST_PROXY`                  | **Yes (prod)** |       —       | Required in production: `1` (behind proxy/Render/Nginx) or `0`           |
+| `TRUST_PROXY_CONFIRMED_DIRECT` |       No       |    `false`    | Set `true` if `TRUST_PROXY=0` is intentional on direct internet exposure |
+| `REDIS_URL`                    | **Yes (prod)** |       —       | Redis connection URL (`rediss://...` in production)                      |
+| `REDIS_NAMESPACE`              |       No       |     `tm`      | Prefix key namespace in shared Redis instance                            |
+| `SEPAY_API_KEY`                | **Yes (prod)** |       —       | Secret key required in `Authorization: Apikey <key>` on webhooks         |
+| `SEPAY_BANK_ACCOUNT`           | **Yes (prod)** |       —       | Bank account number for QR code generation                               |
+| `SEPAY_BANK_NAME`              | **Yes (prod)** |       —       | Bank short name for VietQR code generation                               |
+| `ORDER_EXPIRY_HOURS`           |       No       |     `24`      | Hours before an unpaid online order expires                              |
+| `BREVO_API_KEY` / `FROM_EMAIL` |       No       |       —       | Transactional email provider for password resets                         |
+| `CLOUDINARY_*`                 |       No       |       —       | Cloudinary cloud credentials for brand logo & image uploads              |
 
-## Running
+---
 
-```bash
-npm run dev      # node --watch, auto-reload
-npm start        # production
-npm test         # Jest test suite (see below)
-```
-
-Health check: `GET /api/home/health`.
-
-## API surface (by router)
-
-All routes are mounted under `/api`. Endpoints requiring auth expect `Authorization: Bearer <token>`.
-
-| Base path | Router | Covers |
-|---|---|---|
-| `/api/home` | `homeRouter` | login, logout, forgot/reset password, health check |
-| `/api/users` | `userRouter` | register, profile, addresses, admin user management |
-| `/api/checkout` | `checkOutRouter` | order placement, SePay webhook, cancel, refunds, COD confirmation |
-| `/api/carts` | `cartRouter` | cart CRUD, plus subscription-box cart |
-| `/api/products`, `/api/brands`, `/api/categories`, `/api/boxes` | — | catalog management |
-| `/api/subcribe-plans` | `subcribePlanRouter` | subscription box plans |
-| `/api/coupons` | `couponRouter` | coupon CRUD (admin) |
-| `/api/admin/notifications` | `notificationRouter` | admin order/payment notifications (SSE) |
-
-### Order placement & payment flow
-
-1. `POST /api/checkout/check-out` — creates one `Order` per merchant represented in the cart, inside a DB transaction. `paymentMethod: "cod"` deducts stock immediately; `paymentMethod: "online"` defers stock deduction until payment is confirmed and returns a SePay QR URL.
-2. `POST /api/checkout/sepay-webhook` — called by SePay when a bank transfer arrives. Authenticated via a static API key (`Authorization: Apikey <SEPAY_API_KEY>`, timing-safe compared), rate-limited, and idempotent on `referenceCode`. Underpayment is flagged for manual reconciliation rather than silently accepted or rejected.
-3. Unpaid online orders are auto-cancelled by `orderExpiryScheduler` after `ORDER_EXPIRY_HOURS`.
-4. `POST /api/checkout/cancel/:_id` — owner or admin can cancel a `pending`/`processing` order; restores stock and coupon usage, and flags a refund if the order was already paid.
-5. Admin: `POST /api/checkout/confirm-cod/:_id`, `POST /api/checkout/mark-cod-delivered/:_id`, `GET /api/checkout/pending-refunds`, `POST /api/checkout/complete-refund/:_id`.
-
-## Testing
+## Available Scripts
 
 ```bash
-npm ci
-npm run test:b01:http  # first: real local HTTP, disposable Redis outage + Mongo replica set
-npm run test:b01       # then: full BE regression, real Redis, coverage baseline
-npm run test:b01:unit  # URL/ownership/DB teardown unit tests; no Docker needed
+# Development
+npm run dev             # Start with Node.js watch mode
+
+# Production
+npm start               # Start HTTP production server
+
+# Quality & Linting
+npm run lint            # Incremental lint gate against baseline
+npm run lint:all        # Full codebase ESLint scan (must report 0 errors)
+npm run format:check    # Check Prettier code style compliance
+npm run validate:api    # Validate OpenAPI specifications and examples
+
+# Testing
+npm test                # Run Jest tests in-band
+npm run test:b01:unit   # Unit harness tests (no Docker needed)
+npm run test:b01:http   # HTTP process integration with real Redis & Mongo
+npm run test:b01        # Full BE regression suite (89 suites, 919 tests)
+npm run test:manager    # Manager and merchant policy test suites
 ```
 
-Use Node 24 and a running Linux Docker daemon, locally and in CI. The runner provisions a Redis 7.4 container on a free loopback port, database `/15`, for primitives. The HTTP suite validates the same URL format, then provisions a **different** Redis container exclusively for stop/start/pause/unpause. It verifies the exact ID, random run label, configured binding and active URL mapping before operations; ambient `TEST_REDIS_CONTAINER` is never trusted. No shared CI Redis service is stopped. Each container has no persisted data and is removed by its owner, with unpause first if needed, including setup failures.
+---
 
-The runner removes ambient test/service credentials and DB targets; Jest and subprocesses do not load `.env`. Mongo integration uses `MongoMemoryReplSet` (real disposable `mongod`, default 7.0.14, one-node replica set). The first run needs its binary download or a compatible `MONGOMS_SYSTEM_BINARY`. The HTTP crash drill refuses `TEST_MONGODB_URI`; it must own its Mongo process. Teardown only clears a successfully connected DB and stops initialized resources.
+## Security & Reliability Design
 
-`npm test` remains the direct Jest entrypoint: without `TEST_REDIS_URL`, both real Redis suites skip locally (error in CI). That is not full verification. The shared test URL validator permits only `redis://127.0.0.1:port` or `redis://localhost:port`, optional database `0..15`; no credentials, remote hosts, queries or fragments. These bounds match the default 16 databases in the disposable Redis image.
-
-Artifacts are under `artifacts/b01/{http,all,unit}-<unique-run>/`: sanitized test counts/statuses, original Jest exit code and coverage JSON/LCOV/HTML over `src/**/*.js`. No arbitrary coverage threshold is enforced. CI uploads these even after failures. Setup failure is not a passing test; compare exit codes and pass/fail/skip counts. Unit/mock tests, local HTTP integration and browser/UI E2E are different evidence; this runner does not prove browser E2E or production readiness. See [B01 evidence](docs/B01-verification.md).
-
-## Security notes
-
-- **Rate limiting**: applied to `/login`, `/register`, `/forgot-password`, `/reset-password` (10 req/15 min), `/check-out` (30 req/15 min), and `/sepay-webhook` (60 req/min) — see `src/middleware/rateLimiter.js`.
-- **Helmet**: standard security headers are applied to all responses.
-- **CORS**: locked to the `CORS_ORIGINS` allowlist (comma-separated), falling back to `FRONTEND_URL`. Requests with no `Origin` header (webhooks, server-to-server calls) are always allowed through; browser requests from origins outside the allowlist are rejected.
-- **SePay webhook**: authenticated via a static API key compared with `crypto.timingSafeEqual`, separate from user JWT auth. Keep `SEPAY_API_KEY` secret — anyone with it can post fake payment confirmations.
-
-## Known gaps / follow-ups not covered by this pass
-
-- `authController.forgotPassword` hardcodes the reset-password URL host (`https://totmartapi.onrender.com/...`) instead of using `FRONTEND_URL` — worth fixing before relying on password reset emails in a different environment.
-- Subscription-box cart code (`cartController.js`'s subscribe-cart branches use a field name `subcricePlanId` that doesn't match the `Cart` model's actual `subscriptionPlanId` field) wasn't in scope for this pass and hasn't been fixed — it looks like the same class of bug as the checkout cart-lookup issue that was just fixed, but affecting a different feature.
-- CI runs Node 24 checks via `.github/workflows/check.yml`; see the disposable runner below.
-
-## Commerce FE v2
-
-See [COMMERCE-FE-V2.md](docs/COMMERCE-FE-V2.md) for direct-to-carrier shipping, recipient addresses and staging acceptance. `npm run check:staging:commerce` performs read-only public checks.
+1. **Transaction Safety**: All order creation, stock adjustments, coupon deductions, payment ledger records, and outbox queues are serialized within MongoDB replica set transactions with bounded timeouts (`MONGO_MAX_COMMIT_TIME_MS: 10s`).
+2. **Idempotency & Replay Protection**: Checkout attempts and SePay webhooks enforce strict client-request keys and SHA-256 payload hashes (`requestHash`). Identical requests safely return previous commitments; altered requests with conflicting keys return 409.
+3. **Two-Tier Webhook Limiter**: Pre-auth flood protection (300 req/min/IP) protects the network edge, while post-auth business quota (60 req/min/IP) prevents forged attacks from exhausting valid SePay quota.
+4. **Optimistic Concurrency on Cart Operations**: Cart item updates and subscribe cart operations implement retry loops with jittered backoff on `VersionError` to prevent lost updates under high concurrency.
+5. **No Blind Trust in Client Identity**: User status, tokenVersion, and session revocation are verified against the database on every authenticated request.

@@ -66,11 +66,19 @@ function validateProductionEnv(env) {
     errors.push('REDIS_URL production phải dùng TLS rediss://');
   if (env.REDIS_NAMESPACE && !/^[a-z0-9:_-]{3,80}$/i.test(env.REDIS_NAMESPACE))
     errors.push('REDIS_NAMESPACE không hợp lệ');
-  if (
-    env.TRUST_PROXY !== undefined &&
-    !/^(0|1|loopback|linklocal|uniquelocal)$/.test(env.TRUST_PROXY)
-  )
+  if (env.TRUST_PROXY === undefined || env.TRUST_PROXY === '') {
+    errors.push('TRUST_PROXY phải được khai báo rõ ràng trong production');
+  } else if (!/^(0|1|loopback|linklocal|uniquelocal)$/.test(env.TRUST_PROXY)) {
     errors.push('TRUST_PROXY phải là 0/1 hoặc loopback/linklocal/uniquelocal');
+  } else if (
+    env.TRUST_PROXY === '0' &&
+    env.TRUST_PROXY_CONFIRMED_DIRECT !== 'true' &&
+    env.TRUST_PROXY_CONFIRMED_DIRECT !== '1'
+  ) {
+    warnings.push(
+      'TRUST_PROXY=0: server đang bỏ qua header X-Forwarded-For; mọi client sau reverse proxy sẽ bị dùng chung IP rate limit. Nếu máy chủ chạy trực tiếp không qua proxy, hãy đặt TRUST_PROXY_CONFIRMED_DIRECT=true',
+    );
+  }
   for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET'])
     if (env[key] && new Set(env[key]).size < 8) errors.push(`${key} quá dễ đoán`);
   return { errors, warnings };

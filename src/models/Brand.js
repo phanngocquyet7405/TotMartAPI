@@ -1,9 +1,9 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const brandSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    slug: { type: String, slug: "name", unique: true },
+    slug: { type: String, slug: 'name', unique: true },
     logo: { type: String },
     // Server-managed ID used to clean up images; legacy URL-only logos still work.
     logoPublicId: { type: String, select: false },
@@ -11,14 +11,20 @@ const brandSchema = new mongoose.Schema(
     cityAddress: { type: String },
     ownerId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
     },
   },
   {
-    toJSON: { transform: (doc, ret) => { if (ret.description !== undefined) ret.description = require("../utils/safeHtml")(ret.description); return ret; } },
+    toJSON: {
+      transform: (doc, ret) => {
+        if (ret.description !== undefined)
+          ret.description = require('../utils/safeHtml')(ret.description);
+        return ret;
+      },
+    },
     timestamps: true,
   },
 );
 
-module.exports = mongoose.model("Brand", brandSchema);
+module.exports = mongoose.model('Brand', brandSchema);

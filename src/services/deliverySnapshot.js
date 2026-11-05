@@ -2,7 +2,10 @@ const Joi = require('joi');
 
 const deliverySchema = Joi.object({
   fullName: Joi.string().trim().min(2).max(120).required(),
-  phone: Joi.string().trim().pattern(/^(?:0\d{9}|\+[1-9]\d{7,14})$/).required(),
+  phone: Joi.string()
+    .trim()
+    .pattern(/^(?:0\d{9}|\+[1-9]\d{7,14})$/)
+    .required(),
   address: Joi.string().trim().min(5).max(300).required(),
   district: Joi.string().trim().min(1).max(120).required(),
   city: Joi.string().trim().min(1).max(120).required(),
@@ -19,14 +22,18 @@ function deliverySnapshot(user, address) {
     country: address?.country,
   };
   const { error, value } = deliverySchema.validate(candidate, {
-    abortEarly: false, convert: true, stripUnknown: false,
+    abortEarly: false,
+    convert: true,
+    stripUnknown: false,
   });
   if (error) {
-    const err = new Error('Thông tin giao hàng chưa đầy đủ hoặc không hợp lệ. Vui lòng cập nhật địa chỉ.');
+    const err = new Error(
+      'Thông tin giao hàng chưa đầy đủ hoặc không hợp lệ. Vui lòng cập nhật địa chỉ.',
+    );
     err.status = 422;
     // Field names only: never include phone/address values in logs.
     err.code = 'INVALID_DELIVERY_ADDRESS';
-    err.fields = [...new Set(error.details.map(detail => detail.path.join('.')))];
+    err.fields = [...new Set(error.details.map((detail) => detail.path.join('.')))];
     throw err;
   }
   return Object.freeze(value);

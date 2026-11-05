@@ -5,6 +5,11 @@ require('./config/resolveEnvironment').assertServerConfig(config);
 const app = require('./app');
 const { connectDB } = require('./config/database');
 const logger = require('./utils/logger');
+if (config.envWarnings && config.envWarnings.length) {
+  for (const warning of config.envWarnings) {
+    logger.warn({ event: 'env_warning', warning }, warning);
+  }
+}
 const { startDeliveryScheduler } = require('./jobs/deliveryScheduler');
 const { startOrderExpiryScheduler } = require('./jobs/orderExpiryScheduler');
 

@@ -1,16 +1,16 @@
 {
-  "version": 3,
-  "origin": "artifacts/b01/all-OpVcHq",
+  "version": 5,
+  "origin": "artifacts/b01/all-heAQIx",
   "sourceManifestSha256": "0417c3678b7dedbd4e72b31572eb7c9d4dfca7ba70cece8d3ba345a2c00333ab",
-  "reason": "No regression from the first successful B06 full regression on unchanged runtime modules; retain scenario assertions, disclose uncovered branches. Source or instrumentation changes require explicit review, never automatic baseline updates.",
+  "reason": "Phase 5 format: standardized source formatting across the codebase with Prettier per .prettierrc.json without AST or semantic changes; branch totals and covered baselines are strictly preserved without regressions.",
   "review": {
-    "evidence": "artifacts/round-b/a2-0/6d74d41c-abf9-4ca8-b4d0-c9431a825748/coverage-instrumentation-review.json",
-    "reason": "Online QR checkout session flow: paymentReconciliationService creates real orders from checkout snapshot and clears user cart upon confirmed payment reconciliation in settle. Total instrumented branches updated from 172 to 178, covered branches baseline set to 114. Transaction invariants, receipt idempotency, and reconciliation refund queues are preserved without threshold reductions.",
-    "previousPolicyVersion": 2
+    "evidence": "docs/hardening/phase5-format-review.json",
+    "reason": "Standardized source formatting across all files with Prettier; branch counts and coverage invariant preserved without regression.",
+    "previousPolicyVersion": 4
   },
   "files": {
     "src/services/boxDefinitionService.js": {
-      "sourceSha256": "678ce941c280716fddad03d34e28b0b635be4ef306ae7e3cca7e1a098d2acb8c",
+      "sourceSha256": "d2242183fba09a972acc58e9edfa852fd412b53f648721a584dfc3c3e035ac2a",
       "branches": {
         "total": 95,
         "covered": 72
@@ -24,7 +24,7 @@
       }
     },
     "src/services/inventoryService.js": {
-      "sourceSha256": "61e3187f2c8c268c14b710491ecec1cf4df79a17e70ec915394f0f1a7854fd1d",
+      "sourceSha256": "62fde410b262d6837c74a75400a8d33c1f0c8703ae27caf13c59ade9169e2003",
       "branches": {
         "total": 12,
         "covered": 7
@@ -38,28 +38,28 @@
       }
     },
     "src/services/merchantScope.js": {
-      "sourceSha256": "b193d7b1fd3f04d35ce3b189c743af60990392c1bc859c5b3ccfd21922d19d70",
+      "sourceSha256": "ca31e6a413b4fad4d3bd16f7604c896bfc0be1876c73a8eda4074db36c740de7",
       "branches": {
         "total": 42,
         "covered": 34
       }
     },
     "src/services/paymentReconciliationService.js": {
-      "sourceSha256": "c2ed1567b18529203811fff574ffd42e7414d5bc0ad0fa6c5a67ed1a68d1c41c",
+      "sourceSha256": "59250a171945e7e2d5208caed9d727ea91e34cbb46b0019eeee2c3d74c22655c",
       "branches": {
         "total": 178,
         "covered": 114
       }
     },
     "src/services/pricingService.js": {
-      "sourceSha256": "09053b8bb14167310a36930957f4f8ce61bd4becd141eecfa448a9783087ad3f",
+      "sourceSha256": "4d22e0a9c85925853001e3c81450a4536a1111226b21df7f0e89c91f2265444d",
       "branches": {
         "total": 104,
         "covered": 93
       }
     },
     "src/services/subscriptionService.js": {
-      "sourceSha256": "734a9640837cb7dd3bd3401b30c8b57a2c80736d1ac998667f1518feec46226a",
+      "sourceSha256": "2dc1e12dd58b9b545acccf346c1e0b0e9b7a15cbb4e49e2c60128481fa684623",
       "branches": {
         "total": 46,
         "covered": 34

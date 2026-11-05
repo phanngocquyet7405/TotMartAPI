@@ -1,4 +1,4 @@
-const Coupon = require("../models/Coupon");
+const Coupon = require('../models/Coupon');
 
 class CouponController {
   // ==== Admin tạo mã giảm giá ====
@@ -7,14 +7,12 @@ class CouponController {
       const validated = req.validatedBody;
       const existing = await Coupon.findOne({ code: validated.code });
       if (existing) {
-        return res
-          .status(409)
-          .json({ success: false, message: "Mã giảm giá đã tồn tại" });
+        return res.status(409).json({ success: false, message: 'Mã giảm giá đã tồn tại' });
       }
       const coupon = await Coupon.create(validated);
       res.status(201).json({
         success: true,
-        message: "Tạo mã giảm giá thành công",
+        message: 'Tạo mã giảm giá thành công',
         data: coupon,
       });
     } catch (error) {
@@ -38,7 +36,7 @@ class CouponController {
 
       res.status(200).json({
         success: true,
-        message: "Lấy danh sách mã giảm giá thành công",
+        message: 'Lấy danh sách mã giảm giá thành công',
         data: coupons,
         pagination: {
           page,
@@ -61,13 +59,11 @@ class CouponController {
         runValidators: true,
       });
       if (!coupon) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Không tìm thấy mã giảm giá" });
+        return res.status(404).json({ success: false, message: 'Không tìm thấy mã giảm giá' });
       }
       res.status(200).json({
         success: true,
-        message: "Cập nhật mã giảm giá thành công",
+        message: 'Cập nhật mã giảm giá thành công',
         data: coupon,
       });
     } catch (error) {
@@ -80,13 +76,11 @@ class CouponController {
     try {
       const coupon = await Coupon.findByIdAndDelete(req.params._id);
       if (!coupon) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Không tìm thấy mã giảm giá" });
+        return res.status(404).json({ success: false, message: 'Không tìm thấy mã giảm giá' });
       }
       res.status(200).json({
         success: true,
-        message: "Xoá mã giảm giá thành công",
+        message: 'Xoá mã giảm giá thành công',
       });
     } catch (error) {
       next(error);

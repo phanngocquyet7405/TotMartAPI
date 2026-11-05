@@ -1,11 +1,11 @@
 const mongoose = require('mongoose');
-const crypto = require('crypto');
 const Event = require('../models/PaymentEvent');
 const Allocation = require('../models/PaymentAllocation');
 const Audit = require('../models/PaymentAudit');
 const Refund = require('../models/ReceiptRefund');
 const Checkout = require('../models/Checkout');
 const Order = require('../models/Order');
+const { createOrdersFromGroups } = require('./orderFactory');
 const Cart = require('../models/Cart');
 const Subscription = require('../models/UserSubscription');
 const { lockCheckout, requestHash } = require('./checkoutLifecycle');
@@ -99,39 +99,18 @@ async function settle(checkout, orders, session, referenceCode) {
     // If orders were not created at checkout (online session flow), create them now from snapshot
     if (!orders.length) {
       if (!checkout.snapshot?.orderGroups?.length) fail('Thiếu snapshot để tạo đơn hàng');
-      const created = [];
-      for (const group of checkout.snapshot.orderGroups) {
-        const [order] = await Order.create(
-          [
-            {
-              userId: checkout.userId,
-              merchantId: group.merchantId,
-              paymentCode: checkout.paymentCode,
-              customerEmail: group.customerEmail,
-              products: group.products,
-              boxes: group.boxes,
-              orderId: 'ORD' + crypto.randomBytes(12).toString('hex').toUpperCase(),
-              totalAmount: group.totalAmount,
-              giftFee: group.giftFee,
-              bulkDiscountAmount: group.bulkDiscountAmount,
-              pricingPolicyVersion: group.pricingPolicyVersion,
-              shippingFee: group.shippingFee,
-              shippingPayment: group.shippingPayment,
-              shippingMode: group.shippingMode,
-              discountAmount: group.discountAmount,
-              couponCode: group.couponCode,
-              shippingAddress: group.shippingAddress,
-              paymentMethod: 'online',
-              note: group.note,
-              status: 'pending',
-              paymentStatus: 'pending',
-              stockDeducted: false,
-            },
-          ],
-          { session },
-        );
-        created.push(order);
-      }
+      const created = await createOrdersFromGroups(
+        checkout.snapshot.orderGroups,
+        {
+          userId: checkout.userId,
+          paymentCode: checkout.paymentCode,
+          paymentMethod: 'online',
+          status: 'pending',
+          paymentStatus: 'pending',
+          stockDeducted: false,
+        },
+        session,
+      );
       orders = created;
       checkout.orderIds = created.map((o) => o._id);
       // Empty user's cart now that order is confirmed and paid

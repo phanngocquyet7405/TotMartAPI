@@ -1,4 +1,4 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const couponSchema = new mongoose.Schema(
   {
@@ -6,8 +6,8 @@ const couponSchema = new mongoose.Schema(
     discount: { type: Number, required: true },
     discountType: {
       type: String,
-      enum: ["percentage", "fixed"],
-      default: "percentage",
+      enum: ['percentage', 'fixed'],
+      default: 'percentage',
     },
     minOrderValue: { type: Number, default: 0 },
     startDate: { type: Date, required: true },
@@ -21,4 +21,4 @@ const couponSchema = new mongoose.Schema(
   },
 );
 
-module.exports = mongoose.model("Coupon", couponSchema);
+module.exports = mongoose.model('Coupon', couponSchema);

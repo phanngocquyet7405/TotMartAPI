@@ -64,6 +64,23 @@ Muốn chuyển sang GO phải có bằng chứng mới cho các cổng áp dụ
 
 ## B-A1-AV01 — P2 availability transaction/commit, owner chấp nhận có điều kiện
 
+### Cập nhật giảm thiểu rủi ro B-A1-AV01 — Hardening V1 (05/11/2026)
+
+- **Đã giảm thiểu về cấu hình & runtime:**
+  1. Thêm cấu hình phân lớp và biến môi trường tường minh trong `src/config/resolveEnvironment.js`:
+     - `MONGO_SOCKET_TIMEOUT_MS`: mặc định 45000ms.
+     - `MONGO_WAIT_QUEUE_TIMEOUT_MS`: mặc định 5000ms.
+     - `MONGO_MAX_COMMIT_TIME_MS`: mặc định 10000ms.
+     - `MONGO_TRANSACTION_TIMEOUT_MS`: mặc định 15000ms.
+  2. Áp dụng `socketTimeoutMS` và `waitQueueTimeoutMS` vào `connectDB()` (`src/config/database.js`).
+  3. Xây dựng helper tập trung `src/utils/transaction.js` (`withTransaction`) áp `maxCommitTimeMS` và `timeoutMS` (Client-Side Operation Timeout) cho transaction MongoDB; tự động patch `mongoose.Connection.prototype.transaction` để mọi điểm gọi transaction nhận ngân sách timeout đồng nhất.
+  4. Chuyển đổi các điểm gọi transaction tại `checkOutController.js`, `userSubscriptionController.js`, `orderExpiryScheduler.js`, `subscriptionService.js`, `managerController.js`, `managerService.js`, `sessionService.js` sang helper có timeout.
+  5. Bổ sung test tích hợp độc lập `tests/transactionTimeout.integration.test.js`:
+     - (a) Mongo im lặng/trả chậm vượt ngưỡng -> request trả về 503 có giới hạn (không bị treo 120s vô tận).
+     - (b) Sau lỗi 503, replay cùng key/body thành công 201, tạo đúng 1 Checkout/Order và tồn kho không bị trừ hai lần.
+     - (c) Timeout bảo toàn CheckoutAttempt và các tombstone fencing theo hợp đồng.
+- **Trạng thái ghi nhận:** Rủi ro treo không thời hạn (unbounded stall) do Mongo im lặng đã được khống chế bởi trần Client-Side Operation Timeout và socket timeout. Tuy nhiên, **issue B-A1-AV01 vẫn giữ ở trạng thái còn mở (chưa tuyên bố đóng hoàn toàn)** cho tới khi có thêm nghiệm thu tải đa node và diễn tập failover primary multi-node thực tế ở môi trường staging/production.
+
 **Quyết định:** owner **Q**, ngày **22/10/2026**, hạ **P1→P2** và chấp nhận phần rủi ro availability dưới đây tới điều kiện hết hạn. Issue **còn mở**; chưa sửa transaction/commit và không đổi kết quả test, source, contract hoặc baseline để đổi mức. Trạng thái P1/chưa có acceptance trong các báo cáo trước quyết định này là lịch sử.
 
 **Phạm vi chấp nhận:** khi Mongo im lặng, TCP không đóng, sau khi request mua hàng đã vào transaction hoặc commit, request có thể chờ lâu hơn budget read5s. Driver6.20.0 có cửa sổ retry mặc định khoảng120s, **không phải hard deadline hay upper bound120s của một await I/O đang treo**. `socketTimeoutMS`/`waitQueueTimeoutMS` vẫn0, chưa có MongoClient/session/transaction CSOT hoặc maxCommitTimeMS cho các call này. Read ngoài transaction thuộc A1 và auth/ownership đã có budget từng read5000ms, **không nằm trong ngoại lệ này**. Không dùng acceptance để bỏ budget đã có hoặc bỏ transaction/fencing/unique index/tombstone.

@@ -2,8 +2,11 @@ const { deliverySnapshot } = require('../src/services/deliverySnapshot');
 
 const user = { name: 'Nguyen Van An' };
 const valid = {
-  phone: '0912345678', address: '12 Nguyen Trai', district: 'Quan 1',
-  city: 'Ho Chi Minh', country: 'VN',
+  phone: '0912345678',
+  address: '12 Nguyen Trai',
+  district: 'Quan 1',
+  city: 'Ho Chi Minh',
+  country: 'VN',
 };
 describe('deliverySnapshot', () => {
   test('returns a trimmed independent snapshot without model metadata', () => {
@@ -14,7 +17,7 @@ describe('deliverySnapshot', () => {
     expect(snapshot.city).toBe(valid.city);
     expect(Object.isFrozen(snapshot)).toBe(true);
   });
-  test.each(['phone', 'address', 'district', 'city', 'country'])('rejects missing %s', field => {
+  test.each(['phone', 'address', 'district', 'city', 'country'])('rejects missing %s', (field) => {
     const input = { ...valid };
     delete input[field];
     try {
@@ -27,7 +30,7 @@ describe('deliverySnapshot', () => {
       expect(err.message).not.toContain(valid.phone);
     }
   });
-  test.each(['', '   ', '123', 'abc', '09123456789'])('rejects invalid phone %j', phone => {
+  test.each(['', '   ', '123', 'abc', '09123456789'])('rejects invalid phone %j', (phone) => {
     expect(() => deliverySnapshot(user, { ...valid, phone })).toThrow();
   });
   test('accepts international E.164-shaped numbers', () => {

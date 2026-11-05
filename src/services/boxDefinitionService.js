@@ -15,8 +15,11 @@ async function guardBox(boxId, session, { ownerId } = {}) {
   requireTransaction(session);
   if (!mongoose.isObjectIdOrHexString(boxId)) fail('Box ID không hợp lệ', 400);
   // Shared write serializes pinning against edits/archive, including read predicates.
-  const box = await Box.findOneAndUpdate({ _id: boxId, archivedAt: null, ...(ownerId ? { ownerId } : {}) },
-    { $inc: { obligationRevision: 1 } }, { new: true, session });
+  const box = await Box.findOneAndUpdate(
+    { _id: boxId, archivedAt: null, ...(ownerId ? { ownerId } : {}) },
+    { $inc: { obligationRevision: 1 } },
+    { new: true, session },
+  );
   if (!box) fail('Box không tồn tại hoặc đã lưu trữ', 404);
   if (!Number.isSafeInteger(box.definitionVersion) || box.definitionVersion < 1)
     fail('Box chưa được migration version');
@@ -24,31 +27,58 @@ async function guardBox(boxId, session, { ownerId } = {}) {
 }
 function definition(box) {
   return {
-    name: box.name, descriptions: safeHtml(box.descriptions),
-    products: box.products.map(p => ({ productId: p.productId,
-      quantity: p.quantity, price: p.price, name: p.name || box.name })),
-    value: box.value, totalItem: box.totalItem, isGift: box.isGift,
-    sourceComboId: box.sourceComboId, sourceComboVersion: box.sourceComboVersion,
-    subscriptionOnly: box.subscriptionOnly, internalSubscription: box.internalSubscription,
-    giftPolicy: box.giftPolicy ? {
-      bulkTiers: (box.giftPolicy.bulkTiers || []).map(t => ({ minQuantity: t.minQuantity, percent: t.percent })),
-      amenities: (box.giftPolicy.amenities || []).map(a => ({ name: a.name, fee: a.fee })),
-    } : undefined,
-    discountPercent: box.discountPercent, validFrom: box.validFrom, validTo: box.validTo,
-    images: box.images.map(i => ({ url: i.url, public_id: i.public_id })),
+    name: box.name,
+    descriptions: safeHtml(box.descriptions),
+    products: box.products.map((p) => ({
+      productId: p.productId,
+      quantity: p.quantity,
+      price: p.price,
+      name: p.name || box.name,
+    })),
+    value: box.value,
+    totalItem: box.totalItem,
+    isGift: box.isGift,
+    sourceComboId: box.sourceComboId,
+    sourceComboVersion: box.sourceComboVersion,
+    subscriptionOnly: box.subscriptionOnly,
+    internalSubscription: box.internalSubscription,
+    giftPolicy: box.giftPolicy
+      ? {
+          bulkTiers: (box.giftPolicy.bulkTiers || []).map((t) => ({
+            minQuantity: t.minQuantity,
+            percent: t.percent,
+          })),
+          amenities: (box.giftPolicy.amenities || []).map((a) => ({ name: a.name, fee: a.fee })),
+        }
+      : undefined,
+    discountPercent: box.discountPercent,
+    validFrom: box.validFrom,
+    validTo: box.validTo,
+    images: box.images.map((i) => ({ url: i.url, public_id: i.public_id })),
   };
 }
 async function ensureVersion(box, session) {
-  let snapshot = await BoxVersion.findOne({ boxId: box._id, version: box.definitionVersion }).session(session);
-  if (!snapshot) [snapshot] = await BoxVersion.create([{ boxId: box._id,
-    version: box.definitionVersion, definition: definition(box) }], { session });
+  let snapshot = await BoxVersion.findOne({
+    boxId: box._id,
+    version: box.definitionVersion,
+  }).session(session);
+  if (!snapshot)
+    [snapshot] = await BoxVersion.create(
+      [{ boxId: box._id, version: box.definitionVersion, definition: definition(box) }],
+      { session },
+    );
   return snapshot;
 }
 async function pinBox(boxId, session, { kind = 'main' } = {}) {
   const box = await guardBox(boxId, session);
   const now = new Date();
-  if (!box.products.length || (kind === 'main' && box.isGift) ||
-      (kind === 'gift' && !box.isGift) || box.validFrom > now || box.validTo < now)
+  if (
+    !box.products.length ||
+    (kind === 'main' && box.isGift) ||
+    (kind === 'gift' && !box.isGift) ||
+    box.validFrom > now ||
+    box.validTo < now
+  )
     fail('Box không hợp lệ cho subscription');
   const snapshot = await ensureVersion(box, session);
   return { box, version: snapshot };
@@ -57,21 +87,38 @@ async function assertEditable(boxId, session) {
   // Deliberately protects ANY paid subscription, including historical ones.
   const sub = await Subscription.exists({
     $or: [{ boxId }, { 'gift.boxId': boxId }],
-    $and: [{ $or: [{ paymentStatus: 'paid' }, { status: { $in: ['pending_payment', 'active'] } }] }],
+    $and: [
+      { $or: [{ paymentStatus: 'paid' }, { status: { $in: ['pending_payment', 'active'] } }] },
+    ],
   }).session(session);
   if (sub) fail('Box đang gắn với subscription; hãy tạo Box mới thay vì sửa/xóa');
   // Pending/paid product orders also need this identity and stock for reserve/restore.
-  if (await Order.exists({ 'boxes.boxId': boxId,
-    status: { $nin: ['cancelled', 'returned'] } }).session(session))
+  if (
+    await Order.exists({
+      'boxes.boxId': boxId,
+      status: { $nin: ['cancelled', 'returned'] },
+    }).session(session)
+  )
     fail('Box đang gắn với đơn hàng chưa kết thúc');
 }
 async function applyPatch(box, input, uploadedImages, session) {
   // Validate the existing composition too: legacy mixed-owner boxes cannot be
   // legitimized by replacing their components through an ordinary edit.
   await assertCompositionOwner(box, box.products, session);
-  const allowed = new Set(['name', 'descriptions', 'validFrom', 'validTo',
-    'isGift', 'discountPercent', 'products', 'existingImages', 'stock', 'giftPolicy']);
-  for (const key of Object.keys(input)) if (!allowed.has(key)) fail(`Field không được phép: ${key}`, 400);
+  const allowed = new Set([
+    'name',
+    'descriptions',
+    'validFrom',
+    'validTo',
+    'isGift',
+    'discountPercent',
+    'products',
+    'existingImages',
+    'stock',
+    'giftPolicy',
+  ]);
+  for (const key of Object.keys(input))
+    if (!allowed.has(key)) fail(`Field không được phép: ${key}`, 400);
   for (const key of ['name', 'validFrom', 'validTo', 'isGift', 'discountPercent'])
     if (input[key] !== undefined) box[key] = input[key];
   if (input.descriptions !== undefined) box.descriptions = safeHtml(input.descriptions);
@@ -82,22 +129,30 @@ async function applyPatch(box, input, uploadedImages, session) {
   if (box.validFrom > box.validTo) fail('Ngày kết thúc phải sau ngày bắt đầu', 400);
   if (input.products !== undefined) {
     if (!input.products.length) fail('Box cần ít nhất một sản phẩm', 400);
-    const docs = await Product.find({ _id: { $in: input.products.map(p => p.productId) } }).session(session);
+    const docs = await Product.find({
+      _id: { $in: input.products.map((p) => p.productId) },
+    }).session(session);
     await assertCompositionOwner(box, input.products, session, docs);
     await require('./managerCatalogService').buildParts(box.ownerId, input.products, session);
-    const map = new Map(docs.map(p => [String(p._id), p]));
-    box.products = input.products.map(p => {
+    const map = new Map(docs.map((p) => [String(p._id), p]));
+    box.products = input.products.map((p) => {
       const product = map.get(String(p.productId));
       if (!product) fail('Sản phẩm trong Box không tồn tại', 400);
-      if (!Number.isSafeInteger(p.quantity) || p.quantity < 1) fail('Số lượng cấu phần không hợp lệ', 400);
-      return { productId: product._id, quantity: p.quantity, price: product.price, name: product.name };
+      if (!Number.isSafeInteger(p.quantity) || p.quantity < 1)
+        fail('Số lượng cấu phần không hợp lệ', 400);
+      return {
+        productId: product._id,
+        quantity: p.quantity,
+        price: product.price,
+        name: product.name,
+      };
     });
   }
   if (input.existingImages !== undefined) {
-    const retained = new Set(input.existingImages.map(i => i.public_id));
-    const owned = new Set(box.images.map(i => i.public_id));
-    if ([...retained].some(id => !owned.has(id))) fail('Ảnh không thuộc Box', 400);
-    box.images = box.images.filter(i => retained.has(i.public_id));
+    const retained = new Set(input.existingImages.map((i) => i.public_id));
+    const owned = new Set(box.images.map((i) => i.public_id));
+    if ([...retained].some((id) => !owned.has(id))) fail('Ảnh không thuộc Box', 400);
+    box.images = box.images.filter((i) => retained.has(i.public_id));
   }
   box.images.push(...uploadedImages);
   box.value = require('./managerCatalogService').boxPrice(box.products, box.discountPercent);
@@ -106,22 +161,41 @@ async function applyPatch(box, input, uploadedImages, session) {
   // stock ignored: only atomic stock adjustment/inventory services may change it.
 }
 async function assertCompositionOwner(box, parts, session, docs) {
-  if (new Set(parts.map(p => String(p.productId))).size !== parts.length || parts.some(p => !Number.isSafeInteger(p.quantity) || p.quantity < 1)) fail('Invalid or duplicate composition', 400);
-  if (!box.ownerId) fail('Combo legacy chưa xác minh merchant sở hữu; cần đối chiếu trước khi sửa', 409);
-  docs ||= await Product.find({ _id: { $in: parts.map(p => p.productId) } }).session(session);
-  const brands = await require('../models/Brand').find({ ownerId: box.ownerId }).select('_id').session(session);
-  const brandIds = new Set(brands.map(b => String(b._id)));
-  const map = new Map(docs.map(p => [String(p._id), p]));
+  if (
+    new Set(parts.map((p) => String(p.productId))).size !== parts.length ||
+    parts.some((p) => !Number.isSafeInteger(p.quantity) || p.quantity < 1)
+  )
+    fail('Invalid or duplicate composition', 400);
+  if (!box.ownerId)
+    fail('Combo legacy chưa xác minh merchant sở hữu; cần đối chiếu trước khi sửa', 409);
+  docs ||= await Product.find({ _id: { $in: parts.map((p) => p.productId) } }).session(session);
+  const brands = await require('../models/Brand')
+    .find({ ownerId: box.ownerId })
+    .select('_id')
+    .session(session);
+  const brandIds = new Set(brands.map((b) => String(b._id)));
+  const map = new Map(docs.map((p) => [String(p._id), p]));
   for (const part of parts) {
     const product = map.get(String(part.productId));
-    if (!product || product.archivedAt || !brandIds.has(String(product.brand)) ||
-        (product.ownerId && String(product.ownerId) !== String(box.ownerId)))
-      fail('Mọi sản phẩm combo phải thuộc cùng merchant; dữ liệu legacy cần đối chiếu ownership', 409);
+    if (
+      !product ||
+      product.archivedAt ||
+      !brandIds.has(String(product.brand)) ||
+      (product.ownerId && String(product.ownerId) !== String(box.ownerId))
+    )
+      fail(
+        'Mọi sản phẩm combo phải thuộc cùng merchant; dữ liệu legacy cần đối chiếu ownership',
+        409,
+      );
   }
 }
-async function changeDefinition(boxId, input, { archive = false, uploadedImages = [], ownerId } = {}) {
+async function changeDefinition(
+  boxId,
+  input,
+  { archive = false, uploadedImages = [], ownerId } = {},
+) {
   let result;
-  await mongoose.connection.transaction(async session => {
+  await mongoose.connection.transaction(async (session) => {
     const box = await guardBox(boxId, session, { ownerId });
     await assertEditable(box._id, session);
     await ensureVersion(box, session);

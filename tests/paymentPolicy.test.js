@@ -1,7 +1,16 @@
-const { money, sumMoney, receiptHash, paymentCodeFrom, remainingAmount } = require('../src/services/paymentPolicy');
-test.each([0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '100'])('rejects invalid VND %j', value => {
-  expect(() => money(value)).toThrow();
-});
+const {
+  money,
+  sumMoney,
+  receiptHash,
+  paymentCodeFrom,
+  remainingAmount,
+} = require('../src/services/paymentPolicy');
+test.each([0, -1, 1.1, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1, '100'])(
+  'rejects invalid VND %j',
+  (value) => {
+    expect(() => money(value)).toThrow();
+  },
+);
 test('sums partial payments exactly; rejects unsafe sum', () => {
   expect(sumMoney([60000, 40000])).toBe(100000);
   expect(() => sumMoney([Number.MAX_SAFE_INTEGER, 1])).toThrow();
@@ -17,7 +26,14 @@ test('parses standalone payment code; ignores invalid explicit code', () => {
   expect(paymentCodeFrom({ content: 'NOTMARTA123' })).toBe('');
 });
 test('receipt hash pins amount/account/provider ID, not retry timestamp', () => {
-  const receipt = { id: 1, referenceCode: 'REF1', accountNumber: '0123', code: 'TMART1', transferAmount: 100, transferType: 'in' };
+  const receipt = {
+    id: 1,
+    referenceCode: 'REF1',
+    accountNumber: '0123',
+    code: 'TMART1',
+    transferAmount: 100,
+    transferType: 'in',
+  };
   expect(receiptHash(receipt)).toBe(receiptHash({ ...receipt, transactionDate: 'different' }));
   for (const patch of [{ id: 2 }, { transferAmount: 200 }, { accountNumber: '9999' }])
     expect(receiptHash(receipt)).not.toBe(receiptHash({ ...receipt, ...patch }));

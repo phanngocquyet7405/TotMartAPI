@@ -1,5 +1,7 @@
 const crypto = require('crypto');
-function fail(message, statusCode = 409) { throw Object.assign(new Error(message), { statusCode }); }
+function fail(message, statusCode = 409) {
+  throw Object.assign(new Error(message), { statusCode });
+}
 function money(value) {
   if (!Number.isSafeInteger(value) || value <= 0) fail('Số tiền phải là số nguyên VND dương', 400);
   return value;
@@ -10,16 +12,32 @@ function sumMoney(values) {
   return Number(sum);
 }
 function paymentCodeFrom(body) {
-  const explicit = String(body.code || '').trim().toUpperCase();
+  const explicit = String(body.code || '')
+    .trim()
+    .toUpperCase();
   if (/^TMART[A-Z0-9]{1,100}$/.test(explicit)) return explicit;
-  return String(body.content || '').match(/\bTMART[A-Z0-9]{1,100}\b/i)?.[0].toUpperCase() || '';
+  return (
+    String(body.content || '')
+      .match(/\bTMART[A-Z0-9]{1,100}\b/i)?.[0]
+      .toUpperCase() || ''
+  );
 }
 function receiptHash(receipt) {
   // Hash financial identity, not delivery timestamp/description which retries may vary.
-  return crypto.createHash('sha256').update(JSON.stringify({ provider: 'sepay',
-    providerEventId: String(receipt.id), referenceCode: receipt.referenceCode,
-    accountNumber: receipt.accountNumber, paymentCode: paymentCodeFrom(receipt),
-    amount: money(receipt.transferAmount), transferType: receipt.transferType })).digest('hex');
+  return crypto
+    .createHash('sha256')
+    .update(
+      JSON.stringify({
+        provider: 'sepay',
+        providerEventId: String(receipt.id),
+        referenceCode: receipt.referenceCode,
+        accountNumber: receipt.accountNumber,
+        paymentCode: paymentCodeFrom(receipt),
+        amount: money(receipt.transferAmount),
+        transferType: receipt.transferType,
+      }),
+    )
+    .digest('hex');
 }
 function remainingAmount(total, received) {
   money(total);

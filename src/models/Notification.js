@@ -1,22 +1,17 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const notificationSchema = new mongoose.Schema(
   {
     eventKey: { type: String, unique: true, sparse: true },
     type: {
       type: String,
-      enum: [
-        "new_order",
-        "payment_received",
-        "order_cancelled",
-        "payment_underpaid",
-      ],
+      enum: ['new_order', 'payment_received', 'order_cancelled', 'payment_underpaid'],
       required: true,
     },
 
     order: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Order",
+      ref: 'Order',
       required: true,
     },
     orderCode: { type: String, required: true },
@@ -33,7 +28,7 @@ const notificationSchema = new mongoose.Schema(
     readAt: { type: Date, default: null },
     readBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       default: null,
     },
   },
@@ -44,4 +39,4 @@ const notificationSchema = new mongoose.Schema(
 
 notificationSchema.index({ isRead: 1, createdAt: -1 });
 
-module.exports = mongoose.model("Notification", notificationSchema);
+module.exports = mongoose.model('Notification', notificationSchema);

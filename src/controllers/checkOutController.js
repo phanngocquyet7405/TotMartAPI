@@ -1,7 +1,8 @@
 const attempts = require('../services/checkoutAttemptService');
 const reconciliation = require('../services/paymentReconciliationService');
+const { createOrdersFromGroups } = require('../services/orderFactory');
 const mongoose = require('mongoose');
-const crypto = require('crypto');
+const { withTransaction } = require('../utils/transaction');
 const Order = require('../models/Order');
 const Cart = require('../models/Cart');
 const User = require('../models/User');
@@ -90,15 +91,14 @@ class CheckOutController {
   }
 
   async checkOut(req, res, next) {
-    let session, key, hash, result;
+    let key, hash, result;
     try {
       key = requestKey(req);
       hash = requestHash(req.validatedBody);
       const previous = await replay(req.userId, key, hash, null, 'products');
       if (previous) return res.status(201).json({ success: true, data: previous.result });
       await attempts.prepare(req.userId, 'products', key, hash, req.validatedBody);
-      session = await mongoose.startSession();
-      await session.withTransaction(async () => {
+      await withTransaction(async (session) => {
         const attempt = await attempts.lock(req.userId, 'products', key, hash, session);
         const existing = await replay(req.userId, key, hash, session, 'products');
         if (existing) {
@@ -146,7 +146,13 @@ class CheckOutController {
                 pendingSession.snapshot.fingerprint === quote.fingerprint
               ) {
                 // Reusing active session: undo the duplicate coupon increment from buildQuote
-                if (quote.couponCode) {
+                if (quote.couponId) {
+                  await Coupon.updateOne(
+                    { _id: quote.couponId, usedCount: { $gt: 0 } },
+                    { $inc: { usedCount: -1 } },
+                    { session },
+                  );
+                } else if (quote.couponCode) {
                   await Coupon.updateOne(
                     { code: quote.couponCode, usedCount: { $gt: 0 } },
                     { $inc: { usedCount: -1 } },
@@ -221,38 +227,23 @@ class CheckOutController {
             note,
             code,
           );
-          const created = [];
-          for (const group of orderGroups) {
-            const [order] = await Order.create(
-              [
-                {
-                  userId: req.userId,
-                  merchantId: group.merchantId,
-                  paymentCode: code,
-                  customerEmail: group.customerEmail,
-                  products: group.products,
-                  boxes: group.boxes,
-                  orderId: 'ORD' + crypto.randomBytes(12).toString('hex').toUpperCase(),
-                  totalAmount: group.totalAmount,
-                  giftFee: group.giftFee,
-                  bulkDiscountAmount: group.bulkDiscountAmount,
-                  pricingPolicyVersion: group.pricingPolicyVersion,
-                  shippingFee: group.shippingFee,
-                  shippingPayment: group.shippingPayment,
-                  shippingMode: group.shippingMode,
-                  discountAmount: group.discountAmount,
-                  couponCode: group.couponCode,
-                  shippingAddress: group.shippingAddress,
-                  paymentMethod,
-                  note: group.note,
-                  stockDeducted: true,
-                },
-              ],
-              { session },
-            );
+          const created = await createOrdersFromGroups(
+            orderGroups,
+            {
+              userId: req.userId,
+              paymentCode: code,
+              paymentMethod,
+              status: 'pending',
+              paymentStatus: 'pending',
+              stockDeducted: true,
+            },
+            session,
+          );
+          for (let i = 0; i < orderGroups.length; i++) {
+            const group = orderGroups[i];
+            const order = created[i];
             await deductStock(group.products, session, group.boxes);
             await enqueue(order, 'new_order', session);
-            created.push(order);
           }
           result = {
             orderId: String(created[0]._id),
@@ -296,8 +287,6 @@ class CheckOutController {
       if (key && hash)
         await attempts.reject(req.userId, 'products', key, hash, err).catch(() => {});
       next(err);
-    } finally {
-      if (session) await session.endSession();
     }
   }
 
@@ -329,10 +318,8 @@ class CheckOutController {
       if (state === 'pending' && checkout.expiresAt <= now) {
         state = 'expired';
         // Lazy-expire: persist state and release coupon
-        let session;
         try {
-          session = await mongoose.startSession();
-          await session.withTransaction(async () => {
+          await withTransaction(async (session) => {
             const locked = await lockCheckout(checkout.paymentCode, session);
             if (locked && locked.state === 'pending' && locked.expiresAt <= now) {
               await releaseCoupon(locked, session, 'expired');
@@ -348,8 +335,6 @@ class CheckOutController {
             { err, paymentCode: checkout.paymentCode },
             'Lazy-expire failed in getSession',
           );
-        } finally {
-          if (session) await session.endSession();
         }
       }
 
@@ -453,11 +438,9 @@ class CheckOutController {
   }
 
   async cancelSession(req, res, next) {
-    let session;
     try {
-      session = await mongoose.startSession();
       let cancelled;
-      await session.withTransaction(async () => {
+      await withTransaction(async (session) => {
         const id = req.params.id || req.params.paymentCode;
         const filter = mongoose.isObjectIdOrHexString(id) ? { _id: id } : { paymentCode: id };
         const checkout = await lockCheckout(filter, session);
@@ -507,8 +490,6 @@ class CheckOutController {
       res.json({ success: true, message: 'Đã huỷ phiên thanh toán', data: cancelled });
     } catch (err) {
       next(err);
-    } finally {
-      if (session) await session.endSession();
     }
   }
 
@@ -521,10 +502,9 @@ class CheckOutController {
   }
 
   async cancelOrder(req, res, next) {
-    let session, cancelled;
+    let cancelled;
     try {
-      session = await mongoose.startSession();
-      await session.withTransaction(async () => {
+      await withTransaction(async (session) => {
         const target = await Order.findById(req.params._id).session(session);
         if (!target) fail('Đơn hàng không tồn tại', 404);
         if (req.user.role !== 'admin' && String(target.userId) !== req.userId)
@@ -596,16 +576,13 @@ class CheckOutController {
       void flush();
     } catch (err) {
       next(err);
-    } finally {
-      if (session) await session.endSession();
     }
   }
 
   async resolveInventoryHold(req, res, next) {
-    let session, order;
+    let order;
     try {
-      session = await mongoose.startSession();
-      await session.withTransaction(async () => {
+      await withTransaction(async (session) => {
         order = await Order.findOne({
           _id: req.params._id,
           status: 'on_hold',
@@ -636,8 +613,6 @@ class CheckOutController {
       res.json({ success: true, data: order });
     } catch (err) {
       next(err);
-    } finally {
-      if (session) await session.endSession();
     }
   }
 
@@ -706,10 +681,9 @@ class CheckOutController {
 }
 
 async function changeCod(req, res, next, delivered) {
-  let session, result;
+  let result;
   try {
-    session = await mongoose.startSession();
-    await session.withTransaction(async () => {
+    await withTransaction(async (session) => {
       result = await Order.findById(req.params._id).session(session);
       if (
         !result ||
@@ -758,8 +732,6 @@ async function changeCod(req, res, next, delivered) {
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
-  } finally {
-    if (session) await session.endSession();
   }
 }
 

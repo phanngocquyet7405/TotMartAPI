@@ -1,33 +1,33 @@
-const SubscribePlan = require("../models/SubcribePlan");
-const { processDeliveries } = require("../jobs/deliveryScheduler");
-const boxModel = require("../models/Box");
-const { paginate } = require("../utils/pagination");
+const SubscribePlan = require('../models/SubcribePlan');
+const { processDeliveries } = require('../jobs/deliveryScheduler');
+const boxModel = require('../models/Box');
+const { paginate } = require('../utils/pagination');
 
 function getPlanConfig(planType) {
   const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
   const configs = {
-    "1_month": {
+    '1_month': {
       intervalMs: THIRTY_DAYS,
       periodMs: THIRTY_DAYS,
       deliveriesPerPeriod: 1,
     },
-    "3_month": {
+    '3_month': {
       intervalMs: THIRTY_DAYS,
       periodMs: 3 * THIRTY_DAYS,
       deliveriesPerPeriod: 3,
     },
-    "6_month": {
+    '6_month': {
       intervalMs: THIRTY_DAYS,
       periodMs: 6 * THIRTY_DAYS,
       deliveriesPerPeriod: 6,
     },
-    "12_month": {
+    '12_month': {
       intervalMs: THIRTY_DAYS,
       periodMs: 12 * THIRTY_DAYS,
       deliveriesPerPeriod: 12,
     },
   };
-  return configs[planType] || configs["1_month"];
+  return configs[planType] || configs['1_month'];
 }
 
 class SubcribePlanController {
@@ -37,17 +37,13 @@ class SubcribePlanController {
 
       const box = await boxModel.findById(validated.boxId);
       if (!box) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Box not found" });
+        return res.status(404).json({ success: false, message: 'Box not found' });
       }
 
-      const User = require("../models/User");
+      const User = require('../models/User');
       const user = await User.findById(validated.userId);
       if (!user) {
-        return res
-          .status(404)
-          .json({ success: false, message: "User not found" });
+        return res.status(404).json({ success: false, message: 'User not found' });
       }
 
       const { deliveriesPerPeriod } = getPlanConfig(validated.planType);
@@ -90,18 +86,17 @@ class SubcribePlanController {
       subcribePlan.discountPercent = validated.discountPercent || 0;
       subcribePlan.price = box.value * (1 - subcribePlan.discountPercent / 100);
       subcribePlan.discount = subcribePlan.oldPrice - subcribePlan.price;
-      subcribePlan.gift =
-        validated.gift && validated.gift.length > 0 ? validated.gift : [];
+      subcribePlan.gift = validated.gift && validated.gift.length > 0 ? validated.gift : [];
 
       await subcribePlan.save();
 
-      await subcribePlan.populate("userId", "name email");
-      await subcribePlan.populate("gift.boxId", "name");
-      await subcribePlan.populate("boxId", "name value");
+      await subcribePlan.populate('userId', 'name email');
+      await subcribePlan.populate('gift.boxId', 'name');
+      await subcribePlan.populate('boxId', 'name value');
 
       res.status(201).json({
         success: true,
-        message: "Subscribe plan created successfully",
+        message: 'Subscribe plan created successfully',
         data: subcribePlan,
       });
     } catch (error) {
@@ -118,8 +113,8 @@ class SubcribePlanController {
         {},
         {
           populate: [
-            { path: "userId", select: "name email" },
-            { path: "gift.boxId", select: "name" },
+            { path: 'userId', select: 'name email' },
+            { path: 'gift.boxId', select: 'name' },
           ],
           sort: { createdAt: -1 },
         },
@@ -139,13 +134,11 @@ class SubcribePlanController {
   async getSubcribePlanById(req, res, next) {
     try {
       const plan = await SubscribePlan.findById(req.params.id)
-        .populate("userId", "name email")
-        .populate("gift.boxId", "name");
+        .populate('userId', 'name email')
+        .populate('gift.boxId', 'name');
 
       if (!plan)
-        return res
-          .status(404)
-          .json({ success: false, message: "Subscribe plan not found" });
+        return res.status(404).json({ success: false, message: 'Subscribe plan not found' });
 
       res.status(200).json({ success: true, data: plan });
     } catch (error) {
@@ -156,7 +149,7 @@ class SubcribePlanController {
   async getSubcribePlansByUser(req, res, next) {
     try {
       const plans = await SubscribePlan.find({ userId: req.params.userId })
-        .populate("gift.boxId", "name")
+        .populate('gift.boxId', 'name')
         .sort({ createdAt: -1 });
 
       res.status(200).json({ success: true, count: plans.length, data: plans });
@@ -170,10 +163,8 @@ class SubcribePlanController {
       const plan = await SubscribePlan.findById(req.params.id);
 
       if (!plan)
-        return res
-          .status(404)
-          .json({ success: false, message: "Subscribe plan not found" });
-      if (plan.status !== "active")
+        return res.status(404).json({ success: false, message: 'Subscribe plan not found' });
+      if (plan.status !== 'active')
         return res.status(400).json({
           success: false,
           message: `Cannot cancel plan with status: ${plan.status}`,
@@ -184,7 +175,7 @@ class SubcribePlanController {
 
       res.status(200).json({
         success: true,
-        message: "Subscribe plan will be cancelled at end of current period",
+        message: 'Subscribe plan will be cancelled at end of current period',
         data: plan,
       });
     } catch (error) {
@@ -197,22 +188,20 @@ class SubcribePlanController {
       const plan = await SubscribePlan.findById(req.params.id);
 
       if (!plan)
-        return res
-          .status(404)
-          .json({ success: false, message: "Subscribe plan not found" });
-      if (plan.status !== "active")
+        return res.status(404).json({ success: false, message: 'Subscribe plan not found' });
+      if (plan.status !== 'active')
         return res.status(400).json({
           success: false,
           message: `Cannot cancel plan with status: ${plan.status}`,
         });
 
-      plan.status = "cancelled";
+      plan.status = 'cancelled';
       plan.nextDeliveries = null;
       await plan.save();
 
       res.status(200).json({
         success: true,
-        message: "Subscribe plan cancelled immediately",
+        message: 'Subscribe plan cancelled immediately',
         data: plan,
       });
     } catch (error) {
@@ -225,7 +214,7 @@ class SubcribePlanController {
       await processDeliveries();
       res.status(200).json({
         success: true,
-        message: "Delivery processing triggered successfully",
+        message: 'Delivery processing triggered successfully',
       });
     } catch (error) {
       next(error);

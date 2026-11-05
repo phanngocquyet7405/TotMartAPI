@@ -110,6 +110,41 @@ test('boolean missing/empty/invalid and credential URI errors are safe', () => {
     expect(Boolean(message) && !message.includes(marker) && !message.includes('hidden')).toBe(true);
   }
 });
+test('Mongo timeout defaults and explicit values are parsed and validated', () => {
+  const defaults = resolveEnvironment(fixture());
+  expect(defaults.mongodb.socketTimeoutMS).toBe(45000);
+  expect(defaults.mongodb.waitQueueTimeoutMS).toBe(5000);
+  expect(defaults.mongodb.maxCommitTimeMS).toBe(10000);
+  expect(defaults.mongodb.transactionTimeoutMS).toBe(15000);
+
+  const custom = resolveEnvironment({
+    ...fixture(),
+    MONGO_SOCKET_TIMEOUT_MS: '30000',
+    MONGO_WAIT_QUEUE_TIMEOUT_MS: '3000',
+    MONGO_MAX_COMMIT_TIME_MS: '8000',
+    MONGO_TRANSACTION_TIMEOUT_MS: '20000',
+  });
+  expect(custom.mongodb.socketTimeoutMS).toBe(30000);
+  expect(custom.mongodb.waitQueueTimeoutMS).toBe(3000);
+  expect(custom.mongodb.maxCommitTimeMS).toBe(8000);
+  expect(custom.mongodb.transactionTimeoutMS).toBe(20000);
+
+  expect(() => resolveEnvironment({ ...fixture(), MONGO_SOCKET_TIMEOUT_MS: '500' })).toThrow(
+    /MONGO_SOCKET_TIMEOUT_MS/,
+  );
+  expect(() => resolveEnvironment({ ...fixture(), MONGO_WAIT_QUEUE_TIMEOUT_MS: '100' })).toThrow(
+    /MONGO_WAIT_QUEUE_TIMEOUT_MS/,
+  );
+  expect(() => resolveEnvironment({ ...fixture(), MONGO_MAX_COMMIT_TIME_MS: '100' })).toThrow(
+    /MONGO_MAX_COMMIT_TIME_MS/,
+  );
+  expect(() => resolveEnvironment({ ...fixture(), MONGO_TRANSACTION_TIMEOUT_MS: '500' })).toThrow(
+    /MONGO_TRANSACTION_TIMEOUT_MS/,
+  );
+  expect(() => resolveEnvironment({ ...fixture(), MONGO_TRANSACTION_TIMEOUT_MS: '12.5' })).toThrow(
+    /MONGO_TRANSACTION_TIMEOUT_MS/,
+  );
+});
 test.each(['15m', '900s', '1h', '0.5h'])(
   'issued access JWT matches configured lifetime %s',
   (lifetime) => {

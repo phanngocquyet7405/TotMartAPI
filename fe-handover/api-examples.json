@@ -74,5 +74,43 @@
         "canRestart": true
       }
     }
+  },
+  {
+    "schema": "HealthResponse",
+    "value": {
+      "status": "ok",
+      "db": "connected",
+      "redis": "connected",
+      "uptime": 12.34,
+      "timestamp": "2026-11-05T00:00:00.000Z"
+    }
+  },
+  {
+    "schema": "SuccessResponse",
+    "value": {
+      "success": true,
+      "message": "Operation completed",
+      "data": null
+    }
+  },
+  {
+    "schema": "CartResponse",
+    "value": {
+      "success": true,
+      "message": "Cart updated",
+      "data": {
+        "totalPrice": 1000
+      }
+    }
+  },
+  {
+    "schema": "QuoteResponse",
+    "value": {
+      "success": true,
+      "data": {
+        "subtotal": 50000,
+        "finalTotal": 50000
+      }
+    }
   }
 ]

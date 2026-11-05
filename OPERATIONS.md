@@ -36,6 +36,19 @@ npm test -- --silent
 
 Phải tạo Redis disposable có tên prefix `totmart-session-...-redis` và port tương ứng trước khi chạy. Suite sẽ stop/start và pause/unpause **đúng container đó**, nên tuyệt đối không trỏ tới Redis dùng chung hoặc staging. Mongo test mặc định tự tạo replica set một member; không dùng URI ứng dụng. Hai process HTTP chỉ chạy security outbox worker, không scheduler gửi email/SMS hay ngân hàng thật. Kiểm chứng reconnect/blackhole không chứng minh Sentinel/Cluster, multi-node primary failover hoặc unknown commit-result thật.
 
+## Cấu hình MongoDB Timeouts và Ngân sách Transaction (B-A1-AV01)
+
+Nhằm giới hạn trần thời gian khi MongoDB hoặc kết nối mạng bị treo/im lặng (silent I/O), TotMart BE cấu hình các timeout phân lớp:
+- `MONGO_SOCKET_TIMEOUT_MS` (mặc định 45000ms): thời gian tối đa chờ phản hồi socket cho mỗi thao tác gửi/nhận MongoDB.
+- `MONGO_WAIT_QUEUE_TIMEOUT_MS` (mặc định 5000ms): thời gian tối đa một request chờ lấy connection từ pool khi pool đầy.
+- `MONGO_MAX_COMMIT_TIME_MS` (mặc định 10000ms): giới hạn tối đa cho lệnh `commitTransaction` trên MongoDB server.
+- `MONGO_TRANSACTION_TIMEOUT_MS` (mặc định 15000ms): tổng trần thời gian cho một transaction thực thi qua `withTransaction` (Client-Side Operation Timeout).
+
+Khi xảy ra timeout:
+- Request nhận mã lỗi HTTP 503 (`Database temporarily unavailable` hoặc `Lỗi hệ thống. Vui lòng thử lại.`).
+- Hợp đồng idempotency được bảo toàn nguyên vẹn: CheckoutAttempt không bị xóa, không bị drop tombstone.
+- Client/frontend replay lại với cùng `Idempotency-Key` và request body để nhận lại kết quả hoặc hoàn tất giao dịch một cách an toàn mà không bị trừ kho/tạo nghĩa vụ hai lần.
+
 ## Môi trường kiểm tra đã chuẩn bị
 
 MongoDB replica set rs0 dùng cổng 27018, Redis cổng 6380. Không chuyển đổi hoặc xóa MongoDB standalone đang dùng ở 27017. Bộ kiểm thử chỉ nhận database localhost tên `totmart_test`; dữ liệu nghiệm thu trình duyệt ở `totmart_acceptance` tách riêng.
@@ -103,6 +116,14 @@ Trước deploy: backup, lưu bản release, chạy migration preview, kiểm tr
 ## Giới hạn quyền Codex
 
 Trong phiên hiện tại lệnh Docker daemon và mở Next server trực tiếp gặp hạn chế quyền. Chủ máy chạy script hạ tầng/frontend bên ngoài Codex; Codex dùng kết nối tới dịch vụ thử đã mở. Không tắt firewall, sandbox hoặc cấp quyền quản trị diện rộng chỉ để chạy test. Với chính sách managed, cần quản trị viên xem cấu hình quyền theo tài liệu OpenAI chính thức.
+## Proxy, Reverse Proxy and Rate Limiting
+
+- `TRUST_PROXY`: Bắt buộc phải khai báo rõ ràng trong môi trường `production` và `staging`. Khi chạy phía sau reverse proxy (Render, Nginx, AWS ALB, Cloudflare), đặt `TRUST_PROXY=1` (hoặc số hop tương ứng) để Express nhận diện đúng client IP từ header `X-Forwarded-For`.
+- Nếu triển khai máy chủ độc lập không qua reverse proxy (`TRUST_PROXY=0`), cần đặt thêm `TRUST_PROXY_CONFIRMED_DIRECT=true` để xác nhận chủ ý và tắt cảnh báo khởi động `env_warning`.
+- Cơ chế giới hạn tỷ lệ (Rate Limiting) hai tầng cho SePay webhook (`/api/checkout/sepay-webhook`):
+  1. **Pre-auth flood filter** (`webhookFloodLimiter`): 300 req/phút/IP, chạy trước tầng xác thực nhằm ngăn chặn DDoS flood tầng mạng.
+  2. **Post-auth business limiter** (`webhookLimiter`): 60 req/phút/IP, chỉ áp dụng sau khi API key SePay đã được xác thực bằng `timingSafeEqual`. Nhờ đó, các request giả mạo/sai key không làm cạn kiệt hạn mức của webhook hợp lệ từ SePay.
+
 ## Session rotation and staging policy
 
 See [refresh family state machine, retention, legacy cutover and rollback](docs/refresh-family-policy.md).

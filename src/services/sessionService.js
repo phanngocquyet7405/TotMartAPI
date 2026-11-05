@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const Session = require('../models/AuthSession');
+const { withTransaction } = require('../utils/transaction');
 const config = require('../config/environment');
 const hash = (token) => crypto.createHash('sha256').update(token).digest('hex');
 const options = () => ({
@@ -95,7 +96,7 @@ async function revokeReusedFamily(family, user, now, transaction) {
 async function rotate(refresh) {
   if (typeof refresh !== 'string' || !/^[a-f0-9]{96}$/.test(refresh)) return null;
   let result, revoked;
-  await require('mongoose').connection.transaction(async (transaction) => {
+  await withTransaction(async (transaction) => {
     result = null;
     revoked = null;
     const now = new Date(),
