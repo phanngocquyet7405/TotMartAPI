@@ -16,19 +16,18 @@ routers.post(
 routers.get(
   "/get-all-users",
   authMiddleware.adminMiddleware,
-  authMiddleware.authMiddleware,
   userController.getAllUsers,
 );
 routers.get(
   "/get-user-by-id/:_id",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
   authMiddleware.requireOwnerOrAdmin,
   userController.getUserById,
 );
 routers.put(
   "/update-user/:_id",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
   authMiddleware.requireOwnerOrAdmin,
   validationHandler.validate(validationSchemas.updateUserSchema),
@@ -36,28 +35,28 @@ routers.put(
 );
 routers.delete(
   "/lock-user/:_id",
-  authMiddleware.adminMiddleware,
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   userController.lockUser,
 );
 routers.patch(
   "/unlock-user/:_id",
-  authMiddleware.adminMiddleware,
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   userController.unlockUser,
 );
 routers.delete(
   "/delete-user/:_id",
-  authMiddleware.adminMiddleware,
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   userController.deleteUser,
 );
 routers.post(
   "/update-address/:_id",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
   authMiddleware.requireOwnerOrAdmin,
   validationHandler.validate(validationSchemas.updateAddressSchema),
@@ -66,7 +65,7 @@ routers.post(
 
 routers.put(
   "/edit-address/:_id/:address_id",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
   authMiddleware.requireOwnerOrAdmin,
   validationHandler.validate(validationSchemas.updateAddressSchema),
@@ -75,12 +74,12 @@ routers.put(
 
 routers.delete(
   "/delete-address/:_id/:address_id",
-  authMiddleware.authMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(validationSchemas.idParamSchema, "params"),
   authMiddleware.requireOwnerOrAdmin,
   userController.deleteAddress,
 );
 
-routers.get("/me", authMiddleware.authMiddleware, userController.getMyProfile);
+routers.get("/me", authMiddleware.authenticate, userController.getMyProfile);
 
 module.exports = routers;

@@ -11,33 +11,33 @@ const {
 
 router.post(
   "/create-coupon",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
+  authMiddleware.requireAdmin,
   validationHandler.validate(couponSchema, "body"),
   couponController.createCoupon,
 );
 
 router.get(
   "/get-all-coupons",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
+  authMiddleware.requireAdmin,
   couponController.getAllCoupons,
 );
 
 router.put(
   "/update-coupon/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   validationHandler.validate(updateCouponSchema, "body"),
   couponController.updateCoupon,
 );
 
 router.delete(
   "/delete-coupon/:_id",
-  authMiddleware.authMiddleware,
-  authMiddleware.adminMiddleware,
+  authMiddleware.authenticate,
   validationHandler.validate(idParamSchema, "params"),
+  authMiddleware.requireAdmin,
   couponController.deleteCoupon,
 );
 

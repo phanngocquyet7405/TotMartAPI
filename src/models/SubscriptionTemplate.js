@@ -1,6 +1,9 @@
 const mongoose = require('mongoose');
 
 const subscriptionTemplateSchema = new mongoose.Schema({
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', immutable: true, index: true },
+    sourceType: { type: String, enum: ['combo', 'retail'], default: 'combo', immutable: true },
+    archivedAt: { type: Date, default: null },
     name: { type: String, required: true },
     description: { type: String, default: '' },
     boxId: { type: mongoose.Schema.Types.ObjectId, ref: "Box", required: true },
@@ -20,4 +23,5 @@ const subscriptionTemplateSchema = new mongoose.Schema({
     timestamps: true
 });
 
+subscriptionTemplateSchema.index({ ownerId: 1, archivedAt: 1, createdAt: -1 });
 module.exports = mongoose.model('SubscriptionTemplate', subscriptionTemplateSchema);

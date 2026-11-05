@@ -1,25 +1,36 @@
-const joi = require("joi");
+const joi = require('joi');
+const { validNewPassword } = require('../services/passwordService');
+const emailInput = () => joi.string().trim().email();
+const newPassword = () =>
+  joi
+    .string()
+    .min(8)
+    .max(128)
+    .custom((value, helpers) => (validNewPassword(value) ? value : helpers.error('any.invalid')));
 
 const registerSchema = joi.object({
   name: joi.string().min(3).max(100).required(),
-  email: joi.string().email().required(),
-  password: joi.string().min(8).max(128).required(),
+  email: emailInput().lowercase().required(),
+  password: newPassword().required(),
 });
 
 const loginSchema = joi.object({
   rememberMe: joi.boolean().default(false),
-  email: joi.string().email().required(),
+  email: emailInput().required(),
   password: joi.string().min(6).required(),
 });
 
 const forgotPasswordSchema = joi.object({
-  email: joi.string().email().required(),
+  email: emailInput().required(),
 });
 
 // Token nên gửi trong body (không đi vào URL/log); query ?token= vẫn được chấp nhận để tương thích.
 const resetPasswordSchema = joi.object({
-  password: joi.string().min(8).max(128).required(),
-  token: joi.string().pattern(/^[a-f0-9]{40}$/).optional(),
+  password: newPassword().required(),
+  token: joi
+    .string()
+    .pattern(/^[a-f0-9]{40}$/)
+    .optional(),
 });
 
 const updateUserSchema = joi
@@ -58,7 +69,7 @@ const paymentCodeParamSchema = joi.object({
 // transition CHI TIẾT (đúng trạng thái hiện tại + đúng paymentMethod) nằm ở
 // orderAdminController.updateOrderStatus(), Joi chỉ chặn giá trị rác.
 const orderStatusUpdateSchema = joi.object({
-  status: joi.string().valid("processing", "shipped", "delivered").required(),
+  status: joi.string().valid('processing', 'shipped', 'delivered').required(),
 });
 
 const productSchema = joi.object({
@@ -68,14 +79,26 @@ const productSchema = joi.object({
   category: joi.string().max(100).required(),
   stock: joi.number().integer().min(0).required(),
   details: joi.string().max(1000).optional(),
-  sku: joi.string().max(100).allow("").optional(),
+  sku: joi.string().max(100).allow('').optional(),
   salePercent: joi.number().min(0).max(100).optional(),
   brand: joi.string().max(100).required(),
 });
 
 const productUpdateSchema = joi
   .object({
-    existingImages: joi.string().custom((value, helpers) => { try { const ids = JSON.parse(value); return Array.isArray(ids) && ids.every(id => typeof id === "string") ? ids : helpers.error("any.invalid"); } catch { return helpers.error("any.invalid"); } }).optional(),
+    existingImages: joi
+      .string()
+      .custom((value, helpers) => {
+        try {
+          const ids = JSON.parse(value);
+          return Array.isArray(ids) && ids.every((id) => typeof id === 'string')
+            ? ids
+            : helpers.error('any.invalid');
+        } catch {
+          return helpers.error('any.invalid');
+        }
+      })
+      .optional(),
     name: joi.string().min(3).max(100).optional(),
     description: joi.string().max(500).optional(),
     price: joi.number().integer().positive().optional(),
@@ -87,6 +110,7 @@ const productUpdateSchema = joi
   .min(1);
 
 const updateAddressSchema = joi.object({
+  fullName: joi.string().trim().min(2).max(120).optional(),
   country: joi.string().max(100).optional(),
   city: joi.string().max(100).optional(),
   district: joi.string().max(100).optional(),
@@ -98,6 +122,7 @@ const updateAddressSchema = joi.object({
 });
 
 const brandSchema = joi.object({
+  ownerId: joi.string().hex().length(24).optional(),
   name: joi.string().min(3).max(100).required(),
   description: joi.string().max(500).optional(),
   cityAddress: joi.string().max(255).optional(),
@@ -106,6 +131,7 @@ const brandSchema = joi.object({
 
 const updateBrandSchema = joi
   .object({
+    ownerId: joi.string().hex().length(24).optional(),
     name: joi.string().min(3).max(100).optional(),
     description: joi.string().max(500).optional(),
     cityAddress: joi.string().max(255).optional(),
@@ -128,6 +154,7 @@ const updateCategorySchema = joi
   .min(1);
 
 const createBoxSchema = joi.object({
+  ownerId: joi.string().hex().length(24).required(),
   name: joi.string().min(3).max(100).required(),
   // Tên field khớp model Box (`descriptions`). Cho phép HTML từ rich-text editor.
   descriptions: joi.string().max(5000).required(),
@@ -146,16 +173,25 @@ const createBoxSchema = joi.object({
   // 0 = không giảm giá (FE luôn gửi discountPercent, kể cả khi bằng 0)
   discountPercent: joi.number().min(0).max(100).default(0),
   validFrom: joi.date().optional(),
-  validTo: joi.date().greater("now").greater(joi.ref("validFrom", { adjust: (v) => v || new Date(0) })).required(),
+  validTo: joi
+    .date()
+    .greater('now')
+    .greater(joi.ref('validFrom', { adjust: (v) => v || new Date(0) }))
+    .required(),
 });
 
 const retainedImagesSchema = joi.string().custom((value, helpers) => {
   try {
     const images = JSON.parse(value);
-    if (!Array.isArray(images) || images.some((image) =>
-      !image || typeof image.public_id !== "string")) return helpers.error("any.invalid");
+    if (
+      !Array.isArray(images) ||
+      images.some((image) => !image || typeof image.public_id !== 'string')
+    )
+      return helpers.error('any.invalid');
     return images;
-  } catch { return helpers.error("any.invalid"); }
+  } catch {
+    return helpers.error('any.invalid');
+  }
 });
 
 const updateBoxSchema = joi
@@ -179,7 +215,7 @@ const updateBoxSchema = joi
     isGift: joi.boolean().optional(),
     discountPercent: joi.number().min(0).max(100).optional(),
     validFrom: joi.date().optional(),
-    validTo: joi.date().greater("now").optional(),
+    validTo: joi.date().greater('now').optional(),
   })
   .min(1);
 
@@ -187,10 +223,7 @@ const createSubcribePlanSchema = joi.object({
   userId: joi.string().hex().length(24).required(),
   boxId: joi.string().hex().length(24).required(),
   name: joi.string().min(2).max(100).required(),
-  planType: joi
-    .string()
-    .valid("1_month", "3_month", "6_month", "12_month")
-    .required(),
+  planType: joi.string().valid('1_month', '3_month', '6_month', '12_month').required(),
   totalDeliveries: joi.number().integer().min(1).required(),
   shippingAddress: joi
     .object({
@@ -205,7 +238,7 @@ const createSubcribePlanSchema = joi.object({
         .required(),
     })
     .required(),
-  discountPercent: joi.number().min(0).max(100).optional(),
+  discountPercent: joi.number().min(0).less(100).optional(),
   gift: joi
     .array()
     .items(
@@ -223,13 +256,10 @@ const createSubcribePlanSchema = joi.object({
 const createSubscriptionTemplateSchema = joi.object({
   isActive: joi.boolean().default(true),
   name: joi.string().min(2).max(100).required(),
-  description: joi.string().max(500).allow("").optional(),
+  description: joi.string().max(500).allow('').optional(),
   boxId: joi.string().hex().length(24).required(),
-  planType: joi
-    .string()
-    .valid("1_month", "3_month", "6_month", "12_month")
-    .required(),
-  discountPercent: joi.number().min(0).max(100).optional(),
+  planType: joi.string().valid('1_month', '3_month', '6_month', '12_month').required(),
+  discountPercent: joi.number().min(0).less(100).optional(),
   gift: joi
     .array()
     .items(
@@ -245,13 +275,10 @@ const createSubscriptionTemplateSchema = joi.object({
 const updateSubscriptionTemplateSchema = joi
   .object({
     name: joi.string().min(2).max(100).optional(),
-    description: joi.string().max(500).allow("").optional(),
+    description: joi.string().max(500).allow('').optional(),
     boxId: joi.string().hex().length(24).optional(),
-    planType: joi
-      .string()
-      .valid("1_month", "3_month", "6_month", "12_month")
-      .optional(),
-    discountPercent: joi.number().min(0).max(100).optional(),
+    planType: joi.string().valid('1_month', '3_month', '6_month', '12_month').optional(),
+    discountPercent: joi.number().min(0).less(100).optional(),
     isActive: joi.boolean().optional(),
     gift: joi
       .array()
@@ -275,7 +302,7 @@ const subscribeToTemplateSchema = joi.object({
       district: joi.string().max(100).required(),
       city: joi.string().max(100).required(),
       country: joi.string().max(100).required(),
-      zipCode: joi.string().max(10).allow("").default(""),
+      zipCode: joi.string().max(10).allow('').default(''),
       phone: joi
         .string()
         .pattern(/^[0-9()+\s-]{7,20}$/)
@@ -284,10 +311,24 @@ const subscribeToTemplateSchema = joi.object({
     .required(),
 });
 
-const checkoutSchema = joi.object({
+const createSessionSchema = joi.object({
+  addressHash: joi.string().hex().length(64).optional(),
   addressId: joi.string().hex().length(24).required(),
-  paymentMethod: joi.string().valid("cod", "online").required(),
-  note: joi.string().max(500).allow("").optional(),
+  paymentMethod: joi.string().valid('online').default('online').optional(),
+  note: joi.string().max(500).allow('').optional(),
+  quoteFingerprint: joi.string().hex().length(64).optional(),
+  couponCode: joi.string().trim().uppercase().min(3).max(30).optional(),
+});
+
+const sessionIdParamSchema = joi.object({
+  id: joi.string().trim().min(1).max(100).required(),
+});
+
+const checkoutSchema = joi.object({
+  addressHash: joi.string().hex().length(64).optional(),
+  addressId: joi.string().hex().length(24).required(),
+  paymentMethod: joi.string().valid('cod', 'online').required(),
+  note: joi.string().max(500).allow('').optional(),
   quoteFingerprint: joi.string().hex().length(64).optional(),
   couponCode: joi.string().trim().uppercase().min(3).max(30).optional(),
 });
@@ -304,13 +345,15 @@ const syncCartSchema = joi.object({
   items: joi
     .array()
     .items(
-      joi.object({
-        productId: cartProductIdField.optional(),
-        boxId: cartProductIdField.optional(),
-        gift: giftSchema.optional(),
-        lineId: cartLineIdField.optional(),
-        quantity: cartQuantityField.required(),
-      }).xor("productId", "boxId"),
+      joi
+        .object({
+          productId: cartProductIdField.optional(),
+          boxId: cartProductIdField.optional(),
+          gift: giftSchema.optional(),
+          lineId: cartLineIdField.optional(),
+          quantity: cartQuantityField.required(),
+        })
+        .xor('productId', 'boxId'),
     )
     .max(100)
     .required(),
@@ -328,22 +371,22 @@ const updateCartSchema = joi.object({
 
 const couponSchema = joi.object({
   code: joi.string().trim().uppercase().min(3).max(30).required(),
-  discountType: joi.string().valid("percentage", "fixed").default("percentage"),
+  discountType: joi.string().valid('percentage', 'fixed').default('percentage'),
   discount: joi
     .number()
     .positive()
-    .when("discountType", { is: "percentage", then: joi.number().max(100) })
+    .when('discountType', { is: 'percentage', then: joi.number().max(100) })
     .required(),
   minOrderValue: joi.number().min(0).default(0),
   startDate: joi.date().required(),
-  expiresAt: joi.date().greater(joi.ref("startDate")).required(),
+  expiresAt: joi.date().greater(joi.ref('startDate')).required(),
   usageLimit: joi.number().integer().positive().allow(null).default(null),
   isActive: joi.boolean().default(true),
 });
 
 const updateCouponSchema = joi
   .object({
-    discountType: joi.string().valid("percentage", "fixed"),
+    discountType: joi.string().valid('percentage', 'fixed'),
     discount: joi.number().positive(),
     minOrderValue: joi.number().min(0),
     startDate: joi.date(),
@@ -360,22 +403,39 @@ const sepayWebhookSchema = joi
     transactionDate: joi.string().required(),
     accountNumber: joi.string().required(),
     code: joi.string().allow(null).optional(),
-    content: joi.string().allow("").required(),
-    transferType: joi.string().valid("in", "out").required(),
+    content: joi.string().allow('').required(),
+    transferType: joi.string().valid('in', 'out').required(),
     transferAmount: joi.number().integer().min(1).max(Number.MAX_SAFE_INTEGER).required(),
     accumulated: joi.number().optional(),
     subAccount: joi.string().allow(null).optional(),
     referenceCode: joi.string().trim().min(1).max(150).required(),
-    description: joi.string().allow("").optional(),
+    description: joi.string().allow('').optional(),
   })
   .unknown(true);
 
-const quoteSchema = joi.object({ items: syncCartSchema.extract("items"), couponCode: joi.string().trim().uppercase().min(3).max(30).optional() });
-const refundSchema = joi.object({ amount: joi.number().integer().min(0).required(), reference: joi.string().trim().min(3).max(150).required() });
-const adjustStockSchema = joi.object({ delta: joi.number().integer().invalid(0).min(-1000000).max(1000000).required(), reason: joi.string().trim().max(200).allow("").optional() });
-const cancelSchema = joi.object({ reason: joi.string().trim().max(500).allow("").optional() });
-const subscriptionCartSchema = joi.object({ subscriptionPlanId: joi.string().hex().length(24).required(), quantity: cartQuantityField.required() });
-module.exports = { adjustStockSchema, subscriptionCartSchema, quoteSchema, refundSchema, cancelSchema,
+const quoteSchema = joi.object({
+  items: syncCartSchema.extract('items'),
+  couponCode: joi.string().trim().uppercase().min(3).max(30).optional(),
+});
+const refundSchema = joi.object({
+  amount: joi.number().integer().min(0).required(),
+  reference: joi.string().trim().min(3).max(150).required(),
+});
+const adjustStockSchema = joi.object({
+  delta: joi.number().integer().invalid(0).min(-1000000).max(1000000).required(),
+  reason: joi.string().trim().max(200).allow('').optional(),
+});
+const cancelSchema = joi.object({ reason: joi.string().trim().max(500).allow('').optional() });
+const subscriptionCartSchema = joi.object({
+  subscriptionPlanId: joi.string().hex().length(24).required(),
+  quantity: cartQuantityField.required(),
+});
+module.exports = {
+  adjustStockSchema,
+  subscriptionCartSchema,
+  quoteSchema,
+  refundSchema,
+  cancelSchema,
   registerSchema,
   loginSchema,
   forgotPasswordSchema,
@@ -398,6 +458,8 @@ module.exports = { adjustStockSchema, subscriptionCartSchema, quoteSchema, refun
   updateSubscriptionTemplateSchema,
   subscribeToTemplateSchema,
   checkoutSchema,
+  createSessionSchema,
+  sessionIdParamSchema,
   sepayWebhookSchema,
   syncCartSchema,
   addToCartSchema,

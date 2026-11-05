@@ -1,9 +1,10 @@
 const rateLimit = require("express-rate-limit");
 
-function buildLimiter({ windowMs, max, message, policy }) {
+function buildLimiter({ windowMs, max, message, policy, keyGenerator }) {
   return rateLimit({
     windowMs,
     max,
+    ...(keyGenerator ? { keyGenerator } : {}),
     ...(require("../config/redis").enabled() ? {store:new (require("../services/redisRateLimitStore").RedisRateLimitStore)(policy)} : {}),
     standardHeaders: true, // trả RateLimit-* headers
     legacyHeaders: false, // tắt X-RateLimit-* cũ
@@ -42,7 +43,12 @@ const refreshLimiter = buildLimiter({
   message: "Quá nhiều yêu cầu làm mới phiên, vui lòng thử lại sau ít phút",
 });
 const ticketLimiter = buildLimiter({ policy: "ticket", windowMs: 60000, max: 30, message: "Too many stream ticket requests" });
+// Recovery gets a separate, generous budget; rotating keys cannot evade the user budget.
+const attemptIpLimiter = buildLimiter({ policy: 'attempt-ip', windowMs: 60000, max: 300, message: 'Too many attempt requests' });
+const attemptUserLimiter = buildLimiter({ policy: 'attempt-user', windowMs: 60000, max: 120, message: 'Too many attempt requests', keyGenerator: req => String(req.userId) });
 module.exports = {
+  attemptIpLimiter,
+  attemptUserLimiter,
   ticketLimiter,
   authLimiter,
   refreshLimiter,

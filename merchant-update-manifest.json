@@ -1,0 +1,74 @@
+{
+  "date": "2026-10-17",
+  "backendBase": "TotMartAPI-master (1).zip",
+  "frontendBase": "Tot-mart-staging-impeccable-cleaned.zip",
+  "backendChanges": {
+    "added": [
+      "docs/MANAGER-API-CONTRACT.md",
+      "docs/MERCHANT-OPERATING-MODEL.md",
+      "docs/UPGRADE-MERCHANT.md",
+      "scripts/migrate-merchant-ownership.js",
+      "src/controllers/managerController.js",
+      "src/middleware/managerSchemas.js",
+      "src/routes/adminCommerceRouter.js",
+      "src/routes/managerRouter.js",
+      "src/services/managerCatalogService.js",
+      "src/services/merchantOrderPolicy.js",
+      "tests/manager.integration.test.js",
+      "tests/merchantOrderPolicy.test.js"
+    ],
+    "changed": [
+      "package.json",
+      "README.md",
+      "src/controllers/boxController.js",
+      "src/controllers/checkOutController.js",
+      "src/controllers/productController.js",
+      "src/controllers/subscriptionTemplateController.js",
+      "src/middleware/authMiddleware.js",
+      "src/models/Box.js",
+      "src/models/Order.js",
+      "src/models/Product.js",
+      "src/models/SubscriptionTemplate.js",
+      "src/routes/checkOutRouter.js",
+      "src/routes/index.js",
+      "src/routes/subcribePlanRouter.js",
+      "src/services/boxDefinitionService.js",
+      "src/services/pricingService.js",
+      "src/services/stockAdjustment.js"
+    ],
+    "removed": []
+  },
+  "frontendChanges": {
+    "added": [
+      "src/app/manager/lib/orderActions.mjs",
+      "tests/merchantOrderActions.test.cjs"
+    ],
+    "changed": [
+      "src/app/(admin)/admin-orders/services/ordersAdminService.js",
+      "src/app/manager/components/OrdersWorkspace.jsx",
+      "src/app/manager/orders/page.jsx",
+      "src/app/manager/services/managerApi.js"
+    ],
+    "removed": []
+  },
+  "verification": {
+    "backend": {
+      "suites": 38,
+      "tests": 309,
+      "failed": 0,
+      "database": "dedicated local disposable MongoDB 7.0.14 replica set",
+      "mode": "actual Express routes and database"
+    },
+    "frontend": {
+      "tests": 71,
+      "failed": 0,
+      "lint": "passed",
+      "build": "passed --webpack with BUILD_WORKER_THREADS=1"
+    },
+    "frontendContractChecks": 38,
+    "externalCloudinary": "mocked failure/cleanup and multipart limits; real external upload not tested",
+    "browser": "not tested",
+    "productionData": "not accessed or migrated"
+  },
+  "lockfileUnchanged": true
+}

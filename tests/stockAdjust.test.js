@@ -35,7 +35,10 @@ async function makeProduct(overrides = {}) {
   return createProduct(brand, overrides);
 }
 async function makeBox(stock = 5) {
+  const brand = await createBrand();
+  const product = await createProduct(brand);
   return Box.create({
+    ownerId: brand.ownerId,
     name: "Hộp thử",
     stock,
     descriptions: "Mô tả",
@@ -43,7 +46,7 @@ async function makeBox(stock = 5) {
     validTo: new Date(Date.now() + 86400000),
     value: 90000,
     discountPercent: 10,
-    products: [],
+    products: [{ productId: product._id, name: product.name, price: product.price, quantity: 1 }],
   });
 }
 const patch = (url, token, body) =>

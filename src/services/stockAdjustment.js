@@ -28,14 +28,14 @@ async function adjustStock(Model, id, delta, options = {}) {
   const set = { stock: next };
   if (options.withInstock) set.instock = { $gt: [next, 0] };
 
-  const filter = { _id: id };
+  const filter = { ...options.scope, _id: id };
   if (delta < 0) filter.stock = { $gte: -delta };
 
   const updated = await Model.findOneAndUpdate(filter, [{ $set: set }], { new: true });
   if (updated) return updated;
 
   // Không khớp: hoặc không tồn tại, hoặc giảm quá tồn kho hiện tại.
-  const exists = await Model.exists({ _id: id });
+  const exists = await Model.exists({ ...options.scope, _id: id });
   if (!exists) throw httpError(options.notFoundMessage || 'Không tìm thấy bản ghi', 404);
   throw httpError('Không thể giảm quá tồn kho hiện tại', 409);
 }

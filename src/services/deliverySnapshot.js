@@ -11,7 +11,7 @@ const deliverySchema = Joi.object({
 
 function deliverySnapshot(user, address) {
   const candidate = {
-    fullName: user?.name,
+    fullName: address?.fullName || user?.name,
     phone: address?.phone,
     address: address?.address,
     district: address?.district,

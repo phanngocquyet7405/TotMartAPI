@@ -1,0 +1,69 @@
+{
+  "version": 3,
+  "origin": "artifacts/b01/all-OpVcHq",
+  "sourceManifestSha256": "0417c3678b7dedbd4e72b31572eb7c9d4dfca7ba70cece8d3ba345a2c00333ab",
+  "reason": "No regression from the first successful B06 full regression on unchanged runtime modules; retain scenario assertions, disclose uncovered branches. Source or instrumentation changes require explicit review, never automatic baseline updates.",
+  "review": {
+    "evidence": "artifacts/round-b/a2-0/6d74d41c-abf9-4ca8-b4d0-c9431a825748/coverage-instrumentation-review.json",
+    "reason": "Online QR checkout session flow: paymentReconciliationService creates real orders from checkout snapshot and clears user cart upon confirmed payment reconciliation in settle. Total instrumented branches updated from 172 to 178, covered branches baseline set to 114. Transaction invariants, receipt idempotency, and reconciliation refund queues are preserved without threshold reductions.",
+    "previousPolicyVersion": 2
+  },
+  "files": {
+    "src/services/boxDefinitionService.js": {
+      "sourceSha256": "678ce941c280716fddad03d34e28b0b635be4ef306ae7e3cca7e1a098d2acb8c",
+      "branches": {
+        "total": 95,
+        "covered": 72
+      }
+    },
+    "src/services/checkoutAttemptService.js": {
+      "sourceSha256": "17facf9607844b66fc580f85e38c349a8e1526a48fe4163743eb0f86a5d0f2eb",
+      "branches": {
+        "total": 61,
+        "covered": 54
+      }
+    },
+    "src/services/inventoryService.js": {
+      "sourceSha256": "61e3187f2c8c268c14b710491ecec1cf4df79a17e70ec915394f0f1a7854fd1d",
+      "branches": {
+        "total": 12,
+        "covered": 7
+      }
+    },
+    "src/services/managerCatalogService.js": {
+      "sourceSha256": "ddac5e984758c81dabdf5a3660ac031fb6daa3d4c46ae1d2797789946ffb7035",
+      "branches": {
+        "total": 112,
+        "covered": 77
+      }
+    },
+    "src/services/merchantScope.js": {
+      "sourceSha256": "b193d7b1fd3f04d35ce3b189c743af60990392c1bc859c5b3ccfd21922d19d70",
+      "branches": {
+        "total": 42,
+        "covered": 34
+      }
+    },
+    "src/services/paymentReconciliationService.js": {
+      "sourceSha256": "c2ed1567b18529203811fff574ffd42e7414d5bc0ad0fa6c5a67ed1a68d1c41c",
+      "branches": {
+        "total": 178,
+        "covered": 114
+      }
+    },
+    "src/services/pricingService.js": {
+      "sourceSha256": "09053b8bb14167310a36930957f4f8ce61bd4becd141eecfa448a9783087ad3f",
+      "branches": {
+        "total": 104,
+        "covered": 93
+      }
+    },
+    "src/services/subscriptionService.js": {
+      "sourceSha256": "734a9640837cb7dd3bd3401b30c8b57a2c80736d1ac998667f1518feec46226a",
+      "branches": {
+        "total": 46,
+        "covered": 34
+      }
+    }
+  }
+}

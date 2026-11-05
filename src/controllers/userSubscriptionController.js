@@ -1,3 +1,4 @@
+const attempts = require('../services/checkoutAttemptService');
 const reconciliation = require('../services/paymentReconciliationService');
 const { pinBox } = require("../services/boxDefinitionService");
 const mongoose = require("mongoose");
@@ -36,12 +37,14 @@ class UserSubscriptionController {
     try {
       key = require("../utils/idempotencyKey")(req);
       hash = requestHash(req.validatedBody);
-      const previous = await replay(req.userId, key, hash);
+      const previous = await replay(req.userId, key, hash, null, 'subscription');
       if (previous)
         return res.status(201).json({ success: true, data: previous.result });
+      await attempts.prepare(req.userId, 'subscription', key, hash, req.validatedBody);
       session = await mongoose.startSession();
       await session.withTransaction(async () => {
-        const previous = await replay(req.userId, key, hash, session);
+        const attempt = await attempts.lock(req.userId, 'subscription', key, hash, session);
+        const previous = await replay(req.userId, key, hash, session, 'subscription');
         if (previous) {
           result = previous.result;
           return;
@@ -63,7 +66,7 @@ class UserSubscriptionController {
         for (const id of [...roles.keys()].sort())
           pins.set(id, await pinBox(id, session, { kind: roles.get(id) }));
         const mainPin = pins.get(String(template.boxId));
-        const box = mainPin.box;
+        const box = mainPin.version.definition;
         if (!box || box.isGift) fail("Hộp của gói không còn hợp lệ", 409);
         const pricing = prepaidPrice(
           box.value,
@@ -94,6 +97,7 @@ class UserSubscriptionController {
               boxVersionId: mainPin.version._id,
               snapshotOrigin: "pinned_at_purchase",
               shippingAddress: req.validatedBody.shippingAddress,
+              shippingPayment: 'customer_to_carrier',
               paymentCode: code,
               status: "pending_payment",
               paymentStatus: "pending",
@@ -124,6 +128,7 @@ class UserSubscriptionController {
               requestHash: hash,
               paymentCode: code,
               kind: "subscription",
+              shippingPayment: 'customer_to_carrier',
               subscriptionId: sub._id,
               totalAmount: price,
               paymentMethod: "online",
@@ -135,6 +140,7 @@ class UserSubscriptionController {
           ],
           { session },
         );
+        await attempts.complete(req.userId, 'subscription', key, result, session);
       });
       res.status(201).json({
         success: true,
@@ -145,7 +151,7 @@ class UserSubscriptionController {
     } catch (err) {
       if (err.code === 11000 && key) {
         try {
-          const previous = await replay(req.userId, key, hash);
+          const previous = await replay(req.userId, key, hash, null, 'subscription');
           if (previous)
             return res
               .status(201)
@@ -154,6 +160,7 @@ class UserSubscriptionController {
           return next(e);
         }
       }
+      if (key && hash) await attempts.reject(req.userId, 'subscription', key, hash, err).catch(() => {});
       next(err);
     } finally {
       if (session) await session.endSession();

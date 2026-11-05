@@ -1,0 +1,1161 @@
+{
+  "eslint": "10.13.0",
+  "policySha256": "a4bbe42a956beb1569056a9f5de9c03e0521921eefc0999685260e10fa751e43",
+  "files": {
+    "jest.config.js": {
+      "sha256": "148c1b80429188ad383401b3ec31f0ce64b11f5c9d8eb115b440cccf02bc8918",
+      "issues": [],
+      "lfSha256": "148c1b80429188ad383401b3ec31f0ce64b11f5c9d8eb115b440cccf02bc8918"
+    },
+    "eslint.config.cjs": {
+      "sha256": "8d88deb11670a32074a10a6cfdf7472b13b360063325eef2982119c5b3bee4cf",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/app.js": {
+      "sha256": "d99d92dce38fb7ca87a6833c07d47b0416ce6a4bbf1f5671ec51aebb89518004",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/config/database.js": {
+      "sha256": "e70a932fc811f6d0fbbf8cffc915bc652871c9c31bab2b6e8559e48a5adca18e",
+      "issues": [
+        {
+          "rule": "no-unused-vars",
+          "line": 5,
+          "column": 10,
+          "messageId": "unusedVar",
+          "severity": 2
+        }
+      ],
+      "lfSha256": null
+    },
+    "src/config/environment.js": {
+      "sha256": "ad1cc079ff250a28f8473ba8c44ae0faed0d6cd28eb6ea38cad997bfbba8e44e",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/config/environmentChecks.js": {
+      "sha256": "ccd05358bdc21c0a82eb836f43bd110bf9e6fdfbedf6c0683439eef55b13aebf",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/config/redis.js": {
+      "sha256": "1c912759ff012eb0de436508e5efdf29b327e08bf020d35773b10fe974d157b7",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/config/sessionPolicy.js": {
+      "sha256": "cd060951162e39914c3dc8313a0700f597755190a54f1efc936a3964727d28de",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/controllers/authController.js": {
+      "sha256": "8d98c4b59adda3f812a7b7817c84edaa4d64beac3de278f1b13801da21b83903",
+      "issues": [],
+      "lfSha256": "678f35562c30843cd9f07d05b25de61e4efb246309cd06b7cb02e1e0938460de"
+    },
+    "src/controllers/boxController.js": {
+      "sha256": "3d1f6034df8d1656bc7ba727da12a1bb5a6a1ab85137f55711470e0140c01406",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/controllers/brandController.js": {
+      "sha256": "165229bf88db038d3f25893ecede8d1fabfb03367e1cc58df4a1f517467586b2",
+      "issues": [],
+      "lfSha256": "1b809296344ebce3b76d7cbd909012e36695a27e2a0ae3a9287c28c5944146ad"
+    },
+    "src/controllers/cartController.js": {
+      "sha256": "9a44f2ea71b6650d3eba9a1c02d12c87ecddf1dba3e00d89c51f1cb76954fb12",
+      "issues": [],
+      "lfSha256": "1523db47d648647ac9434036df15638fc345b4a7c5c621c69dfedad44e871e5c"
+    },
+    "src/controllers/categoryController.js": {
+      "sha256": "d3d8f86670acad7d04e0274623c8b3ff632fddb8baa989249941923b64a673a0",
+      "issues": [
+        {
+          "rule": "no-unused-vars",
+          "line": 1,
+          "column": 9,
+          "messageId": "unusedVar",
+          "severity": 2
+        }
+      ],
+      "lfSha256": "d3d8f86670acad7d04e0274623c8b3ff632fddb8baa989249941923b64a673a0"
+    },
+    "src/controllers/checkOutController.js": {
+      "sha256": "d328d16ecaafd3af276ed51bbc3e17da8bba0ee0ef49940befa3a3c88a36989e",
+      "issues": [
+        {
+          "rule": "no-unused-vars",
+          "line": 3,
+          "column": 9,
+          "messageId": "unusedVar",
+          "severity": 2
+        },
+        {
+          "rule": "no-unused-vars",
+          "line": 11,
+          "column": 7,
+          "messageId": "unusedVar",
+          "severity": 2
+        },
+        {
+          "rule": "no-unused-vars",
+          "line": 16,
+          "column": 3,
+          "messageId": "unusedVar",
+          "severity": 2
+        },
+        {
+          "rule": "no-unused-vars",
+          "line": 27,
+          "column": 9,
+          "messageId": "unusedVar",
+          "severity": 2
+        },
+        {
+          "rule": "no-unused-vars",
+          "line": 39,
+          "column": 15,
+          "messageId": "unusedVar",
+          "severity": 2
+        },
+        {
+          "rule": "no-unused-vars",
+          "line": 39,
+          "column": 25,
+          "messageId": "unusedVar",
+          "severity": 2
+        },
+        {
+          "rule": "no-unused-vars",
+          "line": 62,
+          "column": 17,
+          "messageId": "unusedVar",
+          "severity": 2
+        }
+      ],
+      "lfSha256": "76c69149e94c689a0979bfcc5ac84e0fe01d38da19608d326548e75b21355600"
+    },
+    "src/controllers/couponController.js": {
+      "sha256": "1ae994afcc23c423c9f6b48480fa6811d01d40091d8ff76d86317603fcbf7169",
+      "issues": [],
+      "lfSha256": "1ae994afcc23c423c9f6b48480fa6811d01d40091d8ff76d86317603fcbf7169"
+    },
+    "src/controllers/customerOrderController.js": {
+      "sha256": "ed39c50acc20ed32369ec21dd85e314222a7822808db4ff51630e379ee0133e2",
+      "issues": [],
+      "lfSha256": "8712bb8e8bbfdb340c4460b58ba586fe879556f02f5149c8d229e2555f89390c"
+    },
+    "src/controllers/healthController.js": {
+      "sha256": "be475f3651f3065cfb949bcbbf8e887d4df284702a5544f7d07903a7e0bca51b",
+      "issues": [],
+      "lfSha256": "be475f3651f3065cfb949bcbbf8e887d4df284702a5544f7d07903a7e0bca51b"
+    },
+    "src/controllers/managerController.js": {
+      "sha256": "a4a03490b5ec95ac75e2b1729223fd887162fcd23c55639db5c3a823a5246a24",
+      "issues": [],
+      "lfSha256": "c5ef5e7d71a20af3265be8b2ffef0870a73be63f570e385c4d9dfb0a349f51f2"
+    },
+    "src/controllers/notificationController.js": {
+      "sha256": "04590aa263c7fe9e46836c9528647455600735ce37a426e640d756f5c42257b3",
+      "issues": [],
+      "lfSha256": "427cc0b40e53552bb95e16ad2de7bfba3266c1fa300dc4693c7ece1f2185215c"
+    },
+    "src/controllers/operationsController.js": {
+      "sha256": "2dd35a630d4d07918df441cd335bb801ef0ec7015ef49c11a21aa6ef2697486f",
+      "issues": [],
+      "lfSha256": "2dd35a630d4d07918df441cd335bb801ef0ec7015ef49c11a21aa6ef2697486f"
+    },
+    "src/controllers/orderAdminController.js": {
+      "sha256": "717cc0ee3cd66c1a4081117740eee90e5afba7e62f81c1d5c3ba3e8824fd62df",
+      "issues": [],
+      "lfSha256": "717cc0ee3cd66c1a4081117740eee90e5afba7e62f81c1d5c3ba3e8824fd62df"
+    },
+    "src/controllers/productController.js": {
+      "sha256": "d6f0a3fd52eea56a3d568f18ddb7f974a88be2116bbd4619be99971a9bd88ee4",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/controllers/subcribePlanController.js": {
+      "sha256": "7387addb41cc038564daeed813277456cfd2736695e3e6661a5956a00b62e901",
+      "issues": [],
+      "lfSha256": "7387addb41cc038564daeed813277456cfd2736695e3e6661a5956a00b62e901"
+    },
+    "src/controllers/subscriptionTemplateController.js": {
+      "sha256": "a2aeb71a1f1796d1b987ad694d80ce6e95fe5cc10f16f69e7dd506a56974da9e",
+      "issues": [],
+      "lfSha256": "77ef95d1d04ada07201afeb7cee320fca7e939b0f5f1302e21736abeb42ddda1"
+    },
+    "src/controllers/userController.js": {
+      "sha256": "9bd6c2f1eecd51b5bd8eb6bfcba31a2af568a825f25c6d814a40bd7f0a2cb47e",
+      "issues": [
+        {
+          "rule": "no-unused-vars",
+          "line": 5,
+          "column": 7,
+          "messageId": "unusedVar",
+          "severity": 2
+        },
+        {
+          "rule": "no-unused-vars",
+          "line": 6,
+          "column": 7,
+          "messageId": "unusedVar",
+          "severity": 2
+        }
+      ],
+      "lfSha256": null
+    },
+    "src/controllers/userSubscriptionController.js": {
+      "sha256": "c362bb5a68667a597c19730f9ae7dadb95227c4cd82399e03a86989c3b60950d",
+      "issues": [
+        {
+          "rule": "no-unused-vars",
+          "line": 5,
+          "column": 7,
+          "messageId": "unusedVar",
+          "severity": 2
+        },
+        {
+          "rule": "no-unused-vars",
+          "line": 46,
+          "column": 15,
+          "messageId": "unusedVar",
+          "severity": 2
+        }
+      ],
+      "lfSha256": "0c9e67f78f9fe8ac62a65ddddda46f242294c4306d10b94c969cb77fd6dd58b3"
+    },
+    "src/jobs/deliveryScheduler.js": {
+      "sha256": "4fcd89bf768e3b41bac7675e1c4955f80228d99a9c595e4270578dd0e4c9056d",
+      "issues": [],
+      "lfSha256": "4fcd89bf768e3b41bac7675e1c4955f80228d99a9c595e4270578dd0e4c9056d"
+    },
+    "src/jobs/notificationOutboxScheduler.js": {
+      "sha256": "4c908369a986572a8acfdd5bafc154f956c80a2209e2fd8649368ea857c6d16c",
+      "issues": [],
+      "lfSha256": "4c908369a986572a8acfdd5bafc154f956c80a2209e2fd8649368ea857c6d16c"
+    },
+    "src/jobs/orderExpiryScheduler.js": {
+      "sha256": "dc6a1c9d76adf56d147bbf7cfc360b99c389f481649873ca7e2ce92f5d6a6985",
+      "issues": [],
+      "lfSha256": "dc6a1c9d76adf56d147bbf7cfc360b99c389f481649873ca7e2ce92f5d6a6985"
+    },
+    "src/jobs/paymentReconciliationScheduler.js": {
+      "sha256": "cff9278d8339aec8b2eb41dc4ea2f06b0374333bda00db12537db3818b643e95",
+      "issues": [],
+      "lfSha256": "cff9278d8339aec8b2eb41dc4ea2f06b0374333bda00db12537db3818b643e95"
+    },
+    "src/jobs/securityOutboxScheduler.js": {
+      "sha256": "bfd158649c948c6a9684cc476df5844edbf2dd45d42ec298f4f95b3644f4adca",
+      "issues": [],
+      "lfSha256": "bfd158649c948c6a9684cc476df5844edbf2dd45d42ec298f4f95b3644f4adca"
+    },
+    "src/middleware/authMiddleware.js": {
+      "sha256": "681c517ca775ce4c6746c025e97c5751988b88d4616a6f51586fa15ba1ef4c0d",
+      "issues": [],
+      "lfSha256": "7a6da194dc2a6c2327f40112a90650008e13a008f4105a38a53d7fe4864e0a2f"
+    },
+    "src/middleware/brandLogoUpload.js": {
+      "sha256": "32d2644c66317437c31a8f061d5b5c29d0712e4013d2ee64c2a84fb81ac02330",
+      "issues": [],
+      "lfSha256": "32d2644c66317437c31a8f061d5b5c29d0712e4013d2ee64c2a84fb81ac02330"
+    },
+    "src/middleware/cookieCsrf.js": {
+      "sha256": "b0d17d464513fb891ae1a0ff6f65d1d9d86d0b16b2ef9726efc7fdc1763dc1c8",
+      "issues": [],
+      "lfSha256": "b0d17d464513fb891ae1a0ff6f65d1d9d86d0b16b2ef9726efc7fdc1763dc1c8"
+    },
+    "src/middleware/errorHandler.js": {
+      "sha256": "108c0db68b576066197b1b68200501abeab0a1a4682a70cdf9b01166befabe84",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/middleware/managerSchemas.js": {
+      "sha256": "c8e36e4edcede4f23781c77ce7d38d9e80e5997c94c42807fd2be3e9138c461f",
+      "issues": [],
+      "lfSha256": "c8e36e4edcede4f23781c77ce7d38d9e80e5997c94c42807fd2be3e9138c461f"
+    },
+    "src/middleware/rateLimiter.js": {
+      "sha256": "97435830d20eb4dd27b97485abb86cff636b3cda75d60d93db7d298426ec6929",
+      "issues": [],
+      "lfSha256": "97435830d20eb4dd27b97485abb86cff636b3cda75d60d93db7d298426ec6929"
+    },
+    "src/middleware/reconciliationSchemas.js": {
+      "sha256": "013c98dae0161928b5ec1f1a531912a412d62bbe26cc5c6aeadb673069e06c00",
+      "issues": [],
+      "lfSha256": "013c98dae0161928b5ec1f1a531912a412d62bbe26cc5c6aeadb673069e06c00"
+    },
+    "src/middleware/sepayAuth.js": {
+      "sha256": "4a1d1bda45c58fe9e018abbb63859cb4d937089a1c1a1a7557e69748e026e285",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/middleware/uploadMiddleware.js": {
+      "sha256": "a5b895f1dfa50a1be2f8b903865e4318996f0b2e3347e2de1220bc4497439444",
+      "issues": [],
+      "lfSha256": "a5b895f1dfa50a1be2f8b903865e4318996f0b2e3347e2de1220bc4497439444"
+    },
+    "src/middleware/validationHandler.js": {
+      "sha256": "bffe507c43a932214d3b697f9b06490caf8beb684e3d083c795e7b1b1de50717",
+      "issues": [
+        {
+          "rule": "no-unused-vars",
+          "line": 1,
+          "column": 7,
+          "messageId": "unusedVar",
+          "severity": 2
+        }
+      ],
+      "lfSha256": "bffe507c43a932214d3b697f9b06490caf8beb684e3d083c795e7b1b1de50717"
+    },
+    "src/middleware/validationSchemas.js": {
+      "sha256": "7d530b4a50fa74c999e2eca4bcf4f76a80124616d86b15a64596c17af55d121b",
+      "issues": [],
+      "lfSha256": "9c3a280e609b1ffe88217126d9d16328ef7894b12b9a7f3c9c17078fc70c5b54"
+    },
+    "src/models/AuthSession.js": {
+      "sha256": "9f9dd107012c0f51e267fed7877c08b6fec95bcb37fb9f8f2a6d14e7cafcccf9",
+      "issues": [],
+      "lfSha256": "9f9dd107012c0f51e267fed7877c08b6fec95bcb37fb9f8f2a6d14e7cafcccf9"
+    },
+    "src/models/Box.js": {
+      "sha256": "e649dbc8508b61d7c95b7ba642803f48ba34a2ce994707e8c7dcdc420f5ae435",
+      "issues": [],
+      "lfSha256": "274db660d4e098cb6c0937c68d17bb05124879055f05caaa5f807e23d7bd2591"
+    },
+    "src/models/BoxVersion.js": {
+      "sha256": "4443cc6c13a7cf5f6ec8b56ed4073ac735ebc77df4ffef52ba2071e0cdb7006f",
+      "issues": [],
+      "lfSha256": "4443cc6c13a7cf5f6ec8b56ed4073ac735ebc77df4ffef52ba2071e0cdb7006f"
+    },
+    "src/models/Brand.js": {
+      "sha256": "aa76776bb916a0772343ad59960d3470c6991dffc3abf1b82bfef10200c0bd1a",
+      "issues": [],
+      "lfSha256": "aa76776bb916a0772343ad59960d3470c6991dffc3abf1b82bfef10200c0bd1a"
+    },
+    "src/models/Cart.js": {
+      "sha256": "3d743f7db4e7a70c40c6d402c6f4634cd8961a00ac8f6a45a9e6ceaa898a908f",
+      "issues": [],
+      "lfSha256": "3d743f7db4e7a70c40c6d402c6f4634cd8961a00ac8f6a45a9e6ceaa898a908f"
+    },
+    "src/models/Category.js": {
+      "sha256": "54e7d605d7253793a85157b26371d26ae8631be0c4474dc204d2c5c9436b3794",
+      "issues": [],
+      "lfSha256": "54e7d605d7253793a85157b26371d26ae8631be0c4474dc204d2c5c9436b3794"
+    },
+    "src/models/Checkout.js": {
+      "sha256": "bbe314cc43a1acad3e38fcd7a9bbd5ffd1b21dd4957fa6b486aa79d52bbd990d",
+      "issues": [],
+      "lfSha256": "eb64928a0cab7f6043f28ddd2acb20ec2ba4e6d1e0d1919e873a8e949c7916c4"
+    },
+    "src/models/CheckoutAttempt.js": {
+      "sha256": "2bae656098c71943ebce5dd047fb307e739162fe5e3a47eaab1a8cebf94e9e42",
+      "issues": [],
+      "lfSha256": "8208de72570aa9802bec58d1eb0c70b49f12d5136017ef91b978a0dcc836b89c"
+    },
+    "src/models/Coupon.js": {
+      "sha256": "e6c16e3bf471dd47665eab73bc835af91b45a92250cfd7a0bfd2db973e9a6932",
+      "issues": [],
+      "lfSha256": "e6c16e3bf471dd47665eab73bc835af91b45a92250cfd7a0bfd2db973e9a6932"
+    },
+    "src/models/Notification.js": {
+      "sha256": "59b0b67db12cc6cf4d8e51635a3b7f4c2e882a50b0979e3f7efa57912ac5e7d5",
+      "issues": [],
+      "lfSha256": "59b0b67db12cc6cf4d8e51635a3b7f4c2e882a50b0979e3f7efa57912ac5e7d5"
+    },
+    "src/models/NotificationOutbox.js": {
+      "sha256": "05507c44a54a57927300694b64e437a8f440f7a256f22b9ecc07d978a32549c0",
+      "issues": [],
+      "lfSha256": "05507c44a54a57927300694b64e437a8f440f7a256f22b9ecc07d978a32549c0"
+    },
+    "src/models/Order.js": {
+      "sha256": "875953df092c4fad61c6714ff9486edb9d47e87fb11607a446b2232c8379b9f1",
+      "issues": [],
+      "lfSha256": "2e9f027904b6435cf256431068d5c21f3abf1861bde5032a180e84f6a5c75c72"
+    },
+    "src/models/PaymentAllocation.js": {
+      "sha256": "d0c5948b65ff80ef8f671470fdd10b1f74aaa534afde0f148d1c7f5a5996817d",
+      "issues": [],
+      "lfSha256": "d0c5948b65ff80ef8f671470fdd10b1f74aaa534afde0f148d1c7f5a5996817d"
+    },
+    "src/models/PaymentAudit.js": {
+      "sha256": "f831862a22965857bb020ad785e052b86e661e2f5fb42a801bfaefa40293c7ad",
+      "issues": [],
+      "lfSha256": "f831862a22965857bb020ad785e052b86e661e2f5fb42a801bfaefa40293c7ad"
+    },
+    "src/models/PaymentEvent.js": {
+      "sha256": "8c3e4d34980f6842fca615052d90604ca56843c1a2ac894f11384f297706299a",
+      "issues": [],
+      "lfSha256": "8c3e4d34980f6842fca615052d90604ca56843c1a2ac894f11384f297706299a"
+    },
+    "src/models/Product.js": {
+      "sha256": "d09d317807feb0cfd70ee711c829ff239ac0cdd98c651ed11d9f31c9b267372a",
+      "issues": [],
+      "lfSha256": "d09d317807feb0cfd70ee711c829ff239ac0cdd98c651ed11d9f31c9b267372a"
+    },
+    "src/models/Rating.js": {
+      "sha256": "335f34a3a46dd20fdbb2cbc3745c023311da509ec3a80187f40d97854f82d754",
+      "issues": [],
+      "lfSha256": "335f34a3a46dd20fdbb2cbc3745c023311da509ec3a80187f40d97854f82d754"
+    },
+    "src/models/ReceiptRefund.js": {
+      "sha256": "d9ee7377ce209eefa1646e77202dc4f9fa412df94631e8152a2b5435d0dae428",
+      "issues": [],
+      "lfSha256": "d9ee7377ce209eefa1646e77202dc4f9fa412df94631e8152a2b5435d0dae428"
+    },
+    "src/models/SecurityOutbox.js": {
+      "sha256": "3fd23e49b8b0c4a228fc67adda095eaa495c5ac795749294c22af6998505e778",
+      "issues": [],
+      "lfSha256": "3fd23e49b8b0c4a228fc67adda095eaa495c5ac795749294c22af6998505e778"
+    },
+    "src/models/SubcribePlan.js": {
+      "sha256": "956aa2c0176e4983ec7d530b9de44594545018a5df37ccc967f40dc8dbf1bd79",
+      "issues": [],
+      "lfSha256": "956aa2c0176e4983ec7d530b9de44594545018a5df37ccc967f40dc8dbf1bd79"
+    },
+    "src/models/SubscriptionFulfillment.js": {
+      "sha256": "754857ea9e7db81a2e5291abfcd499744d64415adcce7287373696b186806b63",
+      "issues": [],
+      "lfSha256": "754857ea9e7db81a2e5291abfcd499744d64415adcce7287373696b186806b63"
+    },
+    "src/models/SubscriptionTemplate.js": {
+      "sha256": "6589a1921561aa1e3846be744277e1bf2e4bdd0613987da2ab6f7b2c09702460",
+      "issues": [],
+      "lfSha256": "6589a1921561aa1e3846be744277e1bf2e4bdd0613987da2ab6f7b2c09702460"
+    },
+    "src/models/User.js": {
+      "sha256": "48fbfa6f87074e78687a1b26db32fc132b3567052e64c26fcdde48b0a1a216d6",
+      "issues": [],
+      "lfSha256": "8a2530f7c867a1ec2bc45cd1c393afaa12cf860c4f524320f3b73084585219b3"
+    },
+    "src/models/UserSubscription.js": {
+      "sha256": "d7a18ca0b75658bc8f0654fde3a682c9c8bd6c6ac74f7bb55d4677d1de6fa65d",
+      "issues": [],
+      "lfSha256": "67f14c5bb371e28b3fa6c662b00b2523b6abf805c3902549c9c037f8d27e66d4"
+    },
+    "src/routes/adminCommerceRouter.js": {
+      "sha256": "3cd6341e2031997b23907234097c1178dc0bce013dc754cdac2346ce103785a1",
+      "issues": [],
+      "lfSha256": "9197cbfe48a7c38777409b056e0e38913840f37a091a699f473b9b442268b592"
+    },
+    "src/routes/boxRouter.js": {
+      "sha256": "5c573dd5231a81fa077bfb516b4c7c9fde5f38ce0d5083b41f5c27a5ced6296d",
+      "issues": [],
+      "lfSha256": "5c573dd5231a81fa077bfb516b4c7c9fde5f38ce0d5083b41f5c27a5ced6296d"
+    },
+    "src/routes/brandRouter.js": {
+      "sha256": "5993ee08fe67bf338ef87461b87217b6ff9ba119c163fd8e99ba741f764584b5",
+      "issues": [],
+      "lfSha256": "9b69edd89cf2de7a6f761595ee26c6a436aaace07608551eb4e38d2528954b5b"
+    },
+    "src/routes/cartRouter.js": {
+      "sha256": "56d1e73be49c98a022116f18081b8e1ce53242d8856e5925ba5c9fed95c8616e",
+      "issues": [],
+      "lfSha256": "56d1e73be49c98a022116f18081b8e1ce53242d8856e5925ba5c9fed95c8616e"
+    },
+    "src/routes/categoryRouter.js": {
+      "sha256": "a81435b4952dd48761d415d047c92ba9d8c902a9731a4a3bafd3ac967f95960d",
+      "issues": [],
+      "lfSha256": "a81435b4952dd48761d415d047c92ba9d8c902a9731a4a3bafd3ac967f95960d"
+    },
+    "src/routes/checkOutRouter.js": {
+      "sha256": "7d6caaa240d0866c7b78889af469c5883145a49664053fdcbc9f4e92f4b826f4",
+      "issues": [],
+      "lfSha256": "5685d10567790b25ff30fca7ec66083807c6a288c2bc781de17639a97818edcd"
+    },
+    "src/routes/couponRouter.js": {
+      "sha256": "20ec85ff88cac32fec4067883debdee0a25e3100879d02a16d31df887e79e3b3",
+      "issues": [],
+      "lfSha256": "20ec85ff88cac32fec4067883debdee0a25e3100879d02a16d31df887e79e3b3"
+    },
+    "src/routes/customerOrderRouter.js": {
+      "sha256": "41ceafd110872dcd79c13aedb89261d25157f691686ac1da9bda1cec15259368",
+      "issues": [],
+      "lfSha256": "9657037123bf006d9ee8b12796f720fa25add52da0678a60b339b0345ed03275"
+    },
+    "src/routes/homeRouter.js": {
+      "sha256": "913dc8530c02046d505af9a636822515c249a5ce2d3c87b8a77ade54d1caa421",
+      "issues": [],
+      "lfSha256": "913dc8530c02046d505af9a636822515c249a5ce2d3c87b8a77ade54d1caa421"
+    },
+    "src/routes/index.js": {
+      "sha256": "aa6bebb2d0a97cb664e472142c9943ced8eb9eb4887a7e8f894700e10ac950d7",
+      "issues": [],
+      "lfSha256": "476c6d5bfcb6a95666e016e031555c81761d6cbe74eb778777e664abc3bf021b"
+    },
+    "src/routes/managerRouter.js": {
+      "sha256": "0eac242651fc8862622f4a56df911bb44e16f00cd4ea3e284d0b98ed471c7571",
+      "issues": [],
+      "lfSha256": "0eac242651fc8862622f4a56df911bb44e16f00cd4ea3e284d0b98ed471c7571"
+    },
+    "src/routes/notificationRouter.js": {
+      "sha256": "75003ce9c12dc16820f62219f5adfd2805f655c11ae8983639ee6607e37b9aea",
+      "issues": [],
+      "lfSha256": "75003ce9c12dc16820f62219f5adfd2805f655c11ae8983639ee6607e37b9aea"
+    },
+    "src/routes/orderRouter.js": {
+      "sha256": "23bfe68945ddfb5d5dc7486cb0f9d21c9dcf365a450bbc3fd02452b3ee5fb3ff",
+      "issues": [],
+      "lfSha256": "23bfe68945ddfb5d5dc7486cb0f9d21c9dcf365a450bbc3fd02452b3ee5fb3ff"
+    },
+    "src/routes/productRouter.js": {
+      "sha256": "9797f10b2efbf277816a15e73e8843bbf5df6d326f8a417a30a46530a9a034f9",
+      "issues": [],
+      "lfSha256": "9797f10b2efbf277816a15e73e8843bbf5df6d326f8a417a30a46530a9a034f9"
+    },
+    "src/routes/reconciliationRouter.js": {
+      "sha256": "a72dff35297b21226deb4b64346a85d20b318d93a3f54c005c3d95722585b6e2",
+      "issues": [],
+      "lfSha256": "a72dff35297b21226deb4b64346a85d20b318d93a3f54c005c3d95722585b6e2"
+    },
+    "src/routes/subcribePlanRouter.js": {
+      "sha256": "6c737416c9c7c77b5c4013c156cac8c6d709f61628d19d7f614a2c3cc38b90ab",
+      "issues": [],
+      "lfSha256": "6c737416c9c7c77b5c4013c156cac8c6d709f61628d19d7f614a2c3cc38b90ab"
+    },
+    "src/routes/userRouter.js": {
+      "sha256": "756c16a9731c7428f5ad173ca023b46f82bcf1fe48395a967e36750bf9d12286",
+      "issues": [],
+      "lfSha256": "756c16a9731c7428f5ad173ca023b46f82bcf1fe48395a967e36750bf9d12286"
+    },
+    "src/server.js": {
+      "sha256": "747c9fbe3aed2c952a4939f26c0cdaef890e5cd8860c51dcca5142cb3ecdf2b5",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/services/boxDefinitionService.js": {
+      "sha256": "e5facc69f4ef2be33c87140e3da8009f025c5c38ca298616532750a5bca50490",
+      "issues": [],
+      "lfSha256": "678ce941c280716fddad03d34e28b0b635be4ef306ae7e3cca7e1a098d2acb8c"
+    },
+    "src/services/checkoutAttemptService.js": {
+      "sha256": "29d3a27919ffa20ec133c5b4942c846bbdec1cfe002bce639a55bdbcd5dcf797",
+      "issues": [],
+      "lfSha256": "b22a24c8f29750f5286062ef9b28067cffee98de2ad8535e2e013c5d924b95a2"
+    },
+    "src/services/checkoutLifecycle.js": {
+      "sha256": "d0444ce53c8326226ed23cf9df7e28d953ed4177e52f6f4f551f835e0c0ecd70",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/services/commercePolicy.js": {
+      "sha256": "e9fa298f5e553efb200ab357e51a14b5d225a34e87528c304efe877cff822adb",
+      "issues": [],
+      "lfSha256": "4711d9cbd25d85f51c1d67f9a322f18df45dbbe8cad6c5a10d59b7010b0c9fb3"
+    },
+    "src/services/deliverySnapshot.js": {
+      "sha256": "bff99696390af7408afcc6ee425c1d6181a9551ed9f228bd7a79cac891e4870d",
+      "issues": [],
+      "lfSha256": "d15c77328b8dd66038b0f1859a330db2ecc3b90db9065a48ca03abfa8917fad8"
+    },
+    "src/services/giftPolicy.js": {
+      "sha256": "7b42e70c8113e466654f48a5f9ce824e6f2972a1972a1c941dd3da153c94d221",
+      "issues": [],
+      "lfSha256": "7b42e70c8113e466654f48a5f9ce824e6f2972a1972a1c941dd3da153c94d221"
+    },
+    "src/services/inventoryService.js": {
+      "sha256": "61e3187f2c8c268c14b710491ecec1cf4df79a17e70ec915394f0f1a7854fd1d",
+      "issues": [],
+      "lfSha256": "61e3187f2c8c268c14b710491ecec1cf4df79a17e70ec915394f0f1a7854fd1d"
+    },
+    "src/services/managerCatalogService.js": {
+      "sha256": "0de37a4809c4e94c608da3c63d328c16bf57c0ccca999b31b585cbacc47609b3",
+      "issues": [],
+      "lfSha256": "fad2ba72d2fe783820511e204232f1558f3e0346d18b33067cbf8d668667262c"
+    },
+    "src/services/managerService.js": {
+      "sha256": "52a1cd33fa48309c2e7543f814ad78af5db9ac955fd279576b7a503d23cf30be",
+      "issues": [
+        {
+          "rule": "no-unused-vars",
+          "line": 32,
+          "column": 13,
+          "messageId": "unusedVar",
+          "severity": 2
+        }
+      ],
+      "lfSha256": "52a1cd33fa48309c2e7543f814ad78af5db9ac955fd279576b7a503d23cf30be"
+    },
+    "src/services/merchantOrderPolicy.js": {
+      "sha256": "e9a2a6c0b29385603522772e3d7aad6d84ec0be0a9a264de732bb4ce0f8e83e2",
+      "issues": [],
+      "lfSha256": "e9a2a6c0b29385603522772e3d7aad6d84ec0be0a9a264de732bb4ce0f8e83e2"
+    },
+    "src/services/merchantScope.js": {
+      "sha256": "c1d634c24e4e9c3b630364bbcb0afe4a74054f7b78ab9c56a9c85a573c881b05",
+      "issues": [],
+      "lfSha256": "b193d7b1fd3f04d35ce3b189c743af60990392c1bc859c5b3ccfd21922d19d70"
+    },
+    "src/services/passwordService.js": {
+      "sha256": "d663b40bd922a46ee02b01036b0262e9e0f4d00df7e80100d5244b58cb3d49da",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/services/paymentPolicy.js": {
+      "sha256": "7c36493a88efd94759dd882bb03cf6059fa199f36660df8678524c4946f88210",
+      "issues": [],
+      "lfSha256": "7c36493a88efd94759dd882bb03cf6059fa199f36660df8678524c4946f88210"
+    },
+    "src/services/paymentReconciliationService.js": {
+      "sha256": "6e7e4bef230763461f71c48185b3d99d59cc5b9def0fa2422e1722958765ea2a",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/services/pricingService.js": {
+      "sha256": "d6d49a61ad02d2cdc890c1fdedbb227ccf4121d85ae0af46ed47014f10a575f7",
+      "issues": [],
+      "lfSha256": "09053b8bb14167310a36930957f4f8ce61bd4becd141eecfa448a9783087ad3f"
+    },
+    "src/services/redisRateLimitStore.js": {
+      "sha256": "651eb37a1144e27f75730c8175fa23141f9bc7c2d8a680036d82ade9852f32df",
+      "issues": [],
+      "lfSha256": "651eb37a1144e27f75730c8175fa23141f9bc7c2d8a680036d82ade9852f32df"
+    },
+    "src/services/securityRevocationService.js": {
+      "sha256": "480dc64607b21c01f2ce9b2b46b8d047adcf2e834c7190f144a2e327c1b65e87",
+      "issues": [],
+      "lfSha256": "3b46d14291e2ec8e6785396ae6af15ea5f6b4d5ddda583bb22636ac25332761c"
+    },
+    "src/services/sessionService.js": {
+      "sha256": "e4f7d0fdd2bd75a7a65dd02f388edd342c7e135d1b0ef9e109aa42fab59b59c3",
+      "issues": [],
+      "lfSha256": "e4f7d0fdd2bd75a7a65dd02f388edd342c7e135d1b0ef9e109aa42fab59b59c3"
+    },
+    "src/services/stockAdjustment.js": {
+      "sha256": "9e5c74a84c5b6fa3bef3a85c14c5a523f7d90cba70cb342acf9de81c2310813b",
+      "issues": [],
+      "lfSha256": "9e5c74a84c5b6fa3bef3a85c14c5a523f7d90cba70cb342acf9de81c2310813b"
+    },
+    "src/services/subscriptionService.js": {
+      "sha256": "734a9640837cb7dd3bd3401b30c8b57a2c80736d1ac998667f1518feec46226a",
+      "issues": [],
+      "lfSha256": "734a9640837cb7dd3bd3401b30c8b57a2c80736d1ac998667f1518feec46226a"
+    },
+    "src/services/userIdentityService.js": {
+      "sha256": "b53b639550de73449c71da02ccb9fbb6b6b6cd073d32eeaa81b3efd69990ad15",
+      "issues": [],
+      "lfSha256": "b53b639550de73449c71da02ccb9fbb6b6b6cd073d32eeaa81b3efd69990ad15"
+    },
+    "src/utils/brandLogoStorage.js": {
+      "sha256": "3cb90754f9b04945d718ba301a2d359b62beb8b54950726a2aec2df1d52c6a85",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/utils/idempotencyKey.js": {
+      "sha256": "0ecc757b03084fcfa8187a976573688aa29bac22b51c74063a6379f0770e8847",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/utils/jwt.js": {
+      "sha256": "af436a2f4604b41a5cddcce85313935af38051337774cc472a5aab7e3be7b1bb",
+      "issues": [
+        {
+          "rule": "no-useless-catch",
+          "line": 34,
+          "column": 3,
+          "messageId": "unnecessaryCatch",
+          "severity": 2
+        }
+      ],
+      "lfSha256": null
+    },
+    "src/utils/logger.js": {
+      "sha256": "eb4f363fc074f075869907d9337f219863a0bba050d02cca6fee24615a646df7",
+      "issues": [],
+      "lfSha256": null
+    },
+    "src/utils/logRedaction.js": {
+      "sha256": "408c0914972959734a7d1bb5a1e58a62e0d9cc3e39b78ff019c96d2a78a8efdf",
+      "issues": [
+        {
+          "rule": "no-useless-escape",
+          "line": 18,
+          "column": 14,
+          "messageId": "unnecessaryEscape",
+          "severity": 2
+        }
+      ],
+      "lfSha256": "408c0914972959734a7d1bb5a1e58a62e0d9cc3e39b78ff019c96d2a78a8efdf"
+    },
+    "src/utils/notify.js": {
+      "sha256": "e159a05c149beb10901735f860d6989725261bf19ca9814fd24a9b1090a20e80",
+      "issues": [],
+      "lfSha256": "8f6d14aa152d456c69f2f3a9317f0c463bc658ece4519c7de7239434b1dec4d3"
+    },
+    "src/utils/pagination.js": {
+      "sha256": "3bfc8c2ebc13e3881bd75cdc208211e41ec1cc8ab054396f9f16a1064ecfd59f",
+      "issues": [],
+      "lfSha256": "3a6d390f86a73241e2af7ed3ee40a8c8790e45955b242a012acadd5f94d19ae3"
+    },
+    "src/utils/safeHtml.js": {
+      "sha256": "6826259db034b201edd1f093a8bfddd3e312f31b519a8a97d087b6b44de56472",
+      "issues": [],
+      "lfSha256": "6826259db034b201edd1f093a8bfddd3e312f31b519a8a97d087b6b44de56472"
+    },
+    "src/utils/sendEmail.js": {
+      "sha256": "4320c454e055069541edb2fea628f95d50a0a7b784776587dcee560e4a2357e6",
+      "issues": [],
+      "lfSha256": null
+    },
+    "scripts/acceptance-server.js": {
+      "sha256": "fc4025b141a6c5bbc5db59dd5cb1585dc43bd45939f00d8f05c3c2439385b9ac",
+      "issues": [],
+      "lfSha256": "fc4025b141a6c5bbc5db59dd5cb1585dc43bd45939f00d8f05c3c2439385b9ac"
+    },
+    "scripts/benchmark-passwords.js": {
+      "sha256": "6e45615d0b5c0ddbf994a03391c11cd89a3af947d06484025b396a1cfbe0ee6f",
+      "issues": [],
+      "lfSha256": "6e45615d0b5c0ddbf994a03391c11cd89a3af947d06484025b396a1cfbe0ee6f"
+    },
+    "scripts/bootstrap-staging.js": {
+      "sha256": "2fed6758efe77ef92bc14436827f69ed7d4b4367a3e34bd5f97d6792637675e1",
+      "issues": [],
+      "lfSha256": "2fed6758efe77ef92bc14436827f69ed7d4b4367a3e34bd5f97d6792637675e1"
+    },
+    "scripts/check-staging-commerce.js": {
+      "sha256": "bd7cf19b3b377216f65e8999534a0fac4960e66ac360b9a89ae461b124ffa8a2",
+      "issues": [],
+      "lfSha256": "bd7cf19b3b377216f65e8999534a0fac4960e66ac360b9a89ae461b124ffa8a2"
+    },
+    "scripts/check-staging.js": {
+      "sha256": "0fffa54a739e1ea8f8396328c0595c12e204c119146f98f204cf7c596cf489d0",
+      "issues": [],
+      "lfSha256": "0fffa54a739e1ea8f8396328c0595c12e204c119146f98f204cf7c596cf489d0"
+    },
+    "scripts/drill-backup-disposable.js": {
+      "sha256": "1863e9d481bd3ea0187b1e3cb60aa0bdf34e8bca2217755ed70bd1c91f5afd99",
+      "issues": [],
+      "lfSha256": "1863e9d481bd3ea0187b1e3cb60aa0bdf34e8bca2217755ed70bd1c91f5afd99"
+    },
+    "scripts/migrate-box-version-fields.js": {
+      "sha256": "a991e2c3c86cb341ae1cd418916099cbad0b62564eaae7528912de0016da78c6",
+      "issues": [],
+      "lfSha256": "a991e2c3c86cb341ae1cd418916099cbad0b62564eaae7528912de0016da78c6"
+    },
+    "scripts/migrate-checkouts.js": {
+      "sha256": "d2513720ea3aa7aa1185645c9426e7fb114b9af0a37301bc89b7f83dd0f4bea4",
+      "issues": [],
+      "lfSha256": "d2513720ea3aa7aa1185645c9426e7fb114b9af0a37301bc89b7f83dd0f4bea4"
+    },
+    "scripts/migrate-commerce-integrity.js": {
+      "sha256": "cbb84970e02e2dea4d0eccbc932409a37effb12537d21910dec28039ac49a0cb",
+      "issues": [],
+      "lfSha256": "97f600686b9f397a9cf01dcafd842ad3edd38c09a7440799bb83b530666982b9"
+    },
+    "scripts/migrate-merchant-ownership.js": {
+      "sha256": "54de25d069aa290d09fd09b629e4aeec2007c149b780c748cc1365f60f754a78",
+      "issues": [],
+      "lfSha256": "54de25d069aa290d09fd09b629e4aeec2007c149b780c748cc1365f60f754a78"
+    },
+    "scripts/migrate-payment-ledger.js": {
+      "sha256": "5b9acefb8e8bde3813834aa84fc008b7c0493e82a567c05b47ac21c5b79f967a",
+      "issues": [],
+      "lfSha256": "5b9acefb8e8bde3813834aa84fc008b7c0493e82a567c05b47ac21c5b79f967a"
+    },
+    "scripts/monitor-health.js": {
+      "sha256": "956e3d189a18b91a881dcaa41c5771ab997db88610a6c495707adf2f313d2ff7",
+      "issues": [],
+      "lfSha256": "956e3d189a18b91a881dcaa41c5771ab997db88610a6c495707adf2f313d2ff7"
+    },
+    "scripts/review-user-identity.js": {
+      "sha256": "96c7979cb1e281a6384396d343ca4a605416433f397644b7f0bca6c5210663ab",
+      "issues": [
+        {
+          "rule": "no-unused-vars",
+          "line": 82,
+          "column": 13,
+          "messageId": "unusedVar",
+          "severity": 2
+        },
+        {
+          "rule": "no-unused-vars",
+          "line": 82,
+          "column": 16,
+          "messageId": "unusedVar",
+          "severity": 2
+        }
+      ],
+      "lfSha256": "96c7979cb1e281a6384396d343ca4a605416433f397644b7f0bca6c5210663ab"
+    },
+    "scripts/run-be-tests.js": {
+      "sha256": "247fd7e4e6b61fb8858026cc0f23f56f25a7cd9492c8cc3a8b5b1de5489a08c8",
+      "issues": [],
+      "lfSha256": null
+    },
+    "tests/acceptanceFlows.integration.test.js": {
+      "sha256": "ba99bbfa3a2e2cb4a30b3d69ee6627e01213204aa4068d494268ec8b15cc3d77",
+      "issues": [],
+      "lfSha256": "ba99bbfa3a2e2cb4a30b3d69ee6627e01213204aa4068d494268ec8b15cc3d77"
+    },
+    "tests/accountLock.test.js": {
+      "sha256": "0a14ca1a72f363af55854cc6865ff4e78e9a76117b50a0cb5c72ab683b51433a",
+      "issues": [],
+      "lfSha256": "0a14ca1a72f363af55854cc6865ff4e78e9a76117b50a0cb5c72ab683b51433a"
+    },
+    "tests/attemptRecovery.integration.test.js": {
+      "sha256": "a349dba19952ed631a3ae831e78bac5b4193f651f946574b8358543540729be6",
+      "issues": [],
+      "lfSha256": "6a42cd5cb5ccabebbd40b00dfcce93a9cf7cb6e9a473d8564ec662b7043532d1"
+    },
+    "tests/authBoundary.integration.test.js": {
+      "sha256": "3763ed73a451d29440ef376bffbfa7af0b48cbc992ab19d47c64058171e2dfa0",
+      "issues": [],
+      "lfSha256": null
+    },
+    "tests/boxDefinition.unit.test.js": {
+      "sha256": "3c465f5de38f87731e9f89346775aab5c52da793b109d890ce55d3da9ad03bf2",
+      "issues": [],
+      "lfSha256": "052f7ddfa49757d0b76e5532402d36ccae818d587b75d63b9d22e04c1b78666c"
+    },
+    "tests/boxSnapshot.unit.test.js": {
+      "sha256": "dcf55b8cb6f9b5096e9207ca6b2001e7f71dce78729475cfc47a744c4e204e1e",
+      "issues": [],
+      "lfSha256": "dcf55b8cb6f9b5096e9207ca6b2001e7f71dce78729475cfc47a744c4e204e1e"
+    },
+    "tests/boxVersions.integration.test.js": {
+      "sha256": "574d40a06759bd0423a8f4210d1c1a15555458e10fac90237c9438aaefcdcb06",
+      "issues": [
+        {
+          "rule": "no-unused-vars",
+          "line": 5,
+          "column": 21,
+          "messageId": "unusedVar",
+          "severity": 2
+        }
+      ],
+      "lfSha256": "fc8f27b4d31132851214818c4f7fb1760470c40ccc3b528848b6e77fc5ff3c2c"
+    },
+    "tests/brandLogoUpload.test.js": {
+      "sha256": "765d6245e31863e4111ab03707a6ab01522e1b8ddc74b4fa82d8a53c4812b3bb",
+      "issues": [],
+      "lfSha256": "765d6245e31863e4111ab03707a6ab01522e1b8ddc74b4fa82d8a53c4812b3bb"
+    },
+    "tests/carrierShipping.integration.test.js": {
+      "sha256": "d597ed22e48c7666271ac4265bcd3eba7aa5589e190fb247ca7e4918d6bddfcd",
+      "issues": [],
+      "lfSha256": "c4727bca97d2738239f886ce8541ef2bbb414f097631539c7e0f4de933b06494"
+    },
+    "tests/cartSync.test.js": {
+      "sha256": "1f2345cda44ddebdc557d73636b1a84fbb072c8c421964ddabc858ab35d8eba3",
+      "issues": [],
+      "lfSha256": "50ef7d410a78689b26e3f4d22db5cddb229837a7835abc92ffd9001c8cf56487"
+    },
+    "tests/checkout.test.js": {
+      "sha256": "94407c63e9f0701fd41bd0a4d57f77761e91c7d57b0d1ec27fc85aef41ccc2bd",
+      "issues": [],
+      "lfSha256": "2b218046e0f589b5cc5b6e5f56f59556f5bdc2c3886f7926b44d9049e6aa7601"
+    },
+    "tests/checkoutDelivery.test.js": {
+      "sha256": "d0d5d15f09b65a92c612570cde9e3b893b5a5d6613e3aa178b36df2ae59fa661",
+      "issues": [],
+      "lfSha256": "d0d5d15f09b65a92c612570cde9e3b893b5a5d6613e3aa178b36df2ae59fa661"
+    },
+    "tests/commerce.integration.test.js": {
+      "sha256": "8a470838e51ade186356219cc1290705641bb8c7ae1f19b2f7898f465e302d08",
+      "issues": [],
+      "lfSha256": "4304a2adb893ee803b6be3a23660dff7ca329792de7dc5ffe7887df6ed8ef264"
+    },
+    "tests/commercePolicy.test.js": {
+      "sha256": "17631f8667dfeb7161bee953c2d820f1abf4c1e9a4cd02055abdec1e4dc98ab3",
+      "issues": [],
+      "lfSha256": "17631f8667dfeb7161bee953c2d820f1abf4c1e9a4cd02055abdec1e4dc98ab3"
+    },
+    "tests/commerceQuote.unit.test.js": {
+      "sha256": "53f6f72070a044ce1d228767557e3b626e89a6762cbf8cca43578b74fe34e938",
+      "issues": [],
+      "lfSha256": "521681e903ee44cea38337765829a0c267848f5d257152001c6a4e0e84ca710a"
+    },
+    "tests/cookieSessions.integration.test.js": {
+      "sha256": "ade54b7f26c02ecf9e43482c77c68632c180b14586e42217e9a7f649ae0bc5de",
+      "issues": [],
+      "lfSha256": "1a9f84f8f7da860f295d550160f0eee24645e1135766bc42da1317a9bd5e8513"
+    },
+    "tests/cors.test.js": {
+      "sha256": "ad2de0743c4fc5ced16b232db12aa08b4894117d001d6622325b70a59356d32f",
+      "issues": [],
+      "lfSha256": "ad2de0743c4fc5ced16b232db12aa08b4894117d001d6622325b70a59356d32f"
+    },
+    "tests/customerFeatures.test.js": {
+      "sha256": "355599c02012d2ce1aa57eae7ee0026ba7117aadeff4a303ad7a048f250f32d0",
+      "issues": [],
+      "lfSha256": "355599c02012d2ce1aa57eae7ee0026ba7117aadeff4a303ad7a048f250f32d0"
+    },
+    "tests/dbLifecycle.test.js": {
+      "sha256": "973f180c0d14c6ebdbd5d805c5abfc4a1d3f7b2ac1c88d64b4f88c1f364b85ee",
+      "issues": [],
+      "lfSha256": "973f180c0d14c6ebdbd5d805c5abfc4a1d3f7b2ac1c88d64b4f88c1f364b85ee"
+    },
+    "tests/deliverySnapshot.test.js": {
+      "sha256": "f503104f64145eeaf7680039be15faa8c6fea539daf4e68b25069673a21b48c1",
+      "issues": [],
+      "lfSha256": "f503104f64145eeaf7680039be15faa8c6fea539daf4e68b25069673a21b48c1"
+    },
+    "tests/disposableRedis.test.js": {
+      "sha256": "1d08abcd7c3bdb2925ec9f45de0fcb0ef3bfad2cd9140140563bbd54bfa6260e",
+      "issues": [
+        {
+          "rule": "no-case-declarations",
+          "line": 8,
+          "column": 9,
+          "messageId": "unexpected",
+          "severity": 2
+        }
+      ],
+      "lfSha256": "1d08abcd7c3bdb2925ec9f45de0fcb0ef3bfad2cd9140140563bbd54bfa6260e"
+    },
+    "tests/emailDeliveryB03.test.js": {
+      "sha256": "4db055ae8e81a6a433f7e7ebef247aaadcf6cab8f57640e2ee850dc930fe38ab",
+      "issues": [],
+      "lfSha256": "4db055ae8e81a6a433f7e7ebef247aaadcf6cab8f57640e2ee850dc930fe38ab"
+    },
+    "tests/env.setup.js": {
+      "sha256": "bf84f888e6397c2465d7503a180261b5cb444cf0603997b0135d4617d757a3af",
+      "issues": [],
+      "lfSha256": "bf84f888e6397c2465d7503a180261b5cb444cf0603997b0135d4617d757a3af"
+    },
+    "tests/environmentChecks.test.js": {
+      "sha256": "f2b346ca2fb6fe196b29fd078ae9b6872035a09d80c4e443543a0b1ccb3cfa33",
+      "issues": [],
+      "lfSha256": null
+    },
+    "tests/helpers/db.js": {
+      "sha256": "9058ae62e6e2248e5ab2b0683d577efc96183baf98ede711a530dd3471669fc9",
+      "issues": [],
+      "lfSha256": "9058ae62e6e2248e5ab2b0683d577efc96183baf98ede711a530dd3471669fc9"
+    },
+    "tests/helpers/disposableRedis.js": {
+      "sha256": "036a99a84494473f45e344925c9f06381eddc07da289d42ef67a684b4746e784",
+      "issues": [],
+      "lfSha256": "036a99a84494473f45e344925c9f06381eddc07da289d42ef67a684b4746e784"
+    },
+    "tests/helpers/factories.js": {
+      "sha256": "0bc3d2d474d8296de13d3c49a1c9b4d64a96a1a7ab49f603e610e6f35586f95e",
+      "issues": [],
+      "lfSha256": "0bc3d2d474d8296de13d3c49a1c9b4d64a96a1a7ab49f603e610e6f35586f95e"
+    },
+    "tests/helpers/http-process.js": {
+      "sha256": "f9993569a238543f7b6e40ec634dba4f9f644dfe0b02a860a1820869b67907d9",
+      "issues": [],
+      "lfSha256": "f9993569a238543f7b6e40ec634dba4f9f644dfe0b02a860a1820869b67907d9"
+    },
+    "tests/helpers/localRedisUrl.js": {
+      "sha256": "049feac381582a10eab298d2c10b10939400914a21ccd5b8783ddb4a1c9f44e5",
+      "issues": [],
+      "lfSha256": "049feac381582a10eab298d2c10b10939400914a21ccd5b8783ddb4a1c9f44e5"
+    },
+    "tests/helpers/noDotenv.js": {
+      "sha256": "6947de273d8b07c60473ff85d3780b78dcda4c248e86518271f774920038cc9b",
+      "issues": [],
+      "lfSha256": "6947de273d8b07c60473ff85d3780b78dcda4c248e86518271f774920038cc9b"
+    },
+    "tests/helpers/refresh-child.js": {
+      "sha256": "6616248abe2df83b69cdd11feb10f1a2650968adfe575936a22d75517a7bf678",
+      "issues": [],
+      "lfSha256": "6616248abe2df83b69cdd11feb10f1a2650968adfe575936a22d75517a7bf678"
+    },
+    "tests/httpSetupFailure.test.js": {
+      "sha256": "a09332bba613ffe5b2c6638c103cbf355ddf204c1cbf9bffa7bb788b32395dc3",
+      "issues": [],
+      "lfSha256": "a09332bba613ffe5b2c6638c103cbf355ddf204c1cbf9bffa7bb788b32395dc3"
+    },
+    "tests/idempotencyKey.test.js": {
+      "sha256": "4feb4021b06c1cb23d0531017edc09c1318d2d2fd4cddad13e1add70a7d252c4",
+      "issues": [],
+      "lfSha256": "4feb4021b06c1cb23d0531017edc09c1318d2d2fd4cddad13e1add70a7d252c4"
+    },
+    "tests/identityB03.integration.test.js": {
+      "sha256": "cc5cc0bc9c35a246577ff7065d4f8fed7f6d86ffdd18bdd873d4c3f0183b2c92",
+      "issues": [
+        {
+          "rule": "no-unsafe-finally",
+          "line": 58,
+          "column": 99,
+          "messageId": "unsafeUsage",
+          "severity": 2
+        }
+      ],
+      "lfSha256": "cc5cc0bc9c35a246577ff7065d4f8fed7f6d86ffdd18bdd873d4c3f0183b2c92"
+    },
+    "tests/identityMigrationB03.test.js": {
+      "sha256": "79a298de7ab527a87bf5d4c2cd38328a7070332d80aa6ac1207074263256625b",
+      "issues": [],
+      "lfSha256": "79a298de7ab527a87bf5d4c2cd38328a7070332d80aa6ac1207074263256625b"
+    },
+    "tests/localRedisUrl.test.js": {
+      "sha256": "944e3bcb356c40e4000a7069b32c0b81208ef95eb59eea50a388db8fc76a65c4",
+      "issues": [],
+      "lfSha256": "944e3bcb356c40e4000a7069b32c0b81208ef95eb59eea50a388db8fc76a65c4"
+    },
+    "tests/logRedaction.test.js": {
+      "sha256": "1e92ef6539041d62feba71274ce57edec5b8060f2afda8e096141dc0dea8fa7e",
+      "issues": [],
+      "lfSha256": "1e92ef6539041d62feba71274ce57edec5b8060f2afda8e096141dc0dea8fa7e"
+    },
+    "tests/manager.integration.test.js": {
+      "sha256": "fa5eef2e1d0682faee6e9416c6986fd06ae122845fde457feafff9dd748c9521",
+      "issues": [],
+      "lfSha256": "fa5eef2e1d0682faee6e9416c6986fd06ae122845fde457feafff9dd748c9521"
+    },
+    "tests/manager.unit.test.js": {
+      "sha256": "97644689ad1f5c1b21ba6f32e7499cc6a0a62c025b9727fb80f22d62134b99e2",
+      "issues": [],
+      "lfSha256": "e84de676f888724aa9dca676ff8ee42ed1a77adab6e6102cb7186e590e9c6a19"
+    },
+    "tests/merchantOrderPolicy.test.js": {
+      "sha256": "4aff503fa0a2acf7464b45cc67951a5db3cb16a03475bf9dc7133c9dd6aafb62",
+      "issues": [],
+      "lfSha256": "4aff503fa0a2acf7464b45cc67951a5db3cb16a03475bf9dc7133c9dd6aafb62"
+    },
+    "tests/mergedMerchant.unit.test.js": {
+      "sha256": "8cea60420db1a385921f7b136194c74a2f0e4923d1d89542d48b6b3eb011d440",
+      "issues": [],
+      "lfSha256": "403d25446ae4238ca61e0685001366c1d2f4618fa869fd254075c7817aecb832"
+    },
+    "tests/newCheckout.integration.test.js": {
+      "sha256": "41b85eca038a2b6b303f06158ceefe8f493ef4a8170af2dc67d1a38adcb6fe7d",
+      "issues": [],
+      "lfSha256": "666a7da09dc7d96aa8056c88d69ed6d2deb2c2bb05d2ebd1cdedb9fca26efe92"
+    },
+    "tests/orderAdmin.test.js": {
+      "sha256": "0c6784bec7a83bbe93e9cc1f1bc3c6af636c5e798228ff0412b0fc1bc2d72c88",
+      "issues": [],
+      "lfSha256": "0c6784bec7a83bbe93e9cc1f1bc3c6af636c5e798228ff0412b0fc1bc2d72c88"
+    },
+    "tests/orderBrand.test.js": {
+      "sha256": "76aaca17e562051c7a47052654635c9185894dd1b08b455fc7e8c8e0a6c32c4b",
+      "issues": [],
+      "lfSha256": "76aaca17e562051c7a47052654635c9185894dd1b08b455fc7e8c8e0a6c32c4b"
+    },
+    "tests/passwordResetStreams.test.js": {
+      "sha256": "c9a67a5775348b7b8d131963e80fafbe075e059914dd0c1c8a8749c6567310f0",
+      "issues": [],
+      "lfSha256": "c9a67a5775348b7b8d131963e80fafbe075e059914dd0c1c8a8749c6567310f0"
+    },
+    "tests/paymentPolicy.test.js": {
+      "sha256": "41cb99d26a467d2b8b3857625210bf54dcaf564dd6c072124eb59a0990c1ff33",
+      "issues": [],
+      "lfSha256": "41cb99d26a467d2b8b3857625210bf54dcaf564dd6c072124eb59a0990c1ff33"
+    },
+    "tests/paymentReconciliation.integration.test.js": {
+      "sha256": "ba91038527daac65646094f0f175a5d3167b7dce2573b71f53a2c11d100f1a9d",
+      "issues": [],
+      "lfSha256": "a3728224dd40dcf2d37524137e5ca91bb648e10a09250da97c5530619dcd1ee9"
+    },
+    "tests/prepaidAndPricing.test.js": {
+      "sha256": "ee6d658b586797c546281a514588ebdd426d63ef7408d546a96c36564023e589",
+      "issues": [],
+      "lfSha256": "ee6d658b586797c546281a514588ebdd426d63ef7408d546a96c36564023e589"
+    },
+    "tests/productionReadiness.test.js": {
+      "sha256": "8e1e005553654b86213e8a436fbe2d318067ddb962c99f22e230fab365d09103",
+      "issues": [],
+      "lfSha256": "8e1e005553654b86213e8a436fbe2d318067ddb962c99f22e230fab365d09103"
+    },
+    "tests/qrFlow.unit.test.js": {
+      "sha256": "651ab2cd7f5554d844bbb061ac818b8b03bdf9ddce065513bee7eeab0a330f83",
+      "issues": [],
+      "lfSha256": "743885e7b6f354b8052a8f061f66a2636b3bf1aba3f11100102775f22a405afd"
+    },
+    "tests/rateLimiter.test.js": {
+      "sha256": "a97037902689ed2a00aa043907ef5c57fd5e6fb9cbce0f8f13ee2554ad8321d0",
+      "issues": [],
+      "lfSha256": "a97037902689ed2a00aa043907ef5c57fd5e6fb9cbce0f8f13ee2554ad8321d0"
+    },
+    "tests/redisHttp.integration.test.js": {
+      "sha256": "a7c2b9129f811ffbeec13a108caf72bf8ff072e6ee005115f89d74b4cdc36d40",
+      "issues": [],
+      "lfSha256": "ce4a8714e513be1501c7f627d40f2f4b0433d38e974ce085d5c8d27257e50eb7"
+    },
+    "tests/redisLive.integration.test.js": {
+      "sha256": "f118b5809fe661865bf65b51d849e49cdd88b0b542475d0f0269046fd2f131c4",
+      "issues": [],
+      "lfSha256": "f118b5809fe661865bf65b51d849e49cdd88b0b542475d0f0269046fd2f131c4"
+    },
+    "tests/redisRateLimitStore.test.js": {
+      "sha256": "fd9f26b3d69356c90e9dbcdc38c2aa039a7c8d57fbc137b249adb6effe42c3bf",
+      "issues": [],
+      "lfSha256": "fd9f26b3d69356c90e9dbcdc38c2aa039a7c8d57fbc137b249adb6effe42c3bf"
+    },
+    "tests/refreshFamily.integration.test.js": {
+      "sha256": "c531e8e1032652925645d50d1804c488ec30a41bc5b41de98c2d6c838f31fcb3",
+      "issues": [],
+      "lfSha256": null
+    },
+    "tests/registration.test.js": {
+      "sha256": "d71e7d81874666dc2497d526f1048b14f6d0d4edad7b8a4db5b6e2f9dd8e069f",
+      "issues": [],
+      "lfSha256": "d71e7d81874666dc2497d526f1048b14f6d0d4edad7b8a4db5b6e2f9dd8e069f"
+    },
+    "tests/security.test.js": {
+      "sha256": "2f871ae7a54c32573ac2c8a72dd0feec996ab513b8eb8025de9a7f76d306570d",
+      "issues": [],
+      "lfSha256": null
+    },
+    "tests/securityOutbox.integration.test.js": {
+      "sha256": "1ecd78ee0130092cc4c32b6ddc3ef3a259b2da636a1433c6f194383a93d41f05",
+      "issues": [],
+      "lfSha256": "1ecd78ee0130092cc4c32b6ddc3ef3a259b2da636a1433c6f194383a93d41f05"
+    },
+    "tests/separateDelivery.integration.test.js": {
+      "sha256": "cf3c74877834fecd46756b956a18a1b9450317e540a66e737f3372b0ef0564bf",
+      "issues": [],
+      "lfSha256": "cf3c74877834fecd46756b956a18a1b9450317e540a66e737f3372b0ef0564bf"
+    },
+    "tests/sessionPolicy.test.js": {
+      "sha256": "07ad1033e57a3b716a6c1933f0272de33648f3a9045758d2b2b595f998bd2c0b",
+      "issues": [],
+      "lfSha256": null
+    },
+    "tests/sessionProxyFixture.test.js": {
+      "sha256": "43550f939c7eb99b4ad11d7f9234df11281f403668c44dd0171ce9b9d0687af5",
+      "issues": [],
+      "lfSha256": null
+    },
+    "tests/stagingBootstrap.test.js": {
+      "sha256": "a07c32cd76e2f8b6209087734d5fb2f409074f27375dd5d9d07230eb87a4af86",
+      "issues": [],
+      "lfSha256": "a07c32cd76e2f8b6209087734d5fb2f409074f27375dd5d9d07230eb87a4af86"
+    },
+    "tests/stockAdjust.test.js": {
+      "sha256": "ef383ca50305388b87edc11f1f9cbb2dbf4654e028400b7e27b5575a1e0e80ea",
+      "issues": [],
+      "lfSha256": "ef383ca50305388b87edc11f1f9cbb2dbf4654e028400b7e27b5575a1e0e80ea"
+    },
+    "tests/stockAdjustment.unit.test.js": {
+      "sha256": "1300621f0991f2695a54b053e9043e0988027443a075e7bb10fbb16bb7501260",
+      "issues": [],
+      "lfSha256": "1300621f0991f2695a54b053e9043e0988027443a075e7bb10fbb16bb7501260"
+    },
+    "tests/streamLifecycle.test.js": {
+      "sha256": "dcc62850ef1bfc248213cf9edc31274a28a00a09b6f18053089c195a388c2a1e",
+      "issues": [],
+      "lfSha256": "dcc62850ef1bfc248213cf9edc31274a28a00a09b6f18053089c195a388c2a1e"
+    },
+    "tests/unifiedContract.integration.test.js": {
+      "sha256": "040332507e841d8d210a8213652a174281995015b69f00d17b328276a6471fbc",
+      "issues": [],
+      "lfSha256": "3a85f05c0da3fad8f64f2d7f708f5823b0edae6180f216a1eda9ecda5157133a"
+    },
+    "tests/userAuthorization.test.js": {
+      "sha256": "35bc8310005ed177e5579454e53449f5f69269d20ceaa9076815feda509e9a2e",
+      "issues": [],
+      "lfSha256": "35bc8310005ed177e5579454e53449f5f69269d20ceaa9076815feda509e9a2e"
+    },
+    "tests/webhook.test.js": {
+      "sha256": "4fbaeb5db9fe5f37d78b23df31b0c97c67b8c583161c5e8ed342396eecefc4ec",
+      "issues": [
+        {
+          "rule": "no-unused-vars",
+          "line": 225,
+          "column": 44,
+          "messageId": "unusedVar",
+          "severity": 2
+        }
+      ],
+      "lfSha256": "4fbaeb5db9fe5f37d78b23df31b0c97c67b8c583161c5e8ed342396eecefc4ec"
+    }
+  }
+}

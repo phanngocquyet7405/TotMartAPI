@@ -17,9 +17,15 @@ const looksLikePlaceholder = (value) =>
 function isHttpsUrl(value) {
   try {
     const url = new URL(value);
-    return url.protocol === 'https:' && !url.username && !url.password &&
-      !url.search && !url.hash && (url.pathname === '/' || url.pathname === '') &&
-      !/^(localhost(?:\.|$)|127\.|0\.0\.0\.0$|\[::1\]$)/.test(url.hostname);
+    return (
+      url.protocol === 'https:' &&
+      !url.username &&
+      !url.password &&
+      !url.search &&
+      !url.hash &&
+      (url.pathname === '/' || url.pathname === '') &&
+      !/^(localhost(?:\.|$)|127\.|0\.0\.0\.0$|\[::1\]$)/.test(url.hostname)
+    );
   } catch {
     return false;
   }
@@ -43,9 +49,8 @@ function validateProductionEnv(env) {
     .map((value) => (value || '').trim())
     .filter(Boolean);
   for (const origin of origins) {
-    if (!isHttpsUrl(origin)) {
-      errors.push(`Origin "${origin}" phải là URL https và không phải localhost`);
-    }
+    if (!isHttpsUrl(origin))
+      errors.push('CORS_ORIGINS or FRONTEND_URL must be a public HTTPS origin');
   }
 
   for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET']) {
@@ -57,10 +62,17 @@ function validateProductionEnv(env) {
     errors.push('JWT_SECRET và JWT_REFRESH_SECRET phải khác nhau');
   }
 
-  if (env.REDIS_URL && !/^rediss:\/\//.test(env.REDIS_URL)) errors.push('REDIS_URL production phải dùng TLS rediss://');
-  if (env.REDIS_NAMESPACE && !/^[a-z0-9:_-]{3,80}$/i.test(env.REDIS_NAMESPACE)) errors.push('REDIS_NAMESPACE không hợp lệ');
-  if (env.TRUST_PROXY !== undefined && !/^(0|1|loopback|linklocal|uniquelocal)$/.test(env.TRUST_PROXY)) errors.push('TRUST_PROXY phải là 0/1 hoặc loopback/linklocal/uniquelocal');
-  for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET']) if (env[key] && new Set(env[key]).size < 8) errors.push(`${key} quá dễ đoán`);
+  if (env.REDIS_URL && !/^rediss:\/\//.test(env.REDIS_URL))
+    errors.push('REDIS_URL production phải dùng TLS rediss://');
+  if (env.REDIS_NAMESPACE && !/^[a-z0-9:_-]{3,80}$/i.test(env.REDIS_NAMESPACE))
+    errors.push('REDIS_NAMESPACE không hợp lệ');
+  if (
+    env.TRUST_PROXY !== undefined &&
+    !/^(0|1|loopback|linklocal|uniquelocal)$/.test(env.TRUST_PROXY)
+  )
+    errors.push('TRUST_PROXY phải là 0/1 hoặc loopback/linklocal/uniquelocal');
+  for (const key of ['JWT_SECRET', 'JWT_REFRESH_SECRET'])
+    if (env[key] && new Set(env[key]).size < 8) errors.push(`${key} quá dễ đoán`);
   return { errors, warnings };
 }
 

@@ -43,7 +43,8 @@ describe("password recovery", () => {
     const { user } = await createUser();
     sendEmail.mockResolvedValue({ success: false, error: "provider failure" });
     const res = await request(app).post("/api/home/forgot-password").send({ email: user.email });
-    expect(res.status).toBe(500);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, message: 'If the email is registered, a password reset link has been sent.' });
     expect((await User.findById(user._id)).resetPasswordToken).toBeUndefined();
   });
 

@@ -53,6 +53,7 @@ class CartController {
         return res.status(409).json({
           success: false,
           message: "Giỏ đã thay đổi ở thiết bị khác. Vui lòng tải lại.",
+          version: current?.__v || 0,
         });
       if (!cartItems.length) {
         const deleted = current ? await Cart.deleteOne({ _id: current._id, __v: current.__v }) : null;
@@ -70,6 +71,7 @@ class CartController {
           return res.status(409).json({
             success: false,
             message: "Giỏ vừa thay đổi. Vui lòng tải lại.",
+            version: (await Cart.findOne(filter).select("__v"))?.__v || 0,
           });
       } else
         cart = await Cart.create({ ...filter, items: cartItems, totalPrice });

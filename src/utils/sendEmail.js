@@ -1,10 +1,10 @@
-require("dotenv").config();
+const config = require('../config/environment');
 
-const { BrevoClient } = require("@getbrevo/brevo");
-const logger = require("./logger");
+const { BrevoClient } = require('@getbrevo/brevo');
+const logger = require('./logger');
 
 const brevo = new BrevoClient({
-  apiKey: process.env.BREVO_API_KEY,
+  apiKey: config.email.apiKey,
   timeoutInSeconds: 60,
 });
 const sendEmailWithBrevo = async (toEmail, subject, htmlContent) => {
@@ -12,13 +12,14 @@ const sendEmailWithBrevo = async (toEmail, subject, htmlContent) => {
     const data = await brevo.transactionalEmails.sendTransacEmail({
       subject: subject,
       htmlContent: htmlContent,
-      sender: { name: "TotMart", email: process.env.FROM_EMAIL },
+      sender: { name: 'TotMart', email: config.email.from },
       to: [{ email: toEmail }],
     });
     return { success: true, messageId: data.messageId };
   } catch (error) {
-    logger.error({ err: error, toEmail }, "Error sending email");
-    return { success: false, error: error.message };
+    // Provider error objects can contain recipient, API key or reset URL.
+    logger.error({ dependency: 'email', event: 'delivery_failed' }, 'Email delivery failed');
+    return { success: false };
   }
 };
 

@@ -64,6 +64,7 @@ const userSubscriptionSchema = new mongoose.Schema(
     refundedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     cancelAtPeriodEnd: { type: Boolean, default: false },
 
+    shippingPayment: { type: String, enum: ['platform', 'customer_to_carrier'] },
     shippingAddress: {
       address: { type: String, required: true },
       district: { type: String, required: true },

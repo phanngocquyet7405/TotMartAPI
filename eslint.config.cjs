@@ -1,0 +1,51 @@
+const js = require('@eslint/js');
+module.exports = [
+  {
+    files: ['src/**/*.js', 'scripts/**/*.js', 'tests/**/*.js', '*.cjs', 'jest.config.js'],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: 'commonjs',
+      globals: Object.fromEntries(
+        [
+          'Buffer',
+          'URL',
+          'URLSearchParams',
+          'AbortController',
+          'AbortSignal',
+          'TextEncoder',
+          'TextDecoder',
+          'ReadableStream',
+          'fetch',
+          'structuredClone',
+          'queueMicrotask',
+          'setImmediate',
+          'clearImmediate',
+          'setTimeout',
+          'clearTimeout',
+          'setInterval',
+          'clearInterval',
+          'console',
+          'process',
+          'global',
+          'performance',
+          'crypto',
+          '__dirname',
+          '__filename',
+          'jest',
+          'describe',
+          'test',
+          'expect',
+          'beforeAll',
+          'afterAll',
+          'beforeEach',
+          'afterEach',
+        ].map((name) => [name, 'readonly']),
+      ),
+    },
+    rules: {
+      ...js.configs.recommended.rules,
+      // Express/Jest/driver callback arity and caught-error bindings are interface details.
+      'no-unused-vars': ['error', { args: 'none', caughtErrors: 'none' }],
+    },
+  },
+];

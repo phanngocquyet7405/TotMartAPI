@@ -13,6 +13,12 @@ const schema = new mongoose.Schema({
     products: { type: [partSchema], required: true },
     value: { type: Number, required: true, min: 0 },
     totalItem: Number, isGift: Boolean, discountPercent: Number,
+    sourceComboId: mongoose.Schema.Types.ObjectId, sourceComboVersion: Number,
+    subscriptionOnly: Boolean, internalSubscription: Boolean,
+    giftPolicy: {
+      bulkTiers: [{ _id: false, minQuantity: Number, percent: Number }],
+      amenities: [{ _id: false, name: String, fee: Number }],
+    },
     validFrom: Date, validTo: Date,
     images: [{ _id: false, url: String, public_id: String }],
   },

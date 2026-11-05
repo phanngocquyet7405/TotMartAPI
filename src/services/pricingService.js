@@ -121,7 +121,9 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
       !box ||
       box.validFrom > now ||
       box.validTo < now ||
-      box.isGift ||
+      (box.isGift && !box.sourceComboId) ||
+      box.internalSubscription ||
+      box.subscriptionOnly ||
       !Number.isSafeInteger(box.stock) ||
       box.stock < boxDemand.get(id) ||
       !box.products.length
@@ -141,6 +143,8 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
     const p = productMap.get(String(id));
     if (p?.archivedAt || !p?.brand?.ownerId)
       fail("Sản phẩm không tồn tại hoặc không có người bán hợp lệ");
+    if (p.ownerId && String(p.ownerId) !== String(p.brand.ownerId))
+      fail('Chủ sản phẩm và thương hiệu không khớp; cần đối chiếu ownership trước khi bán', 409);
     return p;
   }
   // Aggregate standalone SKU quantity across gift variants. Box components do not qualify for bulk.
@@ -166,7 +170,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
   const products = [],
     lines = [];
   for (const item of normalized) {
-    const fee = commerce.safeMoney(
+    let fee = commerce.safeMoney(
       commerce.fees[item.gift.wrap] * item.quantity,
     );
     if (item.boxId) {
@@ -175,12 +179,19 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
         product: productFor(c.productId),
         quantity: c.quantity * item.quantity,
       }));
-      const value = commerce.safeMoney(Math.round(box.value) * item.quantity);
+      const baseAmount = commerce.safeMoney(Math.round(box.value) * item.quantity);
+      const percent = box.isGift ? [...(box.giftPolicy?.bulkTiers || [])]
+        .filter(t => t.minQuantity <= boxDemand.get(String(box._id))).sort((a, b) => b.minQuantity - a.minQuantity)[0]?.percent || 0 : 0;
+      const bulkAmount = Math.round(baseAmount * percent / 100);
+      const value = commerce.safeMoney(baseAmount - bulkAmount);
+      const amenitiesFee = box.isGift ? commerce.sum((box.giftPolicy?.amenities || []).map(a => commerce.safeMoney(a.fee * item.quantity))) : 0;
+      fee = commerce.sum([fee, amenitiesFee]);
       const amounts = allocate(
         value,
         parts.map((c) => commerce.safeMoney(unitPrice(c.product) * c.quantity)),
       );
       const giftFees = allocate(fee, amounts);
+      const bulkParts = allocate(bulkAmount, amounts);
       parts.forEach((part, index) =>
         products.push({
           productId: part.product._id,
@@ -194,7 +205,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
           lineId: item.lineId,
           gift: item.gift,
           giftFee: giftFees[index],
-          bulkDiscountAmount: 0,
+          bulkDiscountAmount: bulkParts[index],
         }),
       );
       lines.push({
@@ -204,9 +215,9 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
         name: box.name,
         quantity: item.quantity,
         unitPrice: Math.round(box.value),
-        baseAmount: value,
-        bulkPercent: 0,
-        bulkDiscountAmount: 0,
+        baseAmount,
+        bulkPercent: percent,
+        bulkDiscountAmount: bulkAmount,
         totalPrice: value,
         gift: item.gift,
         giftFee: fee,
@@ -272,7 +283,7 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
     giftFee = commerce.sum(lines.map((l) => l.giftFee));
   const discount = await couponDiscount(couponCode, subtotal, session, claim);
   commerce.safeMoney(discount.discountAmount);
-  const shippingFee = subtotal > 0 && subtotal < 500000 ? 30000 : 0;
+  const shippingFee = 0; // Customer pays the carrier directly; never collect this in COD/QR.
   const totalAmount = commerce.sum([
     subtotal - discount.discountAmount,
     shippingFee,
@@ -303,6 +314,9 @@ async function buildQuote(items, couponCode, session = null, claim = false) {
     subtotal,
     giftFee,
     shippingFee,
+    shippingMode: 'separate', // Compatibility alias; shippingPayment is canonical.
+    shippingPayment: 'customer_to_carrier',
+    shippingFeeIncluded: false,
     ...discount,
     totalAmount,
     fingerprint,

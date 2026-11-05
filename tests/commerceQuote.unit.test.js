@@ -10,11 +10,11 @@ beforeEach(()=>{jest.clearAllMocks();Product.find.mockReturnValue(query([product
 test('bulk before coupon; no discount on wrapping/shipping',async()=>{
   Coupon.findOne.mockReturnValue(query({code:'SAVE',isActive:true,startDate:new Date(0),expiresAt:new Date(Date.now()+60000),minOrderValue:0,usageLimit:null,discountType:'percentage',discount:10}));
   const q=await buildQuote([{productId:P,quantity:3,gift:{wrap:'classic',message:'Hi'}}],'SAVE');
-  expect(q).toMatchObject({baseSubtotal:300000,bulkDiscountAmount:15000,subtotal:285000,discountAmount:28500,giftFee:45000,shippingFee:30000,totalAmount:331500});
+  expect(q).toMatchObject({baseSubtotal:300000,bulkDiscountAmount:15000,subtotal:285000,discountAmount:28500,giftFee:45000,shippingFee:0,shippingPayment:'customer_to_carrier',totalAmount:301500});
 });
 test('five across gift variants qualifies same SKU, fees per unit',async()=>{
   const q=await buildQuote([{productId:P,quantity:2,gift:{wrap:'eco'}},{productId:P,quantity:3,gift:{wrap:'premium'}}]);
-  expect(q.bulkDiscountAmount).toBe(50000);expect(q.giftFee).toBe(135000);expect(q.totalAmount).toBe(615000);
+  expect(q.bulkDiscountAmount).toBe(50000);expect(q.giftFee).toBe(135000);expect(q.totalAmount).toBe(585000);
 });
 test('box demand aggregates across gift variants; batch read no inventory reread',async()=>{
   Box.find.mockReturnValue(query([{_id:B,name:'Box',value:100000,stock:4,products:[{productId:P,quantity:1}],validFrom:new Date(0),validTo:new Date(Date.now()+60000)}]));

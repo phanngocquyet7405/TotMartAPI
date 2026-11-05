@@ -1,6 +1,7 @@
 jest.mock("../src/models/Brand", () => {
   const Brand = jest.fn();
   Brand.exists = jest.fn();
+  Brand.findById = jest.fn();
   Brand.findByIdAndUpdate = jest.fn();
   Brand.findByIdAndDelete = jest.fn();
   return Brand;
@@ -55,6 +56,27 @@ test("text-only updates leave the existing logo alone", async () => {
   expect(Brand.findByIdAndUpdate.mock.calls[0][1]).toEqual({ name: "Renamed Brand" });
   expect(storage.uploadLogo).not.toHaveBeenCalled();
   expect(storage.removeLogo).not.toHaveBeenCalled();
+});
+
+test('admin detail returns ownerId and disables caching', async () => {
+  Brand.findById.mockReturnValue({ select: jest.fn().mockResolvedValue({ _id: id, ownerId: id, name: 'Brand' }) });
+  const response = await authorized('get', `/manage/${id}`);
+  expect(response.status).toBe(200);
+  expect(response.body.data.ownerId).toBe(id);
+  expect(response.headers['cache-control']).toBe('no-store');
+});
+
+test('brand management detail rejects anonymous and merchant access', async () => {
+  expect((await request(app).get(`/manage/${id}`)).status).toBe(401);
+  User.findById.mockResolvedValue({ _id: id, role: 'merchant', isActive: true, tokenVersion: 0 });
+  expect((await authorized('get', `/manage/${id}`)).status).toBe(403);
+  expect(Brand.findById).not.toHaveBeenCalled();
+});
+
+test('brand management detail validates IDs and reports missing brands', async () => {
+  expect((await authorized('get', '/manage/invalid')).status).toBe(400);
+  Brand.findById.mockReturnValue({ select: jest.fn().mockResolvedValue(null) });
+  expect((await authorized('get', `/manage/${id}`)).status).toBe(404);
 });
 test("invalid fields are rejected before Cloudinary upload", async () => {
   expect((await attach(authorized("post", "/create-brand").field("name", "x"))).status).toBe(400);

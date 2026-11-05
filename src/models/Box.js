@@ -1,6 +1,15 @@
 const mongoose = require("mongoose");
 const boxSchema = new mongoose.Schema(
   {
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", immutable: true, index: true },
+    internalSubscription: { type: Boolean, default: false },
+    subscriptionOnly: { type: Boolean, default: false },
+    sourceComboId: { type: mongoose.Schema.Types.ObjectId, ref: "Box", immutable: true },
+    sourceComboVersion: Number,
+    giftPolicy: {
+      bulkTiers: [{ _id: false, minQuantity: Number, percent: Number }],
+      amenities: [{ _id: false, name: String, fee: Number }],
+    },
     definitionVersion: { type: Number, default: 1, min: 1 },
     obligationRevision: { type: Number, default: 0 },
     archivedAt: { type: Date, default: null },
@@ -42,5 +51,11 @@ const boxSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
+boxSchema.pre('validate', function () {
+  const internal = this.internalSubscription || this.subscriptionOnly;
+  this.internalSubscription = internal;
+  this.subscriptionOnly = internal;
+});
 boxSchema.index({ archivedAt: 1, isGift: 1, validTo: 1 });
+boxSchema.index({ ownerId: 1, archivedAt: 1, isGift: 1, createdAt: -1 });
 module.exports = mongoose.model("Box", boxSchema);
