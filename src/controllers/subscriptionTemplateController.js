@@ -1,9 +1,18 @@
 const { prepaidPrice, planMonths } = require('../services/subscriptionService');
 const safeHtml = require('../utils/safeHtml');
-function present(template) { const obj = template.toObject ? template.toObject() : template; if (obj.boxId?.value !== undefined) Object.assign(obj, prepaidPrice(obj.boxId.value, obj.planType, obj.discountPercent)); obj.description = safeHtml(obj.description); obj.totalDeliveries = planMonths(obj.planType); obj.billingMode = 'prepaid_full'; obj.shippingPayment = 'customer_to_carrier'; return obj; }
-const SubscriptionTemplate = require("../models/SubscriptionTemplate");
-const boxModel = require("../models/Box");
-const { paginate } = require("../utils/pagination");
+function present(template) {
+  const obj = template.toObject ? template.toObject() : template;
+  if (obj.boxId?.value !== undefined)
+    Object.assign(obj, prepaidPrice(obj.boxId.value, obj.planType, obj.discountPercent));
+  obj.description = safeHtml(obj.description);
+  obj.totalDeliveries = planMonths(obj.planType);
+  obj.billingMode = 'prepaid_full';
+  obj.shippingPayment = 'customer_to_carrier';
+  return obj;
+}
+const SubscriptionTemplate = require('../models/SubscriptionTemplate');
+const boxModel = require('../models/Box');
+const { paginate } = require('../utils/pagination');
 
 class SubscriptionTemplateController {
   async createTemplate(req, res, next) {
@@ -12,9 +21,7 @@ class SubscriptionTemplateController {
 
       const box = await boxModel.findById(validated.boxId);
       if (!box) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Box not found" });
+        return res.status(404).json({ success: false, message: 'Box not found' });
       }
 
       if (validated.gift !== undefined) {
@@ -31,7 +38,7 @@ class SubscriptionTemplateController {
       const template = new SubscriptionTemplate({
         name: validated.name,
         isActive: validated.isActive,
-        description: validated.description || "",
+        description: validated.description || '',
         boxId: validated.boxId,
         planType: validated.planType,
         basePrice: Math.round(box.value) * planMonths(validated.planType),
@@ -40,17 +47,21 @@ class SubscriptionTemplateController {
       });
 
       const priceBox = await boxModel.findById(template.boxId);
-      if (!priceBox) return res.status(409).json({success:false,message:'Hộp không còn tồn tại'});
-      Object.assign(template, prepaidPrice(priceBox.value, template.planType, template.discountPercent));
+      if (!priceBox)
+        return res.status(409).json({ success: false, message: 'Hộp không còn tồn tại' });
+      Object.assign(
+        template,
+        prepaidPrice(priceBox.value, template.planType, template.discountPercent),
+      );
       template.description = safeHtml(template.description);
       await template.save();
 
-      await template.populate("boxId", "name value");
-      await template.populate("gift.boxId", "name");
+      await template.populate('boxId', 'name value');
+      await template.populate('gift.boxId', 'name');
 
       res.status(201).json({
         success: true,
-        message: "Subscription template created successfully",
+        message: 'Subscription template created successfully',
         data: present(template),
       });
     } catch (error) {
@@ -67,8 +78,8 @@ class SubscriptionTemplateController {
         {},
         {
           populate: [
-            { path: "boxId", select: "name value" },
-            { path: "gift.boxId", select: "name" },
+            { path: 'boxId', select: 'name value' },
+            { path: 'gift.boxId', select: 'name' },
           ],
           sort: { createdAt: -1 },
         },
@@ -88,13 +99,11 @@ class SubscriptionTemplateController {
   async getTemplateById(req, res, next) {
     try {
       const template = await SubscriptionTemplate.findById(req.params.id)
-        .populate("boxId", "name value")
-        .populate("gift.boxId", "name");
+        .populate('boxId', 'name value')
+        .populate('gift.boxId', 'name');
 
       if (!template)
-        return res
-          .status(404)
-          .json({ success: false, message: "Subscription template not found" });
+        return res.status(404).json({ success: false, message: 'Subscription template not found' });
       res.status(200).json({ success: true, data: present(template) });
     } catch (error) {
       next(error);
@@ -107,16 +116,11 @@ class SubscriptionTemplateController {
       let template = await SubscriptionTemplate.findById(req.params.id);
 
       if (!template)
-        return res
-          .status(404)
-          .json({ success: false, message: "Subscription template not found" });
+        return res.status(404).json({ success: false, message: 'Subscription template not found' });
 
       if (validated.boxId && validated.boxId !== template.boxId.toString()) {
         const box = await boxModel.findById(validated.boxId);
-        if (!box)
-          return res
-            .status(404)
-            .json({ success: false, message: "Box not found" });
+        if (!box) return res.status(404).json({ success: false, message: 'Box not found' });
         template.boxId = validated.boxId;
         template.basePrice = box.value;
       }
@@ -134,25 +138,27 @@ class SubscriptionTemplateController {
       }
 
       if (validated.name) template.name = validated.name;
-      if (validated.description !== undefined)
-        template.description = validated.description;
+      if (validated.description !== undefined) template.description = validated.description;
       if (validated.planType) template.planType = validated.planType;
       if (validated.discountPercent !== undefined)
         template.discountPercent = validated.discountPercent;
-      if (validated.isActive !== undefined)
-        template.isActive = validated.isActive;
+      if (validated.isActive !== undefined) template.isActive = validated.isActive;
 
       const priceBox = await boxModel.findById(template.boxId);
-      if (!priceBox) return res.status(409).json({success:false,message:'Hộp không còn tồn tại'});
-      Object.assign(template, prepaidPrice(priceBox.value, template.planType, template.discountPercent));
+      if (!priceBox)
+        return res.status(409).json({ success: false, message: 'Hộp không còn tồn tại' });
+      Object.assign(
+        template,
+        prepaidPrice(priceBox.value, template.planType, template.discountPercent),
+      );
       template.description = safeHtml(template.description);
       await template.save();
-      await template.populate("boxId", "name value");
-      await template.populate("gift.boxId", "name");
+      await template.populate('boxId', 'name value');
+      await template.populate('gift.boxId', 'name');
 
       res.status(200).json({
         success: true,
-        message: "Subscription template updated successfully",
+        message: 'Subscription template updated successfully',
         data: template,
       });
     } catch (error) {
@@ -162,16 +168,12 @@ class SubscriptionTemplateController {
 
   async deleteTemplate(req, res, next) {
     try {
-      const template = await SubscriptionTemplate.findByIdAndDelete(
-        req.params.id,
-      );
+      const template = await SubscriptionTemplate.findByIdAndDelete(req.params.id);
       if (!template)
-        return res
-          .status(404)
-          .json({ success: false, message: "Subscription template not found" });
+        return res.status(404).json({ success: false, message: 'Subscription template not found' });
       res.status(200).json({
         success: true,
-        message: "Subscription template deleted successfully",
+        message: 'Subscription template deleted successfully',
       });
     } catch (error) {
       next(error);
@@ -181,8 +183,8 @@ class SubscriptionTemplateController {
   async getActiveTemplates(req, res, next) {
     try {
       const templates = await SubscriptionTemplate.find({ isActive: true, archivedAt: null })
-        .populate("boxId", "name value image")
-        .populate("gift.boxId", "name image")
+        .populate('boxId', 'name value image')
+        .populate('gift.boxId', 'name image')
         .sort({ createdAt: -1 })
         .limit(50);
 

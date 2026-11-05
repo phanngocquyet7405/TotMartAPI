@@ -5,7 +5,11 @@ const authMiddleware = require('../middleware/authMiddleware');
 const sepayAuth = require('../middleware/sepayAuth');
 const validationHandler = require('../middleware/validationHandler');
 const { quoteSchema, refundSchema, cancelSchema } = require('../middleware/validationSchemas');
-const { checkoutLimiter, webhookLimiter } = require('../middleware/rateLimiter');
+const {
+  checkoutLimiter,
+  webhookLimiter,
+  webhookFloodLimiter,
+} = require('../middleware/rateLimiter');
 const {
   checkoutSchema,
   createSessionSchema,
@@ -80,8 +84,9 @@ router.get(
 
 router.post(
   '/sepay-webhook',
-  webhookLimiter,
+  webhookFloodLimiter,
   sepayAuth.verifyApiKey,
+  webhookLimiter,
   validationHandler.validate(sepayWebhookSchema, 'body'),
   (req, res, next) => checkOutController.sepayWebhook(req, res, next),
 );

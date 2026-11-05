@@ -1,15 +1,15 @@
-const request = require("supertest");
-const mongoose = require("mongoose");
-const app = require("../src/app");
-const { connect, closeDatabase, clearDatabase } = require("./helpers/db");
+const request = require('supertest');
+const mongoose = require('mongoose');
+const app = require('../src/app');
+const { connect, closeDatabase, clearDatabase } = require('./helpers/db');
 const {
   createUser,
   signToken,
   createBrand,
   createProduct,
   createCartWithItems,
-} = require("./helpers/factories");
-const Cart = require("../src/models/Cart");
+} = require('./helpers/factories');
+const Cart = require('../src/models/Cart');
 
 beforeAll(async () => {
   await connect();
@@ -24,26 +24,21 @@ afterAll(async () => {
 });
 
 const sync = (token, items) =>
-  request(app)
-    .put("/api/carts/sync")
-    .set("Authorization", `Bearer ${token}`)
-    .send({ items });
+  request(app).put('/api/carts/sync').set('Authorization', `Bearer ${token}`).send({ items });
 
-describe("PUT /api/carts/sync", () => {
-  test("requires authentication", async () => {
-    const res = await request(app).put("/api/carts/sync").send({ items: [] });
+describe('PUT /api/carts/sync', () => {
+  test('requires authentication', async () => {
+    const res = await request(app).put('/api/carts/sync').send({ items: [] });
     expect(res.status).toBe(401);
   });
 
-  test("creates the cart when the user has none", async () => {
+  test('creates the cart when the user has none', async () => {
     const { user } = await createUser();
     const token = signToken(user);
     const brand = await createBrand();
     const product = await createProduct(brand, { price: 30000 });
 
-    const res = await sync(token, [
-      { productId: product._id.toString(), quantity: 2 },
-    ]);
+    const res = await sync(token, [{ productId: product._id.toString(), quantity: 2 }]);
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
@@ -58,7 +53,7 @@ describe("PUT /api/carts/sync", () => {
     expect(cart.totalPrice).toBe(60000);
   });
 
-  test("replaces existing items instead of adding to them (idempotent)", async () => {
+  test('replaces existing items instead of adding to them (idempotent)', async () => {
     const { user } = await createUser();
     const token = signToken(user);
     const brand = await createBrand();
@@ -79,7 +74,7 @@ describe("PUT /api/carts/sync", () => {
     expect(carts[0].totalPrice).toBe(20000);
   });
 
-  test("merges duplicate productId lines and prices with salePercent", async () => {
+  test('merges duplicate productId lines and prices with salePercent', async () => {
     const { user } = await createUser();
     const token = signToken(user);
     const brand = await createBrand();
@@ -104,7 +99,7 @@ describe("PUT /api/carts/sync", () => {
     expect(cart.totalPrice).toBe(256500); // 270000 after sale, then 5% bulk
   });
 
-  test("rejects missing products without silently dropping cart lines", async () => {
+  test('rejects missing products without silently dropping cart lines', async () => {
     const { user } = await createUser();
     const token = signToken(user);
     const brand = await createBrand();
@@ -124,14 +119,12 @@ describe("PUT /api/carts/sync", () => {
     expect(cart).toBeNull();
   });
 
-  test("empty items clears the cart", async () => {
+  test('empty items clears the cart', async () => {
     const { user } = await createUser();
     const token = signToken(user);
     const brand = await createBrand();
     const product = await createProduct(brand);
-    await createCartWithItems(user._id, [
-      { productId: product._id, quantity: 1 },
-    ]);
+    await createCartWithItems(user._id, [{ productId: product._id, quantity: 1 }]);
 
     const res = await sync(token, []);
 
@@ -140,7 +133,7 @@ describe("PUT /api/carts/sync", () => {
     expect(await Cart.countDocuments({ userId: user._id })).toBe(0);
   });
 
-  test("does not touch the subscribe cart", async () => {
+  test('does not touch the subscribe cart', async () => {
     const { user } = await createUser();
     const token = signToken(user);
     const brand = await createBrand();
@@ -154,21 +147,17 @@ describe("PUT /api/carts/sync", () => {
 
     await sync(token, [{ productId: product._id.toString(), quantity: 1 }]);
 
-    expect(
-      await Cart.countDocuments({ userId: user._id, isSubscribeCart: true }),
-    ).toBe(1);
-    expect(
-      await Cart.countDocuments({ userId: user._id, isSubscribeCart: false }),
-    ).toBe(1);
+    expect(await Cart.countDocuments({ userId: user._id, isSubscribeCart: true })).toBe(1);
+    expect(await Cart.countDocuments({ userId: user._id, isSubscribeCart: false })).toBe(1);
   });
 
   test.each([
-    ["quantity 0", { quantity: 0 }],
-    ["negative quantity", { quantity: -1 }],
-    ["non-integer quantity", { quantity: 1.5 }],
-    ["quantity over 999", { quantity: 1000 }],
-    ["invalid productId", { productId: "not-an-id" }],
-  ])("rejects %s with 400", async (_label, override) => {
+    ['quantity 0', { quantity: 0 }],
+    ['negative quantity', { quantity: -1 }],
+    ['non-integer quantity', { quantity: 1.5 }],
+    ['quantity over 999', { quantity: 1000 }],
+    ['invalid productId', { productId: 'not-an-id' }],
+  ])('rejects %s with 400', async (_label, override) => {
     const { user } = await createUser();
     const token = signToken(user);
     const item = {
@@ -190,11 +179,11 @@ describe("PUT /api/carts/sync", () => {
     await sync(token, [{ productId: product._id.toString(), quantity: 1 }]);
 
     const res = await request(app)
-      .post("/api/checkout/check-out")
-      .set("Authorization", `Bearer ${token}`)
+      .post('/api/checkout/check-out')
+      .set('Authorization', `Bearer ${token}`)
       .send({
         addressId: user.addresses[0]._id.toString(),
-        paymentMethod: "cod",
+        paymentMethod: 'cod',
       });
 
     expect(res.status).toBe(201);

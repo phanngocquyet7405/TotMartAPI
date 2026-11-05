@@ -4,18 +4,34 @@
 const pino = require('pino');
 
 const SENSITIVE_QUERY_KEYS = new Set([
-  'token', 'ticket', 'access_token', 'refresh_token', 'id_token', 'code',
-  'password', 'secret', 'api_key', 'apikey', 'key', 'signature', 'sig', 'otp',
+  'token',
+  'ticket',
+  'access_token',
+  'refresh_token',
+  'id_token',
+  'code',
+  'password',
+  'secret',
+  'api_key',
+  'apikey',
+  'key',
+  'signature',
+  'sig',
+  'otp',
 ]);
 const REDACTED = '[REDACTED]';
 
 function isSensitiveKey(rawKey) {
   let key = String(rawKey);
-  try { key = decodeURIComponent(key); } catch { /* giữ nguyên khóa thô */ }
+  try {
+    key = decodeURIComponent(key);
+  } catch {
+    /* giữ nguyên khóa thô */
+  }
   // Kiểm tra từng đoạn khóa, gồm cả dạng lồng nhau như token[] hoặc user[token].
   return key
     .toLowerCase()
-    .split(/[\[\]]+/)
+    .split(/[[\]]+/)
     .filter(Boolean)
     .some((segment) => SENSITIVE_QUERY_KEYS.has(segment));
 }

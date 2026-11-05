@@ -115,7 +115,13 @@ function resolveEnvironment(env) {
     strictSessions,
     ci: boolean(env, 'CI'),
     port: number(env, 'PORT', 3001, 1, 65535),
-    mongodb: { uri: text(env, 'MONGODB_URI', 'mongodb://localhost:27017/totmart?replicaSet=rs0') },
+    mongodb: {
+      uri: text(env, 'MONGODB_URI', 'mongodb://localhost:27017/totmart?replicaSet=rs0'),
+      socketTimeoutMS: number(env, 'MONGO_SOCKET_TIMEOUT_MS', 45000, 1000, 300000),
+      waitQueueTimeoutMS: number(env, 'MONGO_WAIT_QUEUE_TIMEOUT_MS', 5000, 500, 60000),
+      maxCommitTimeMS: number(env, 'MONGO_MAX_COMMIT_TIME_MS', 10000, 1000, 60000),
+      transactionTimeoutMS: number(env, 'MONGO_TRANSACTION_TIMEOUT_MS', 15000, 1000, 120000),
+    },
     jwt: {
       secret: text(env, 'JWT_SECRET', 'your-secret-key-change-in-production'),
       expiresIn: access.value,
@@ -150,6 +156,7 @@ function resolveEnvironment(env) {
     checkoutSessionExpiryMinutes: number(env, 'CHECKOUT_SESSION_EXPIRY_MINUTES', 15, 5, 60),
     bcryptCost: number(env, 'BCRYPT_COST', 12, 10, 15),
     logLevel: text(env, 'LOG_LEVEL', nodeEnv === 'production' ? 'info' : 'debug'),
+    envWarnings: [],
     provided: Object.fromEntries(
       Object.keys(env).map((key) => [key, env[key] !== undefined && env[key] !== '']),
     ),
@@ -158,6 +165,14 @@ function resolveEnvironment(env) {
   if (!Number.isInteger(config.port)) invalid('PORT', 'integer required');
   if (!Number.isInteger(config.bcryptCost))
     invalid('BCRYPT_COST', 'integer from 10 to 15 required');
+  if (!Number.isInteger(config.mongodb.socketTimeoutMS))
+    invalid('MONGO_SOCKET_TIMEOUT_MS', 'integer required');
+  if (!Number.isInteger(config.mongodb.waitQueueTimeoutMS))
+    invalid('MONGO_WAIT_QUEUE_TIMEOUT_MS', 'integer required');
+  if (!Number.isInteger(config.mongodb.maxCommitTimeMS))
+    invalid('MONGO_MAX_COMMIT_TIME_MS', 'integer required');
+  if (!Number.isInteger(config.mongodb.transactionTimeoutMS))
+    invalid('MONGO_TRANSACTION_TIMEOUT_MS', 'integer required');
   if (!['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'].includes(config.logLevel))
     invalid('LOG_LEVEL', 'enum');
   if (!/^(0|1|loopback|linklocal|uniquelocal)$/.test(config.trustProxy))
@@ -168,12 +183,13 @@ function resolveEnvironment(env) {
   url(config.frontendUrl, 'FRONTEND_URL', ['http:', 'https:'], true);
   config.corsOrigins.forEach((value) => url(value, 'CORS_ORIGINS', ['http:', 'https:'], true));
   if (strictSessions) {
-    const { errors } = validateProductionEnv(env);
+    const { errors, warnings } = validateProductionEnv(env);
     if (errors.length)
       throw new Error(
         'Invalid production/staging configuration: ' +
           errors.map((error) => error.split(' ')[0]).join(', '),
       );
+    config.envWarnings = warnings || [];
   }
   return freeze(config);
 }

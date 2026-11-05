@@ -1,10 +1,10 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 const boxSchema = new mongoose.Schema(
   {
-    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", immutable: true, index: true },
+    ownerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', immutable: true, index: true },
     internalSubscription: { type: Boolean, default: false },
     subscriptionOnly: { type: Boolean, default: false },
-    sourceComboId: { type: mongoose.Schema.Types.ObjectId, ref: "Box", immutable: true },
+    sourceComboId: { type: mongoose.Schema.Types.ObjectId, ref: 'Box', immutable: true },
     sourceComboVersion: Number,
     giftPolicy: {
       bulkTiers: [{ _id: false, minQuantity: Number, percent: Number }],
@@ -22,7 +22,7 @@ const boxSchema = new mongoose.Schema(
       {
         productId: {
           type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
+          ref: 'Product',
           required: true,
         },
         quantity: { type: Number, default: 1 },
@@ -44,7 +44,7 @@ const boxSchema = new mongoose.Schema(
   {
     toJSON: {
       transform: (doc, ret) => {
-        ret.descriptions = require("../utils/safeHtml")(ret.descriptions);
+        ret.descriptions = require('../utils/safeHtml')(ret.descriptions);
         return ret;
       },
     },
@@ -58,4 +58,4 @@ boxSchema.pre('validate', function () {
 });
 boxSchema.index({ archivedAt: 1, isGift: 1, validTo: 1 });
 boxSchema.index({ ownerId: 1, archivedAt: 1, isGift: 1, createdAt: -1 });
-module.exports = mongoose.model("Box", boxSchema);
+module.exports = mongoose.model('Box', boxSchema);

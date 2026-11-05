@@ -1,21 +1,18 @@
-jest.mock("../src/utils/sendEmail", () => jest.fn());
+jest.mock('../src/utils/sendEmail', () => jest.fn());
 
-const request = require("supertest");
-const crypto = require("crypto");
-const mongoose = require("mongoose");
-const app = require("../src/app");
-const User = require("../src/models/User");
-const sendEmail = require("../src/utils/sendEmail");
-const {
-  terminateUserStreams,
-} = require("../src/controllers/notificationController");
-const { connect, clearDatabase, closeDatabase } = require("./helpers/db");
-const { createUser, signToken } = require("./helpers/factories");
+const request = require('supertest');
+const crypto = require('crypto');
+const mongoose = require('mongoose');
+const app = require('../src/app');
+const User = require('../src/models/User');
+const sendEmail = require('../src/utils/sendEmail');
+const { terminateUserStreams } = require('../src/controllers/notificationController');
+const { connect, clearDatabase, closeDatabase } = require('./helpers/db');
+const { createUser, signToken } = require('./helpers/factories');
 
 const streamUsers = new Set();
 const streamRequests = new Set();
-const hashToken = (token) =>
-  crypto.createHash("sha256").update(token).digest("hex");
+const hashToken = (token) => crypto.createHash('sha256').update(token).digest('hex');
 
 function deferred() {
   let resolve;
@@ -48,13 +45,13 @@ function openStream(ticket) {
         callback(error);
         return;
       }
-      response.once("data", () => ready.resolve());
-      response.once("end", () => {
+      response.once('data', () => ready.resolve());
+      response.once('end', () => {
         didEnd = true;
         ended.resolve();
-        callback(null, "");
+        callback(null, '');
       });
-      response.once("error", (error) => {
+      response.once('error', (error) => {
         ready.reject(error);
         ended.reject(error);
         callback(error);
@@ -90,7 +87,7 @@ afterAll(async () => {
   if (mongoose.connection.readyState === 1) await closeDatabase();
 });
 
-test("an older failed reset email does not invalidate a newer reset token", async () => {
+test('an older failed reset email does not invalidate a newer reset token', async () => {
   const { user } = await createUser();
   const firstSending = deferred();
   const firstDelivery = deferred();
@@ -103,7 +100,7 @@ test("an older failed reset email does not invalidate a newer reset token", asyn
 
   // Calling .then starts Supertest immediately; do not await this request yet.
   const firstRequest = request(app)
-    .post("/api/home/forgot-password")
+    .post('/api/home/forgot-password')
     .send({ email: user.email })
     .timeout({ deadline: 5000 })
     .then((response) => response);
@@ -112,22 +109,20 @@ test("an older failed reset email does not invalidate a newer reset token", asyn
     await Promise.race([
       firstSending.promise,
       firstRequest.then(() => {
-        throw new Error("First request never reached email delivery");
+        throw new Error('First request never reached email delivery');
       }),
     ]);
     const secondResponse = await request(app)
-      .post("/api/home/forgot-password")
+      .post('/api/home/forgot-password')
       .send({ email: user.email });
     expect(secondResponse.status).toBe(200);
 
     const secondHtml = sendEmail.mock.calls[1][2];
-    const secondToken = secondHtml.match(
-      /reset-password\?token=([a-f0-9]{40})/,
-    )[1];
+    const secondToken = secondHtml.match(/reset-password\?token=([a-f0-9]{40})/)[1];
 
     firstDelivery.resolve({
       success: false,
-      error: "Simulated delivery failure",
+      error: 'Simulated delivery failure',
     });
     const firstResponse = await firstRequest;
     expect(firstResponse.status).toBe(200);
@@ -140,7 +135,7 @@ test("an older failed reset email does not invalidate a newer reset token", asyn
     // Prove the surviving token works through the real reset endpoint too.
     const reset = await request(app)
       .post(`/api/home/reset-password?token=${secondToken}`)
-      .send({ password: "NewPassword123!" });
+      .send({ password: 'NewPassword123!' });
     expect(reset.status).toBe(200);
   } finally {
     firstDelivery.resolve({ success: false });
@@ -149,15 +144,15 @@ test("an older failed reset email does not invalidate a newer reset token", asyn
 });
 
 test("password reset closes all of that user's SSE streams, but not other users' streams", async () => {
-  const { user: admin } = await createUser({ role: "admin" });
-  const { user: otherAdmin } = await createUser({ role: "admin" });
+  const { user: admin } = await createUser({ role: 'admin' });
+  const { user: otherAdmin } = await createUser({ role: 'admin' });
   streamUsers.add(String(admin._id));
   streamUsers.add(String(otherAdmin._id));
 
   async function ticketFor(user) {
     const response = await request(app)
-      .get("/api/admin/notifications/stream-ticket")
-      .set("Authorization", `Bearer ${signToken(user)}`);
+      .get('/api/admin/notifications/stream-ticket')
+      .set('Authorization', `Bearer ${signToken(user)}`);
     expect(response.status).toBe(200);
     return response.body.data.ticket;
   }
@@ -172,7 +167,7 @@ test("password reset closes all of that user's SSE streams, but not other users'
   expect(first.didEnd).toBe(false);
   expect(second.didEnd).toBe(false);
 
-  const token = crypto.randomBytes(20).toString("hex");
+  const token = crypto.randomBytes(20).toString('hex');
   await User.updateOne(
     { _id: admin._id },
     {
@@ -185,16 +180,14 @@ test("password reset closes all of that user's SSE streams, but not other users'
 
   const response = await request(app)
     .post(`/api/home/reset-password?token=${token}`)
-    .send({ password: "ReplacementPassword123!" });
+    .send({ password: 'ReplacementPassword123!' });
   expect(response.status).toBe(200);
-  expect(response.body.message).toBe("Password updated successfully");
+  expect(response.body.message).toBe('Password updated successfully');
 
   // No client abort/cleanup occurs before these assertions.
   await Promise.all([first.ended, second.ended]);
   expect(other.didEnd).toBe(false);
 
-  const reopen = await request(app).get(
-    `/api/admin/notifications/stream?ticket=${unusedTicket}`,
-  );
+  const reopen = await request(app).get(`/api/admin/notifications/stream?ticket=${unusedTicket}`);
   expect(reopen.status).toBe(401);
 });

@@ -1,9 +1,10 @@
-const mongoose = require('mongoose')
+const mongoose = require('mongoose');
 
-const subcribePlanSchema = new mongoose.Schema({
+const subcribePlanSchema = new mongoose.Schema(
+  {
     name: { type: String, require: true },
-    userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", require: true },
-    boxId: { type: mongoose.Schema.Types.ObjectId, ref: "Box", require: true },
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', require: true },
+    boxId: { type: mongoose.Schema.Types.ObjectId, ref: 'Box', require: true },
     planType: { type: String, enum: ['1_month', '3_month', '6_month', '12_month'], require: true },
 
     currentPeriodStart: { type: Date, require: true },
@@ -21,12 +22,12 @@ const subcribePlanSchema = new mongoose.Schema({
     cancelAtPeriodEnd: { type: Boolean, default: false },
 
     shippingAddress: {
-        address: { type: String, require: true },
-        district: { type: String, require: true },
-        city: { type: String, require: true },
-        country: { type: String, require: true },
-        zipCode: { type: String, require: true },
-        phone: { type: String, require: true },
+      address: { type: String, require: true },
+      district: { type: String, require: true },
+      city: { type: String, require: true },
+      country: { type: String, require: true },
+      zipCode: { type: String, require: true },
+      phone: { type: String, require: true },
     },
 
     price: { type: Number, require: true },
@@ -34,13 +35,15 @@ const subcribePlanSchema = new mongoose.Schema({
     discount: { type: Number, required: true },
     discountPercent: { type: Number, required: true },
     gift: [
-        {
-            boxId: { type: mongoose.Schema.Types.ObjectId, ref: "Box" },
-            quantity: { type: Number, default: 1 }
-        }
-    ]
-}, {
-    timestamps: true
-})
+      {
+        boxId: { type: mongoose.Schema.Types.ObjectId, ref: 'Box' },
+        quantity: { type: Number, default: 1 },
+      },
+    ],
+  },
+  {
+    timestamps: true,
+  },
+);
 
 module.exports = mongoose.model('SubscribePlan', subcribePlanSchema);

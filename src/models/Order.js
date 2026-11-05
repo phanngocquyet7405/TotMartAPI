@@ -1,32 +1,42 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const orderSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
     },
     customerEmail: { type: String },
 
-    boxes: [{ boxId: { type: mongoose.Schema.Types.ObjectId, ref: "Box" }, name: String, quantity: Number }],
-    refundReference: String, refundedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    boxes: [
+      {
+        boxId: { type: mongoose.Schema.Types.ObjectId, ref: 'Box' },
+        name: String,
+        quantity: Number,
+      },
+    ],
+    refundReference: String,
+    refundedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     products: [
       {
         productId: {
           type: mongoose.Schema.Types.ObjectId,
-          ref: "Product",
+          ref: 'Product',
           required: true,
         },
         name: { type: String, required: true },
         lineId: String,
         boxId: { type: mongoose.Schema.Types.ObjectId, ref: 'Box' },
-        gift: { wrap: { type: String, enum: ['none', 'classic', 'eco', 'premium'], default: 'none' }, message: { type: String, maxlength: 500, default: '' } },
+        gift: {
+          wrap: { type: String, enum: ['none', 'classic', 'eco', 'premium'], default: 'none' },
+          message: { type: String, maxlength: 500, default: '' },
+        },
         giftFee: { type: Number, default: 0, min: 0 },
         bulkDiscountAmount: { type: Number, default: 0, min: 0 },
         unitPrice: { type: Number, required: true },
         quantity: { type: Number, default: 1 },
-        brand: { type: mongoose.Schema.Types.ObjectId, ref: "Brand" },
+        brand: { type: mongoose.Schema.Types.ObjectId, ref: 'Brand' },
         totalPrice: { type: Number, required: true },
       },
     ],
@@ -35,16 +45,8 @@ const orderSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: [
-        "pending",
-        "processing",
-        "shipped",
-        "delivered",
-        "cancelled",
-        "returned",
-        "on_hold",
-      ],
-      default: "pending",
+      enum: ['pending', 'processing', 'shipped', 'delivered', 'cancelled', 'returned', 'on_hold'],
+      default: 'pending',
     },
 
     stockDeducted: { type: Boolean, default: false },
@@ -69,11 +71,11 @@ const orderSchema = new mongoose.Schema(
       zipCode: { type: String },
     },
 
-    paymentMethod: { type: String, enum: ["cod", "online"], default: "cod" },
+    paymentMethod: { type: String, enum: ['cod', 'online'], default: 'cod' },
     paymentStatus: {
       type: String,
-      enum: ["pending", "paid", "failed"],
-      default: "pending",
+      enum: ['pending', 'paid', 'failed'],
+      default: 'pending',
     },
     paidReferenceCode: { type: String, unique: true, sparse: true },
 
@@ -84,8 +86,12 @@ const orderSchema = new mongoose.Schema(
     paidAt: { type: Date, default: null },
     shippedAt: { type: Date, default: null },
     trackingReference: { type: String, maxlength: 150 },
-    deliveryConfirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    codCollectionStatus: { type: String, enum: ["not_reported", "pending_review", "confirmed"], default: "not_reported" },
+    deliveryConfirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    codCollectionStatus: {
+      type: String,
+      enum: ['not_reported', 'pending_review', 'confirmed'],
+      default: 'not_reported',
+    },
     deliveredAt: { type: Date, default: null },
     cancelledAt: { type: Date, default: null },
     returnedAt: { type: Date, default: null },
@@ -93,21 +99,21 @@ const orderSchema = new mongoose.Schema(
     cancelReason: { type: String, default: null },
     cancelledBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       default: null,
     },
 
     merchantId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
     },
     paymentCode: { type: String, required: true },
 
     refundStatus: {
       type: String,
-      enum: ["not_applicable", "pending", "completed"],
-      default: "not_applicable",
+      enum: ['not_applicable', 'pending', 'completed'],
+      default: 'not_applicable',
     },
     refundAmount: { type: Number, default: null },
     refundedAt: { type: Date, default: null },
@@ -118,7 +124,7 @@ const orderSchema = new mongoose.Schema(
         changedAt: { type: Date, default: Date.now },
         changedBy: {
           type: mongoose.Schema.Types.ObjectId,
-          ref: "User",
+          ref: 'User',
           default: null,
         },
         note: { type: String },
@@ -126,7 +132,8 @@ const orderSchema = new mongoose.Schema(
     ],
   },
   {
-    timestamps: true, optimisticConcurrency: true,
+    timestamps: true,
+    optimisticConcurrency: true,
   },
 );
 
@@ -136,16 +143,16 @@ orderSchema.index({ status: 1, paymentMethod: 1 });
 orderSchema.index({ refundStatus: 1 });
 orderSchema.index({ merchantId: 1, createdAt: -1 });
 
-orderSchema.pre("save", function (next) {
+orderSchema.pre('save', function (next) {
   const now = new Date();
 
-  if (this.isModified("status")) {
+  if (this.isModified('status')) {
     const milestoneField = {
-      processing: "confirmedAt",
-      shipped: "shippedAt",
-      delivered: "deliveredAt",
-      cancelled: "cancelledAt",
-      returned: "returnedAt",
+      processing: 'confirmedAt',
+      shipped: 'shippedAt',
+      delivered: 'deliveredAt',
+      cancelled: 'cancelledAt',
+      returned: 'returnedAt',
     }[this.status];
 
     if (milestoneField && !this[milestoneField]) {
@@ -160,15 +167,11 @@ orderSchema.pre("save", function (next) {
     });
   }
 
-  if (
-    this.isModified("paymentStatus") &&
-    this.paymentStatus === "paid" &&
-    !this.paidAt
-  ) {
+  if (this.isModified('paymentStatus') && this.paymentStatus === 'paid' && !this.paidAt) {
     this.paidAt = now;
   }
 
   next();
 });
 
-module.exports = mongoose.model("Order", orderSchema);
+module.exports = mongoose.model('Order', orderSchema);

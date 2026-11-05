@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-11-05T04:48:00Z",
+  "phase": "Phase 3: Refactor checkout and pricing safely",
+  "changes": [
+    "Extracted order creation logic into src/services/orderFactory.js (createOrdersFromGroups) shared between COD and online settlement",
+    "Refactored buildQuote in src/services/pricingService.js into modular sub-functions preserving identical calculation, rounding, allocations, and fingerprints",
+    "Updated coupon undo logic in checkOutController.js to prefer direct couponId decrement when available",
+    "Extracted inline routes in adminCommerceRouter.js and reconciliationRouter.js to dedicated controllers"
+  ],
+  "monitoredModules": {
+    "src/services/paymentReconciliationService.js": {
+      "sourceSha256": "59250a171945e7e2d5208caed9d727ea91e34cbb46b0019eeee2c3d74c22655c",
+      "branches": {
+        "total": 178,
+        "covered": 114
+      },
+      "status": "Branch coverage preserved (114/178, no regression)"
+    },
+    "src/services/pricingService.js": {
+      "sourceSha256": "4d22e0a9c85925853001e3c81450a4536a1111226b21df7f0e89c91f2265444d",
+      "branches": {
+        "total": 104,
+        "covered": 93
+      },
+      "status": "Branch coverage preserved (93/104, no regression)"
+    }
+  }
+}

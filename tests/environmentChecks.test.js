@@ -8,6 +8,7 @@ const good = () => ({
   FRONTEND_URL: 'https://tot-mart.vercel.app',
   CORS_ORIGINS: 'https://tot-mart.vercel.app, https://admin.tot-mart.vn',
   SEPAY_API_KEY: 'k3j2h1g0f9e8d7c6b5a4',
+  TRUST_PROXY: '1',
 });
 
 describe('validateProductionEnv', () => {
@@ -77,5 +78,38 @@ describe('validateProductionEnv', () => {
       expect(looksLikePlaceholder(v)).toBe(true);
     }
     expect(looksLikePlaceholder('9f8e7d6c5b4a39281716aa')).toBe(false);
+  });
+
+  test('production bắt buộc khai báo TRUST_PROXY rõ ràng', () => {
+    const withoutProxy = { ...good() };
+    delete withoutProxy.TRUST_PROXY;
+    const { errors: errMissing } = validateProductionEnv(withoutProxy);
+    expect(errMissing).toContain('TRUST_PROXY phải được khai báo rõ ràng trong production');
+
+    const emptyProxy = { ...good(), TRUST_PROXY: '' };
+    const { errors: errEmpty } = validateProductionEnv(emptyProxy);
+    expect(errEmpty).toContain('TRUST_PROXY phải được khai báo rõ ràng trong production');
+
+    const invalidProxy = { ...good(), TRUST_PROXY: 'invalid' };
+    const { errors: errInvalid } = validateProductionEnv(invalidProxy);
+    expect(errInvalid).toContain('TRUST_PROXY phải là 0/1 hoặc loopback/linklocal/uniquelocal');
+  });
+
+  test('TRUST_PROXY=0 xuất cảnh báo nếu thiếu TRUST_PROXY_CONFIRMED_DIRECT, và im lặng nếu đã xác nhận', () => {
+    const unconfirmed = { ...good(), TRUST_PROXY: '0' };
+    const res1 = validateProductionEnv(unconfirmed);
+    expect(res1.errors).toEqual([]);
+    expect(res1.warnings.length).toBeGreaterThan(0);
+    expect(res1.warnings[0]).toMatch(/TRUST_PROXY=0/);
+
+    const confirmed = { ...good(), TRUST_PROXY: '0', TRUST_PROXY_CONFIRMED_DIRECT: 'true' };
+    const res2 = validateProductionEnv(confirmed);
+    expect(res2.errors).toEqual([]);
+    expect(res2.warnings).toEqual([]);
+
+    const confirmedWithOne = { ...good(), TRUST_PROXY: '0', TRUST_PROXY_CONFIRMED_DIRECT: '1' };
+    const res3 = validateProductionEnv(confirmedWithOne);
+    expect(res3.errors).toEqual([]);
+    expect(res3.warnings).toEqual([]);
   });
 });

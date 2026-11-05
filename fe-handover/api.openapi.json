@@ -1513,6 +1513,892 @@
           }
         }
       }
+    },
+    "/checkout/quote": {
+      "post": {
+        "summary": "Calculate commerce quote",
+        "operationId": "post_checkout_quote",
+        "description": "Calculates line items, combo boxes, gift wraps, bulk discounts, and coupon.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "responses": {
+          "200": {
+            "description": "Quote calculated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QuoteResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid input or insufficient stock",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/cancel/{_id}": {
+      "post": {
+        "summary": "Cancel order",
+        "operationId": "post_checkout_cancel_id",
+        "description": "Cancels pending order and restores stock/coupon.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "parameters": [
+          {
+            "name": "_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid param or reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/sessions/{paymentCode}": {
+      "get": {
+        "summary": "Get checkout session status",
+        "operationId": "get_checkout_session",
+        "description": "Retrieves online checkout session by paymentCode.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "parameters": [
+          {
+            "name": "paymentCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CheckoutSessionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/sessions/{paymentCode}/cancel": {
+      "post": {
+        "summary": "Cancel checkout session",
+        "operationId": "post_checkout_session_cancel",
+        "description": "Atomically cancels pending online session and releases coupon.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "parameters": [
+          {
+            "name": "paymentCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Session cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Session not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Non-cancellable state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/checkout/order-status/{paymentCode}": {
+      "get": {
+        "summary": "Get order status by payment code",
+        "operationId": "get_checkout_order_status",
+        "description": "Checks order fulfillment status by paymentCode.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "parameters": [
+          {
+            "name": "paymentCode",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Status retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Order not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/get-cart/{_id}": {
+      "get": {
+        "summary": "Get user cart",
+        "operationId": "get_cart_by_user",
+        "description": "Retrieves active cart for authenticated user.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "parameters": [
+          {
+            "name": "_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cart retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/add-to-cart": {
+      "post": {
+        "summary": "Add item to cart",
+        "operationId": "post_carts_add_to_cart",
+        "description": "Adds product with optimistic concurrency protection.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "responses": {
+          "200": {
+            "description": "Added to existing cart",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created new cart",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed or out of stock",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/sync": {
+      "put": {
+        "summary": "Sync localStorage cart",
+        "operationId": "put_carts_sync",
+        "description": "Replaces user cart with localStorage items.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "responses": {
+          "200": {
+            "description": "Cart synced",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SyncCartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed or invalid product",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Version conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/update-cart/{_id}": {
+      "put": {
+        "summary": "Update item quantity in cart",
+        "operationId": "put_carts_update_cart",
+        "description": "Updates quantity with optimistic concurrency protection.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "parameters": [
+          {
+            "name": "_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created new cart",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/delete-from-cart/{_id}": {
+      "delete": {
+        "summary": "Delete item from cart",
+        "operationId": "delete_carts_from_cart",
+        "description": "Removes item from cart and refreshes totals.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "parameters": [
+          {
+            "name": "_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/add-subscribe-plan-to-cart": {
+      "post": {
+        "summary": "Add subscribe plan to cart",
+        "operationId": "post_carts_add_subscribe",
+        "description": "Adds subscription template item to subscribe cart.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "responses": {
+          "200": {
+            "description": "Item added",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created subscribe cart",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/update-subscribe-cart": {
+      "put": {
+        "summary": "Update subscribe cart item",
+        "operationId": "put_carts_update_subscribe",
+        "description": "Updates subscribe plan quantity in cart.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "responses": {
+          "200": {
+            "description": "Item updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Created subscribe cart",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/delete-from-subscribe-cart/{_id}": {
+      "delete": {
+        "summary": "Delete item from subscribe cart",
+        "operationId": "delete_carts_from_subscribe",
+        "description": "Removes subscription plan from subscribe cart.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "parameters": [
+          {
+            "name": "_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{24}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Item deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CartResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/carts/get-subscribe-cart/{_id}": {
+      "get": {
+        "summary": "Get user subscribe cart",
+        "operationId": "get_subscribe_cart_by_user",
+        "description": "Retrieves subscribe cart and gifts for user.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "parameters": [
+          {
+            "name": "_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Subscribe cart retrieved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubscribeCartResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/home/forgot-password": {
+      "post": {
+        "summary": "Forgot password request",
+        "operationId": "post_home_forgot_password",
+        "description": "Sends password reset token email.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "responses": {
+          "200": {
+            "description": "Generic sent message",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/home/reset-password": {
+      "post": {
+        "summary": "Reset password",
+        "operationId": "post_home_reset_password",
+        "description": "Resets user password with valid token.",
+        "x-csrf": "Cookie writes without Authorization require X-TotMart-Request: 1. CORS allowlist applies.",
+        "x-ownership": "Authenticated user bound to token identity.",
+        "x-idempotency": "Idempotent or state-guarded mutation.",
+        "x-retry-recovery": "Transient errors fail with 503; retryable with safe backoff.",
+        "responses": {
+          "200": {
+            "description": "Password reset successful",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid or expired token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/home/health": {
+      "get": {
+        "summary": "System health check",
+        "operationId": "get_home_health",
+        "description": "Returns connectivity and readiness status for DB and Redis.",
+        "x-csrf": "Public read operation; CSRF check omitted.",
+        "x-ownership": "Public status probe.",
+        "x-idempotency": "Read-only idempotent probe.",
+        "x-retry-recovery": "Probe can be queried periodically.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "System healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "System degraded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -1958,6 +2844,148 @@
         },
         "required": ["success", "data"],
         "additionalProperties": false
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": ["success"],
+        "additionalProperties": true
+      },
+      "HealthResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": ["ok"]
+          },
+          "db": {
+            "type": "string"
+          },
+          "redis": {
+            "type": "string"
+          },
+          "uptime": {
+            "type": "number"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        },
+        "required": ["status", "db", "redis"],
+        "additionalProperties": true
+      },
+      "QuoteResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object"
+          }
+        },
+        "required": ["success", "data"],
+        "additionalProperties": true
+      },
+      "CartResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true
+          }
+        },
+        "required": ["success"],
+        "additionalProperties": true
+      },
+      "SyncCartResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object",
+            "nullable": true
+          },
+          "skipped": {
+            "type": "array"
+          },
+          "version": {
+            "type": "integer"
+          }
+        },
+        "required": ["success"],
+        "additionalProperties": true
+      },
+      "SubscribeCartResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "nullable": true
+          },
+          "gift": {
+            "type": "array"
+          }
+        },
+        "required": ["success"],
+        "additionalProperties": true
+      },
+      "CheckoutSessionResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object"
+          }
+        },
+        "required": ["success", "data"],
+        "additionalProperties": true
+      },
+      "OrderStatusResponse": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "enum": [true]
+          },
+          "data": {
+            "type": "object"
+          }
+        },
+        "required": ["success", "data"],
+        "additionalProperties": true
       }
     }
   }

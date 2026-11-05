@@ -1,15 +1,13 @@
-const mongoose = require("mongoose");
-const Subscription = require("../models/UserSubscription");
-const Fulfillment = require("../models/SubscriptionFulfillment");
-const { loadPinnedVersion } = require("./boxDefinitionService");
-const { deductStock } = require("./inventoryService");
-const { fail } = require("./pricingService");
+const mongoose = require('mongoose');
+const Subscription = require('../models/UserSubscription');
+const Fulfillment = require('../models/SubscriptionFulfillment');
+const { loadPinnedVersion } = require('./boxDefinitionService');
+const { deductStock } = require('./inventoryService');
+const { fail } = require('./pricingService');
 const OFFSET = 7 * 3600000;
 function planMonths(type) {
-  const months = { "1_month": 1, "3_month": 3, "6_month": 6, "12_month": 12 }[
-    type
-  ];
-  if (!months) fail("Loại gói không hợp lệ");
+  const months = { '1_month': 1, '3_month': 3, '6_month': 6, '12_month': 12 }[type];
+  if (!months) fail('Loại gói không hợp lệ');
   return months;
 }
 function prepaidPrice(boxValue, type, discountPercent = 0) {
@@ -23,7 +21,7 @@ function prepaidPrice(boxValue, type, discountPercent = 0) {
     !Number.isSafeInteger(discountPrice) ||
     discountPrice <= 0
   )
-    fail("Giá gói trả trước không hợp lệ");
+    fail('Giá gói trả trước không hợp lệ');
   return { basePrice, discountPrice };
 }
 function addMonths(anchor, months) {
@@ -31,15 +29,13 @@ function addMonths(anchor, months) {
     day = local.getUTCDate();
   local.setUTCDate(1);
   local.setUTCMonth(local.getUTCMonth() + months);
-  const last = new Date(
-    Date.UTC(local.getUTCFullYear(), local.getUTCMonth() + 1, 0),
-  ).getUTCDate();
+  const last = new Date(Date.UTC(local.getUTCFullYear(), local.getUTCMonth() + 1, 0)).getUTCDate();
   local.setUTCDate(Math.min(day, last));
   return new Date(local.getTime() - OFFSET);
 }
 async function activateSubscription(sub, session, now = new Date()) {
-  sub.status = "active";
-  sub.paymentStatus = "paid";
+  sub.status = 'active';
+  sub.paymentStatus = 'paid';
   sub.paidAt = now;
   sub.currentPeriodStart = now;
   sub.currentPeriodEnd = addMonths(now, sub.totalDeliveries);
@@ -48,8 +44,8 @@ async function activateSubscription(sub, session, now = new Date()) {
 }
 async function createDueFulfillments(now = new Date()) {
   const subscriptions = await Subscription.find({
-    status: "active",
-    paymentStatus: "paid",
+    status: 'active',
+    paymentStatus: 'paid',
     nextDeliveries: { $lte: now },
     remainDeliveries: { $gt: 0 },
   });
@@ -79,37 +75,28 @@ async function transitionFulfillment(id, userId, delivered, trackingReference) {
   try {
     await session.withTransaction(async () => {
       fulfillment = await Fulfillment.findById(id).session(session);
-      if (!fulfillment) fail("Không tìm thấy lượt giao", 404);
-      if (fulfillment.state === (delivered ? "delivered" : "dispatched"))
-        return;
-      if (fulfillment.state !== (delivered ? "dispatched" : "pending"))
-        fail("Trạng thái giao hàng không hợp lệ", 409);
-      const sub = await Subscription.findById(
-        fulfillment.subscriptionId,
-      ).session(session);
-      if (!sub || sub.status !== "active" || sub.paymentStatus !== "paid")
-        fail("Gói không hoạt động", 409);
+      if (!fulfillment) fail('Không tìm thấy lượt giao', 404);
+      if (fulfillment.state === (delivered ? 'delivered' : 'dispatched')) return;
+      if (fulfillment.state !== (delivered ? 'dispatched' : 'pending'))
+        fail('Trạng thái giao hàng không hợp lệ', 409);
+      const sub = await Subscription.findById(fulfillment.subscriptionId).session(session);
+      if (!sub || sub.status !== 'active' || sub.paymentStatus !== 'paid')
+        fail('Gói không hoạt động', 409);
       if (fulfillment.sequence !== sub.completeDeliveries + 1)
-        fail("Lượt giao không đúng thứ tự", 409);
+        fail('Lượt giao không đúng thứ tự', 409);
       if (delivered) {
         sub.completeDeliveries += 1;
         sub.remainDeliveries = sub.totalDeliveries - sub.completeDeliveries;
         sub.lastDeliveries = new Date();
         if (sub.remainDeliveries === 0) {
-          sub.status = "expired";
+          sub.status = 'expired';
           sub.nextDeliveries = null;
-        } else
-          sub.nextDeliveries = addMonths(
-            sub.currentPeriodStart,
-            sub.completeDeliveries + 1,
-          );
-        fulfillment.state = "delivered";
+        } else sub.nextDeliveries = addMonths(sub.currentPeriodStart, sub.completeDeliveries + 1);
+        fulfillment.state = 'delivered';
         fulfillment.deliveredAt = new Date();
         fulfillment.deliveredBy = userId;
       } else {
-        const boxes = [
-          { boxId: sub.boxId, versionId: sub.boxVersionId, quantity: 1 },
-        ];
+        const boxes = [{ boxId: sub.boxId, versionId: sub.boxVersionId, quantity: 1 }];
         if (fulfillment.sequence === 1)
           for (const gift of sub.gift)
             boxes.push({
@@ -120,12 +107,8 @@ async function transitionFulfillment(id, userId, delivered, trackingReference) {
         const parts = new Map(),
           snapshots = [];
         for (const entry of boxes) {
-          const box = await loadPinnedVersion(
-            entry.boxId,
-            entry.versionId,
-            session,
-          );
-          if (!box?.products.length) fail("Hộp không còn đủ cấu phần", 409);
+          const box = await loadPinnedVersion(entry.boxId, entry.versionId, session);
+          if (!box?.products.length) fail('Hộp không còn đủ cấu phần', 409);
           snapshots.push({ ...entry, name: box.name });
           for (const p of box.products) {
             const key = String(p.productId);
@@ -140,7 +123,7 @@ async function transitionFulfillment(id, userId, delivered, trackingReference) {
         fulfillment.products = [...parts.values()];
         fulfillment.boxes = snapshots;
         await deductStock(fulfillment.products, session, fulfillment.boxes);
-        fulfillment.state = "dispatched";
+        fulfillment.state = 'dispatched';
         fulfillment.dispatchedAt = new Date();
         fulfillment.trackingReference = trackingReference;
       }

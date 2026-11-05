@@ -1,6 +1,6 @@
 const redis = require('../config/redis');
-const crypto = require("crypto");
-const Notification = require("../models/Notification");
+const crypto = require('crypto');
+const Notification = require('../models/Notification');
 
 const sseClients = new Map();
 
@@ -28,17 +28,30 @@ const ssePendingTickets = new Map();
 function issueSseTicket(userId, credentials = {}) {
   const ticket = crypto.randomUUID();
   if (redis.enabled()) {
-    return redis.getClient().set(redis.namespace() + ':ticket:' + ticket, JSON.stringify({userId:String(userId),...credentials}), {EX:30,NX:true}).then(() => ticket);
+    return redis
+      .getClient()
+      .set(
+        redis.namespace() + ':ticket:' + ticket,
+        JSON.stringify({ userId: String(userId), ...credentials }),
+        { EX: 30, NX: true },
+      )
+      .then(() => ticket);
   }
-  for (const [key, entry] of ssePendingTickets) if (entry.expiresAt <= Date.now()) ssePendingTickets.delete(key);
-  if (ssePendingTickets.size >= 10000) throw Object.assign(new Error('Too many stream tickets'), {statusCode:429});
+  for (const [key, entry] of ssePendingTickets)
+    if (entry.expiresAt <= Date.now()) ssePendingTickets.delete(key);
+  if (ssePendingTickets.size >= 10000)
+    throw Object.assign(new Error('Too many stream tickets'), { statusCode: 429 });
   ssePendingTickets.set(ticket, { userId, ...credentials, expiresAt: Date.now() + 30_000 });
   return ticket;
 }
 
 function consumeSseTicket(ticket, full = false) {
   if (typeof ticket !== 'string' || !/^[a-f0-9-]{36}$/.test(ticket)) return null;
-  if (redis.enabled()) return redis.getClient().getDel(redis.namespace() + ':ticket:' + ticket).then(value => value ? JSON.parse(value) : null);
+  if (redis.enabled())
+    return redis
+      .getClient()
+      .getDel(redis.namespace() + ':ticket:' + ticket)
+      .then((value) => (value ? JSON.parse(value) : null));
   const entry = ssePendingTickets.get(ticket);
 
   if (!entry) return null;
@@ -62,12 +75,11 @@ function revokeUserSseTickets(userId, sessionId) {
 
 const NOTIFICATION_MESSAGES = {
   new_order: (order) =>
-    `Đơn hàng mới ${order.orderId} - ${order.totalAmount.toLocaleString("vi-VN")}đ (COD)`,
+    `Đơn hàng mới ${order.orderId} - ${order.totalAmount.toLocaleString('vi-VN')}đ (COD)`,
   payment_received: (order) =>
-    `Đã nhận thanh toán đơn ${order.orderId} - ${order.totalAmount.toLocaleString("vi-VN")}đ`,
+    `Đã nhận thanh toán đơn ${order.orderId} - ${order.totalAmount.toLocaleString('vi-VN')}đ`,
   order_cancelled: (order) => `Đơn hàng ${order.orderId} đã bị huỷ`,
-  payment_underpaid: (order) =>
-    `Đơn ${order.orderId} nhận thiếu tiền — cần đối soát thủ công`,
+  payment_underpaid: (order) => `Đơn ${order.orderId} nhận thiếu tiền — cần đối soát thủ công`,
 };
 
 async function notifyMerchant(order, type, eventKey) {
@@ -88,7 +100,11 @@ async function notifyMerchant(order, type, eventKey) {
     },
   };
   const notification = eventKey
-    ? await Notification.findOneAndUpdate({ eventKey }, { $setOnInsert: { ...payload, eventKey } }, { upsert: true, new: true })
+    ? await Notification.findOneAndUpdate(
+        { eventKey },
+        { $setOnInsert: { ...payload, eventKey } },
+        { upsert: true, new: true },
+      )
     : await Notification.create(payload);
 
   const broadcast = {
@@ -99,7 +115,10 @@ async function notifyMerchant(order, type, eventKey) {
     meta: notification.meta,
     createdAt: notification.createdAt,
   };
-  if (redis.enabled()) await redis.getClient().publish(redis.namespace() + ':notifications', JSON.stringify(broadcast));
+  if (redis.enabled())
+    await redis
+      .getClient()
+      .publish(redis.namespace() + ':notifications', JSON.stringify(broadcast));
   else broadcastLocal(broadcast);
 
   return notification;

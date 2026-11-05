@@ -1,36 +1,42 @@
-const brand = require("../models/Brand");
-const productModel = require("../models/Product");
-const { paginate } = require("../utils/pagination");
-const { uploadLogo, removeLogo } = require("../utils/brandLogoStorage");
+const brand = require('../models/Brand');
+const productModel = require('../models/Product');
+const { paginate } = require('../utils/pagination');
+const { uploadLogo, removeLogo } = require('../utils/brandLogoStorage');
 
 class BrandController {
   async getManagedBrand(req, res, next) {
     try {
-      const data = await brand.findById(req.params._id).select('name slug logo description cityAddress ownerId');
+      const data = await brand
+        .findById(req.params._id)
+        .select('name slug logo description cityAddress ownerId');
       if (!data) return res.status(404).json({ success: false, message: 'Brand not found' });
       res.set('Cache-Control', 'no-store');
       res.json({ success: true, data });
-    } catch (error) { next(error); }
+    } catch (error) {
+      next(error);
+    }
   }
   async createBrand(req, res, next) {
     let uploaded;
     let saved = false;
     try {
       const validated = { ...req.validatedBody };
-      if (validated.description !== undefined) validated.description = require("../utils/safeHtml")(validated.description);
+      if (validated.description !== undefined)
+        validated.description = require('../utils/safeHtml')(validated.description);
       if (req.file) {
         uploaded = await uploadLogo(req.file);
         validated.logo = uploaded.url;
         validated.logoPublicId = uploaded.publicId;
       }
       const newBrand = new brand(validated);
-      if (validated.ownerId) await require('../services/merchantScope').assertMerchant(validated.ownerId);
+      if (validated.ownerId)
+        await require('../services/merchantScope').assertMerchant(validated.ownerId);
       newBrand.ownerId = validated.ownerId || req.userId;
       await newBrand.save();
       saved = true;
       res.status(201).json({
         success: true,
-        message: "Brand created successfully",
+        message: 'Brand created successfully',
         data: newBrand,
       });
     } catch (error) {
@@ -44,9 +50,13 @@ class BrandController {
     let saved = false;
     try {
       const validated = { ...req.validatedBody };
-      if (validated.description !== undefined) validated.description = require("../utils/safeHtml")(validated.description);
+      if (validated.description !== undefined)
+        validated.description = require('../utils/safeHtml')(validated.description);
       if (validated.ownerId) {
-        await require('../services/merchantScope').assertBrandAssignment(req.params._id, validated.ownerId);
+        await require('../services/merchantScope').assertBrandAssignment(
+          req.params._id,
+          validated.ownerId,
+        );
       }
       const newData = {
         ...validated,
@@ -54,7 +64,7 @@ class BrandController {
       if (req.file) {
         // Avoid uploading for a target that does not exist.
         if (!(await brand.exists({ _id: req.params._id }))) {
-          return res.status(404).json({ message: "Brand not found" });
+          return res.status(404).json({ message: 'Brand not found' });
         }
         uploaded = await uploadLogo(req.file);
         newData.logo = uploaded.url;
@@ -67,16 +77,16 @@ class BrandController {
           new: false,
           runValidators: true,
         })
-        .select("+logoPublicId");
+        .select('+logoPublicId');
       if (!updatedBrand) {
         if (uploaded) await removeLogo(uploaded.publicId);
-        return res.status(404).json({ message: "Brand not found" });
+        return res.status(404).json({ message: 'Brand not found' });
       }
       saved = true;
       if (uploaded) await removeLogo(updatedBrand.logoPublicId);
       res.status(200).json({
         success: true,
-        message: "Brand updated successfully",
+        message: 'Brand updated successfully',
       });
     } catch (error) {
       if (uploaded && !saved) await removeLogo(uploaded.publicId);
@@ -90,23 +100,21 @@ class BrandController {
       if (products.length > 0) {
         return res.status(400).json({
           success: false,
-          message: "Cannot delete brand with associated products",
+          message: 'Cannot delete brand with associated products',
         });
       }
 
-      const deletedBrand = await brand
-        .findByIdAndDelete(req.params._id)
-        .select("+logoPublicId");
+      const deletedBrand = await brand.findByIdAndDelete(req.params._id).select('+logoPublicId');
       if (!deletedBrand) {
         return res.status(404).json({
           success: false,
-          message: "Brand not found",
+          message: 'Brand not found',
         });
       }
       await removeLogo(deletedBrand.logoPublicId);
       res.status(200).json({
         success: true,
-        message: "Brand deleted successfully",
+        message: 'Brand deleted successfully',
       });
     } catch (error) {
       next(error);
@@ -119,7 +127,7 @@ class BrandController {
       const products = await productModel.find({ brand: brandId });
       res.status(200).json({
         success: true,
-        message: "Products retrieved successfully",
+        message: 'Products retrieved successfully',
         data: products,
       });
     } catch (error) {
@@ -138,7 +146,7 @@ class BrandController {
 
       res.status(200).json({
         success: true,
-        message: "Brands retrieved successfully",
+        message: 'Brands retrieved successfully',
         data: data,
         pagination: pagination,
       });

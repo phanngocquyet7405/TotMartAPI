@@ -26,10 +26,7 @@ const paginate = async (model, queryParams, filter = {}, options = {}) => {
     }
   }
 
-  const [data, total] = await Promise.all([
-    query.exec(),
-    model.countDocuments(filter),
-  ]);
+  const [data, total] = await Promise.all([query.exec(), model.countDocuments(filter)]);
 
   return {
     data,

@@ -1,26 +1,26 @@
-const mongoose = require("mongoose");
+const mongoose = require('mongoose');
 
 const userSubscriptionSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
+      ref: 'User',
       required: true,
     },
     templateId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "SubscriptionTemplate",
+      ref: 'SubscriptionTemplate',
       required: true,
     },
-    boxId: { type: mongoose.Schema.Types.ObjectId, ref: "Box", required: true },
-    boxVersionId: { type: mongoose.Schema.Types.ObjectId, ref: "BoxVersion" },
+    boxId: { type: mongoose.Schema.Types.ObjectId, ref: 'Box', required: true },
+    boxVersionId: { type: mongoose.Schema.Types.ObjectId, ref: 'BoxVersion' },
     snapshotOrigin: {
       type: String,
-      enum: ["pinned_at_purchase", "historical_verified"],
+      enum: ['pinned_at_purchase', 'historical_verified'],
     },
     planType: {
       type: String,
-      enum: ["1_month", "3_month", "6_month", "12_month"],
+      enum: ['1_month', '3_month', '6_month', '12_month'],
       required: true,
     },
 
@@ -35,33 +35,33 @@ const userSubscriptionSchema = new mongoose.Schema(
       type: Date,
       default: null,
       required: function () {
-        return this.status === "active";
+        return this.status === 'active';
       },
     },
     lastDeliveries: { type: Date, default: null },
 
     status: {
       type: String,
-      enum: ["pending_payment", "active", "cancelled", "expired"],
-      default: "pending_payment",
+      enum: ['pending_payment', 'active', 'cancelled', 'expired'],
+      default: 'pending_payment',
     },
     paymentCode: { type: String, unique: true, sparse: true },
     paymentStatus: {
       type: String,
-      enum: ["pending", "paid"],
-      default: "pending",
+      enum: ['pending', 'paid'],
+      default: 'pending',
     },
     paidAt: Date,
     fulfillmentRevision: { type: Number, default: 0 },
     refundStatus: {
       type: String,
-      enum: ["not_applicable", "pending", "completed"],
-      default: "not_applicable",
+      enum: ['not_applicable', 'pending', 'completed'],
+      default: 'not_applicable',
     },
     refundAmount: { type: Number, default: 0 },
     refundReference: String,
     refundedAt: Date,
-    refundedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    refundedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
     cancelAtPeriodEnd: { type: Boolean, default: false },
 
     shippingPayment: { type: String, enum: ['platform', 'customer_to_carrier'] },
@@ -71,7 +71,7 @@ const userSubscriptionSchema = new mongoose.Schema(
       city: { type: String, required: true },
       country: { type: String, required: true },
       // Không bắt buộc: địa chỉ đã lưu của user không có zipCode (Việt Nam ít dùng)
-      zipCode: { type: String, default: "" },
+      zipCode: { type: String, default: '' },
       phone: { type: String, required: true },
     },
 
@@ -82,8 +82,8 @@ const userSubscriptionSchema = new mongoose.Schema(
 
     gift: [
       {
-        boxId: { type: mongoose.Schema.Types.ObjectId, ref: "Box" },
-        versionId: { type: mongoose.Schema.Types.ObjectId, ref: "BoxVersion" },
+        boxId: { type: mongoose.Schema.Types.ObjectId, ref: 'Box' },
+        versionId: { type: mongoose.Schema.Types.ObjectId, ref: 'BoxVersion' },
         quantity: { type: Number, default: 1 },
       },
     ],
@@ -95,5 +95,5 @@ const userSubscriptionSchema = new mongoose.Schema(
 
 userSubscriptionSchema.index({ status: 1, nextDeliveries: 1 });
 userSubscriptionSchema.index({ boxId: 1, paymentStatus: 1, status: 1 });
-userSubscriptionSchema.index({ "gift.boxId": 1, paymentStatus: 1, status: 1 });
-module.exports = mongoose.model("UserSubscription", userSubscriptionSchema);
+userSubscriptionSchema.index({ 'gift.boxId': 1, paymentStatus: 1, status: 1 });
+module.exports = mongoose.model('UserSubscription', userSubscriptionSchema);

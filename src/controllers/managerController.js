@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { withTransaction } = require('../utils/transaction');
 const Product = require('../models/Product');
 const Box = require('../models/Box');
 const Template = require('../models/SubscriptionTemplate');
@@ -353,7 +354,7 @@ module.exports = {
   async orderStatus(req, res) {
     let order;
     try {
-      await mongoose.connection.transaction(async (session) => {
+      await withTransaction(async (session) => {
         order = await Order.findOne({ _id: req.params.id, merchantId: req.userId }).session(
           session,
         );
