@@ -45,13 +45,41 @@ async function prepareCollectionsIndexesAndTopology() {
   require('./models/SecurityOutbox');
   // Do not accept checkouts before the unique indexes and collections exist.
   // Index errors (including legacy duplicates) must fail startup visibly.
+  const tModelInit = performance.now();
   await Promise.all(Object.values(require('mongoose').models).map((model) => model.init()));
+  logger.info(
+    {
+      event: 'startup_phase',
+      phase: 'model.init',
+      ms: Math.round(performance.now() - tModelInit),
+    },
+    'Models initialization completed',
+  );
 
   // Explicit createIndexes is additive; never drop indexes during startup.
+  const tCreateIndexes = performance.now();
   for (const model of Object.values(require('mongoose').models)) await model.createIndexes();
+  logger.info(
+    {
+      event: 'startup_phase',
+      phase: 'createIndexes',
+      ms: Math.round(performance.now() - tCreateIndexes),
+    },
+    'Indexes creation completed',
+  );
+
+  const tTopology = performance.now();
   const topology = await require('mongoose').connection.db.admin().command({ hello: 1 });
   if (!topology.setName && topology.msg !== 'isdbgrid')
     throw new Error('MongoDB transactions require replica set or sharded topology');
+  logger.info(
+    {
+      event: 'startup_phase',
+      phase: 'checkTopology',
+      ms: Math.round(performance.now() - tTopology),
+    },
+    'Topology check completed',
+  );
 }
 
 function startWorkers(workers) {
@@ -65,15 +93,55 @@ function startWorkers(workers) {
 }
 
 const server = async () => {
+  const startupStart = performance.now();
   try {
+    const tConnectDB = performance.now();
     await connectDB();
+    logger.info(
+      {
+        event: 'startup_phase',
+        phase: 'connectDB',
+        ms: Math.round(performance.now() - tConnectDB),
+      },
+      'Database connection established',
+    );
+
+    const tLedger = performance.now();
     await assertPaymentLedgerReady();
+    logger.info(
+      {
+        event: 'startup_phase',
+        phase: 'assertPaymentLedgerReady',
+        ms: Math.round(performance.now() - tLedger),
+      },
+      'Payment ledger verification completed',
+    );
+
     await prepareCollectionsIndexesAndTopology();
+
+    const tRedis = performance.now();
     await require('./config/redis').startRedis();
+    logger.info(
+      {
+        event: 'startup_phase',
+        phase: 'startRedis',
+        ms: Math.round(performance.now() - tRedis),
+      },
+      'Redis startup completed',
+    );
+
     const workers = [];
     const PORT = config.port;
     const httpServer = app.listen(PORT, () => {
-      logger.info(`Server running on http://localhost:${PORT}/api/home/health`);
+      const portOpenMs = Math.round(performance.now() - startupStart);
+      logger.info(
+        {
+          event: 'startup_phase',
+          phase: 'portOpen',
+          ms: portOpenMs,
+        },
+        `Server running on http://localhost:${PORT}/api/home/health`,
+      );
       logger.info(`Environment: ${config.nodeEnv}`);
 
       startWorkers(workers);
