@@ -128,3 +128,58 @@ Trong phiên hiện tại lệnh Docker daemon và mở Next server trực tiế
 
 See [refresh family state machine, retention, legacy cutover and rollback](docs/refresh-family-policy.md).
 `NODE_ENV=staging` now uses production configuration validation and requires session `sid` at HTTP/SSE authentication entrypoints, with Secure cookies. Deploy all auth writers together with additive indexes; preserve the same `JWT_REFRESH_SECRET` across instances. Do not roll back to code that ignores `revokedAt`. Local proxy fixture tests do not constitute staging validation.
+
+
+## Cấu hình triển khai Render (render.yaml) và Danh mục biến môi trường
+
+### 1. Danh mục biến môi trường hoàn chỉnh (Environment Variables Reference)
+
+Toàn bộ các biến môi trường được quản lý tập trung và xác thực nghiêm ngặt qua `src/config/resolveEnvironment.js` và `src/config/environmentChecks.js`:
+
+| Biến môi trường | Bắt buộc (Prod) | Kiểu / Ràng buộc | Giá trị gợi ý (Render) | Mục đích & Ràng buộc an ninh |
+| :--- | :---: | :--- | :--- | :--- |
+| `NODE_ENV` | **Có** | `production` \| `staging` \| `test` \| `development` | `production` | Chế độ runtime; kích hoạt xác thực an ninh nghiêm ngặt |
+| `PORT` | **Có** | Integer `1..65535` | `3001` (hoặc `10000`) | Cổng lắng nghe HTTP do Render cấp hoặc cấu hình |
+| `TRUST_PROXY` | **Có** | `1` \| `0` \| `loopback`... | `1` | **Bắt buộc = 1** sau reverse proxy của Render để rate limit nhận đúng client IP |
+| `TRUST_PROXY_CONFIRMED_DIRECT` | Không | `true` \| `false` | `false` | Chỉ đặt `true` nếu chạy `TRUST_PROXY=0` trực tiếp không qua proxy |
+| `MONGODB_URI` | **Có** | URI `mongodb+srv://` hoặc `mongodb://` | `mongodb+srv://...` | Chuỗi kết nối MongoDB Replica Set (Atlas Singapore `ap-southeast-1`) |
+| `REDIS_URL` | **Có** | URI TLS `rediss://...` | `rediss://default:...@...` | Chuỗi kết nối Redis Upstash (Singapore). Bắt buộc TLS `rediss://` ở production |
+| `REDIS_NAMESPACE` | **Có** | String `^[a-z0-9:_-]{3,80}$` | `totmart:production` | Namespace cô lập key cache, quota rate limit và Pub/Sub |
+| `JWT_SECRET` | **Có** | String >= 32 chars ngẫu nhiên | *(Tạo ngẫu nhiên)* | Khóa ký Access Token JWT; không dùng chuỗi mẫu; khác `JWT_REFRESH_SECRET` |
+| `JWT_REFRESH_SECRET` | **Có** | String >= 32 chars ngẫu nhiên | *(Tạo ngẫu nhiên)* | Khóa ký Refresh Token JWT; tách biệt hoàn toàn với `JWT_SECRET` |
+| `FRONTEND_URL` | **Có** | URL `https://...` (không trailing slash) | `https://totmart.vn` | Origin public của client frontend; dùng cho CORS allowlist và email link |
+| `CORS_ORIGINS` | Không | Danh sách URLs phân tách dấu phẩy | `https://totmart.vn,https://admin.totmart.vn` | Danh sách các origin được phép gọi API (bắt buộc HTTPS ở production) |
+| `SEPAY_API_KEY` | **Có** | String (API token SePay) | *(Token SePay thật)* | Khóa xác thực webhook thanh toán ngân hàng SePay |
+| `SEPAY_BANK_ACCOUNT` | **Có** | String | *(Số tài khoản ngân hàng)* | Số tài khoản nhận tiền đối soát |
+| `SEPAY_BANK_NAME` | **Có** | String | `MBBank` / `VCB`... | Tên ngân hàng nhận tiền |
+| `CLOUDINARY_CLOUD_NAME` | **Có** | String | *(Tên Cloudinary cloud)* | Lưu trữ và phân phối hình ảnh sản phẩm |
+| `CLOUDINARY_API_KEY` | **Có** | String | *(API Key Cloudinary)* | Khóa API Cloudinary |
+| `CLOUDINARY_API_SECRET` | **Có** | String | *(API Secret Cloudinary)* | Khóa bí mật Cloudinary |
+| `BREVO_API_KEY` | Không | String | *(Khóa Brevo nếu có)* | Dịch vụ gửi email thông báo / reset password |
+| `FROM_EMAIL` | Không | String (Email format) | `no-reply@totmart.vn` | Địa chỉ email người gửi |
+| `LOG_LEVEL` | Không | `fatal`\|`error`\|`warn`\|`info`\|`debug` | `info` | Mức log của Pino logger trong production |
+| `BCRYPT_COST` | Không | Integer `10..15` | `12` | Số vòng băm mật khẩu bcrypt (mặc định 12) |
+| `MONGO_SOCKET_TIMEOUT_MS` | Không | Integer `1000..300000` | `45000` | Thời gian tối đa chờ phản hồi socket cho mỗi lệnh MongoDB |
+| `MONGO_WAIT_QUEUE_TIMEOUT_MS`| Không | Integer `500..60000` | `5000` | Thời gian tối đa chờ lấy connection từ pool khi pool đầy |
+| `MONGO_MAX_COMMIT_TIME_MS` | Không | Integer `1000..60000` | `10000` | Giới hạn tối đa cho lệnh commitTransaction trên MongoDB |
+| `MONGO_TRANSACTION_TIMEOUT_MS`| Không | Integer `1000..120000` | `15000` | Trần thời gian tối đa cho toàn bộ transaction qua withTransaction |
+| `ORDER_EXPIRY_HOURS` | Không | Number > 0 | `24` | Thời gian hết hạn của đơn hàng chưa thanh toán |
+| `CHECKOUT_SESSION_EXPIRY_MINUTES` | Không | Integer `5..60` | `15` | Thời gian hiệu lực của phiên checkout |
+
+### 2. Thiết lập Render Blueprint (`render.yaml`)
+
+File [`render.yaml`](render.yaml) đã được thiết lập sẵn ở thư mục gốc repo:
+- **Region**: `singapore` (đồng bộ khu vực địa lý với MongoDB Atlas `ap-southeast-1` và Upstash Singapore để tối thiểu hóa RTT mạng).
+- **Health Check Path**: `/api/home/live` (Endpoint **liveness**, trả về 200 `status: 'alive'` tức thời mà không truy vấn DB. Giúp ngăn chặn Render tự ý khởi động lại container khi database hoặc Redis có độ trễ ngắn).
+- **Auto Deploy**: `true` (Tự động kích hoạt build khi merge/push vào nhánh chính).
+- **Quản lý Secrets**: Tất cả secret (`MONGODB_URI`, `REDIS_URL`, `JWT_SECRET`, v.v.) được đánh dấu `sync: false` trong `render.yaml` để nhà vận hành tự điền an toàn trên Dashboard Render, ngăn ngừa rò rỉ credential vào Git.
+
+### 3. Đề xuất về `preDeployCommand` (Tách đồng bộ Index)
+
+- **Hiện trạng gói Free**: Render Free plan **không hỗ trợ** `preDeployCommand`. Mọi thao tác khởi tạo index bắt buộc phải hoàn tất trong quá trình web service khởi động (được tối ưu song song hóa ở Giai đoạn 3).
+- **Đề xuất khi nâng cấp lên gói Starter trở lên**:
+  Nếu nâng cấp lên gói có phí (Starter $7/tháng trở lên), đề xuất cấu hình:
+  ```yaml
+  preDeployCommand: "node scripts/sync-indexes.js"
+  ```
+  Lợi ích: Toàn bộ 24 model sẽ hoàn tất `createIndexes()` trong bước deploy riêng biệt trước khi container mới mở traffic, giúp giảm cold start của web service xuống dưới 1 giây.
