@@ -6,10 +6,10 @@ const { uploadLogo, removeLogo } = require('../utils/brandLogoStorage');
 class BrandController {
   async getManagedBrand(req, res, next) {
     try {
-      const data = await brand
+      const query = brand
         .findById(req.params._id)
-        .select('name slug logo description cityAddress ownerId')
-        .lean();
+        .select('name slug logo description cityAddress ownerId');
+      const data = typeof query?.lean === 'function' ? await query.lean() : await query;
       if (!data) return res.status(404).json({ success: false, message: 'Brand not found' });
       res.set('Cache-Control', 'no-store');
       res.json({ success: true, data });
@@ -125,7 +125,8 @@ class BrandController {
   async getBrandProducts(req, res, next) {
     try {
       const brandId = req.params._id;
-      const products = await productModel.find({ brand: brandId }).lean();
+      const query = productModel.find({ brand: brandId });
+      const products = typeof query?.lean === 'function' ? await query.lean() : await query;
       res.status(200).json({
         success: true,
         message: 'Products retrieved successfully',
