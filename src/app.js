@@ -5,6 +5,7 @@ const errorHandler = require('./middleware/errorHandler');
 const cors = require('cors');
 const mongoSanitize = require('express-mongo-sanitize');
 const helmet = require('helmet');
+const compression = require('compression');
 const cookieParser = require('cookie-parser');
 const pinoHttp = require('pino-http');
 const logger = require('./utils/logger');
@@ -23,6 +24,27 @@ app.use((req, res, next) => {
 
 // Middleware
 app.use(helmet());
+
+app.use(
+  compression({
+    threshold: 1024,
+    filter: (req, res) => {
+      if (
+        req.path?.endsWith('/stream') ||
+        req.path?.includes('/stream') ||
+        req.headers?.accept === 'text/event-stream' ||
+        req.headers?.['x-no-compression']
+      ) {
+        return false;
+      }
+      const contentType = res.getHeader('Content-Type');
+      if (typeof contentType === 'string' && contentType.includes('text/event-stream')) {
+        return false;
+      }
+      return compression.filter(req, res);
+    },
+  }),
+);
 
 if (config.nodeEnv !== 'test') {
   app.use(
@@ -73,6 +95,7 @@ app.use(
 );
 app.use(cookieParser());
 app.use(require('./middleware/cookieCsrf'));
+app.use(require('./middleware/serviceAvailability'));
 // Routes
 routes(app);
 

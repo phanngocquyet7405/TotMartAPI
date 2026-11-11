@@ -76,7 +76,7 @@ class CategoryController {
 
   async getAllCategories(req, res, next) {
     try {
-      const categories = await category.find();
+      const categories = await category.find().lean();
       res.status(200).json({
         success: true,
         message: 'Categories retrieved successfully',
@@ -90,7 +90,7 @@ class CategoryController {
   async getCategoryById(req, res, next) {
     try {
       const { _id } = req.params;
-      const categoryData = await category.findById(_id);
+      const categoryData = await category.findById(_id).lean();
       if (!categoryData) {
         return res.status(404).json({
           success: false,

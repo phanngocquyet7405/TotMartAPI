@@ -24,7 +24,19 @@ async function authenticate(
         .status(401)
         .json({ success: false, message: 'Login required for current session policy' });
 
-    const user = await User.findById(decoded.userId, null, { timeoutMS: AUTH_READ_TIMEOUT_MS });
+    const [user, sessionExists] = await Promise.all([
+      User.findById(decoded.userId, null, { timeoutMS: AUTH_READ_TIMEOUT_MS }),
+      decoded.sid
+        ? AuthSession.exists({
+            sessionId: decoded.sid,
+            userId: decoded.userId,
+            tokenVersion: decoded.tokenVersion ?? 0,
+            revokedAt: null,
+            expiresAt: { $gt: new Date() },
+          }).setOptions({ timeoutMS: AUTH_READ_TIMEOUT_MS })
+        : null,
+    ]);
+
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
@@ -43,17 +55,9 @@ async function authenticate(
       });
     }
 
-    if (
-      decoded.sid &&
-      !(await AuthSession.exists({
-        sessionId: decoded.sid,
-        userId: user._id,
-        tokenVersion: user.tokenVersion,
-        revokedAt: null,
-        expiresAt: { $gt: new Date() },
-      }).setOptions({ timeoutMS: AUTH_READ_TIMEOUT_MS }))
-    )
+    if (decoded.sid && !sessionExists) {
       return res.status(401).json({ success: false, message: 'Session revoked' });
+    }
     // Authorization must use the current database role, not a stale JWT claim.
     req.user = { ...decoded, role: user.role };
     req.userId = String(user._id);

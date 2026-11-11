@@ -121,6 +121,9 @@ function resolveEnvironment(env) {
       waitQueueTimeoutMS: number(env, 'MONGO_WAIT_QUEUE_TIMEOUT_MS', 5000, 500, 60000),
       maxCommitTimeMS: number(env, 'MONGO_MAX_COMMIT_TIME_MS', 10000, 1000, 60000),
       transactionTimeoutMS: number(env, 'MONGO_TRANSACTION_TIMEOUT_MS', 15000, 1000, 120000),
+      minPoolSize: number(env, 'MONGO_MIN_POOL_SIZE', 2, 0, 50),
+      maxPoolSize: number(env, 'MONGO_MAX_POOL_SIZE', 10, 1, 100),
+      maxIdleTimeMS: number(env, 'MONGO_MAX_IDLE_TIME_MS', 45000, 1000, 300000),
     },
     jwt: {
       secret: text(env, 'JWT_SECRET', 'your-secret-key-change-in-production'),
@@ -135,10 +138,22 @@ function resolveEnvironment(env) {
     corsOrigins: text(env, 'CORS_ORIGINS', env.FRONTEND_URL || 'http://localhost:3000')
       .split(',')
       .map((value) => value.trim().replace(/\/+$/, '')),
+    http: {
+      keepAliveTimeoutMs: number(env, 'HTTP_KEEP_ALIVE_TIMEOUT_MS', 65000, 1000, 300000),
+      headersTimeoutMs: number(
+        env,
+        'HTTP_HEADERS_TIMEOUT_MS',
+        Math.max(66000, number(env, 'HTTP_KEEP_ALIVE_TIMEOUT_MS', 65000, 1000, 300000) + 1000),
+        1000,
+        300000,
+      ),
+    },
     trustProxy: text(env, 'TRUST_PROXY', '0'),
     redis: {
       url: env.REDIS_URL === '' && !strictSessions ? undefined : text(env, 'REDIS_URL'),
       namespace: text(env, 'REDIS_NAMESPACE', 'totmart:development'),
+      keepAliveMs: number(env, 'REDIS_KEEP_ALIVE_MS', 30000, 1000, 300000),
+      pingIntervalMs: number(env, 'REDIS_PING_INTERVAL_MS', 1000, 500, 60000),
     },
     sepay: {
       apiKey: text(env, 'SEPAY_API_KEY'),
@@ -173,6 +188,22 @@ function resolveEnvironment(env) {
     invalid('MONGO_MAX_COMMIT_TIME_MS', 'integer required');
   if (!Number.isInteger(config.mongodb.transactionTimeoutMS))
     invalid('MONGO_TRANSACTION_TIMEOUT_MS', 'integer required');
+  if (!Number.isInteger(config.mongodb.minPoolSize))
+    invalid('MONGO_MIN_POOL_SIZE', 'integer required');
+  if (!Number.isInteger(config.mongodb.maxPoolSize))
+    invalid('MONGO_MAX_POOL_SIZE', 'integer required');
+  if (!Number.isInteger(config.mongodb.maxIdleTimeMS))
+    invalid('MONGO_MAX_IDLE_TIME_MS', 'integer required');
+  if (!Number.isInteger(config.http.keepAliveTimeoutMs))
+    invalid('HTTP_KEEP_ALIVE_TIMEOUT_MS', 'integer required');
+  if (!Number.isInteger(config.http.headersTimeoutMs))
+    invalid('HTTP_HEADERS_TIMEOUT_MS', 'integer required');
+  if (config.http.headersTimeoutMs <= config.http.keepAliveTimeoutMs)
+    invalid('HTTP_HEADERS_TIMEOUT_MS', 'must be greater than HTTP_KEEP_ALIVE_TIMEOUT_MS');
+  if (!Number.isInteger(config.redis.keepAliveMs))
+    invalid('REDIS_KEEP_ALIVE_MS', 'integer required');
+  if (!Number.isInteger(config.redis.pingIntervalMs))
+    invalid('REDIS_PING_INTERVAL_MS', 'integer required');
   if (!['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'].includes(config.logLevel))
     invalid('LOG_LEVEL', 'enum');
   if (!/^(0|1|loopback|linklocal|uniquelocal)$/.test(config.trustProxy))

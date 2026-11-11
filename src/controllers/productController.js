@@ -198,7 +198,8 @@ class ProductController {
           .populate('category', 'name slug')
           .sort(sort)
           .skip((page - 1) * limit)
-          .limit(limit),
+          .limit(limit)
+          .lean(),
         Product.countDocuments(filter),
       ]);
       res.json({
@@ -212,8 +213,14 @@ class ProductController {
   }
   async getProductById(req, res, next) {
     try {
-      const product = await Product.findById(req.params._id).populate('brand').populate('category');
+      const product = await Product.findById(req.params._id)
+        .populate('brand')
+        .populate('category')
+        .lean();
       if (!product || product.archivedAt) fail('Sản phẩm không tồn tại', 404);
+      if (product.description !== undefined) {
+        product.description = safeHtml(product.description);
+      }
       res.json({ success: true, data: product });
     } catch (err) {
       next(err);

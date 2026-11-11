@@ -116,6 +116,9 @@ test('Mongo timeout defaults and explicit values are parsed and validated', () =
   expect(defaults.mongodb.waitQueueTimeoutMS).toBe(5000);
   expect(defaults.mongodb.maxCommitTimeMS).toBe(10000);
   expect(defaults.mongodb.transactionTimeoutMS).toBe(15000);
+  expect(defaults.mongodb.minPoolSize).toBe(2);
+  expect(defaults.mongodb.maxPoolSize).toBe(10);
+  expect(defaults.mongodb.maxIdleTimeMS).toBe(45000);
 
   const custom = resolveEnvironment({
     ...fixture(),
@@ -123,11 +126,17 @@ test('Mongo timeout defaults and explicit values are parsed and validated', () =
     MONGO_WAIT_QUEUE_TIMEOUT_MS: '3000',
     MONGO_MAX_COMMIT_TIME_MS: '8000',
     MONGO_TRANSACTION_TIMEOUT_MS: '20000',
+    MONGO_MIN_POOL_SIZE: '5',
+    MONGO_MAX_POOL_SIZE: '25',
+    MONGO_MAX_IDLE_TIME_MS: '60000',
   });
   expect(custom.mongodb.socketTimeoutMS).toBe(30000);
   expect(custom.mongodb.waitQueueTimeoutMS).toBe(3000);
   expect(custom.mongodb.maxCommitTimeMS).toBe(8000);
   expect(custom.mongodb.transactionTimeoutMS).toBe(20000);
+  expect(custom.mongodb.minPoolSize).toBe(5);
+  expect(custom.mongodb.maxPoolSize).toBe(25);
+  expect(custom.mongodb.maxIdleTimeMS).toBe(60000);
 
   expect(() => resolveEnvironment({ ...fixture(), MONGO_SOCKET_TIMEOUT_MS: '500' })).toThrow(
     /MONGO_SOCKET_TIMEOUT_MS/,
@@ -143,6 +152,42 @@ test('Mongo timeout defaults and explicit values are parsed and validated', () =
   );
   expect(() => resolveEnvironment({ ...fixture(), MONGO_TRANSACTION_TIMEOUT_MS: '12.5' })).toThrow(
     /MONGO_TRANSACTION_TIMEOUT_MS/,
+  );
+  expect(() => resolveEnvironment({ ...fixture(), MONGO_MIN_POOL_SIZE: '60' })).toThrow(
+    /MONGO_MIN_POOL_SIZE/,
+  );
+  expect(() => resolveEnvironment({ ...fixture(), MONGO_MAX_POOL_SIZE: '0' })).toThrow(
+    /MONGO_MAX_POOL_SIZE/,
+  );
+  expect(() => resolveEnvironment({ ...fixture(), MONGO_MAX_IDLE_TIME_MS: '500' })).toThrow(
+    /MONGO_MAX_IDLE_TIME_MS/,
+  );
+});
+test('Redis keep-alive, ping interval defaults and explicit values are parsed and validated', () => {
+  const defaults = resolveEnvironment(fixture());
+  expect(defaults.redis.keepAliveMs).toBe(30000);
+  expect(defaults.redis.pingIntervalMs).toBe(1000);
+
+  const custom = resolveEnvironment({
+    ...fixture(),
+    REDIS_KEEP_ALIVE_MS: '60000',
+    REDIS_PING_INTERVAL_MS: '15000',
+    REDIS_URL: 'rediss://default:upstash-secret-pw@singapore-redis.upstash.io:6379',
+  });
+  expect(custom.redis.keepAliveMs).toBe(60000);
+  expect(custom.redis.pingIntervalMs).toBe(15000);
+  expect(custom.redis.url).toBe(
+    'rediss://default:upstash-secret-pw@singapore-redis.upstash.io:6379',
+  );
+
+  expect(() => resolveEnvironment({ ...fixture(), REDIS_KEEP_ALIVE_MS: '500' })).toThrow(
+    /REDIS_KEEP_ALIVE_MS/,
+  );
+  expect(() => resolveEnvironment({ ...fixture(), REDIS_PING_INTERVAL_MS: '100' })).toThrow(
+    /REDIS_PING_INTERVAL_MS/,
+  );
+  expect(() => resolveEnvironment({ ...fixture(), REDIS_PING_INTERVAL_MS: '12.5' })).toThrow(
+    /REDIS_PING_INTERVAL_MS/,
   );
 });
 test.each(['15m', '900s', '1h', '0.5h'])(
