@@ -135,6 +135,16 @@ function resolveEnvironment(env) {
     corsOrigins: text(env, 'CORS_ORIGINS', env.FRONTEND_URL || 'http://localhost:3000')
       .split(',')
       .map((value) => value.trim().replace(/\/+$/, '')),
+    http: {
+      keepAliveTimeoutMs: number(env, 'HTTP_KEEP_ALIVE_TIMEOUT_MS', 65000, 1000, 300000),
+      headersTimeoutMs: number(
+        env,
+        'HTTP_HEADERS_TIMEOUT_MS',
+        Math.max(66000, number(env, 'HTTP_KEEP_ALIVE_TIMEOUT_MS', 65000, 1000, 300000) + 1000),
+        1000,
+        300000,
+      ),
+    },
     trustProxy: text(env, 'TRUST_PROXY', '0'),
     redis: {
       url: env.REDIS_URL === '' && !strictSessions ? undefined : text(env, 'REDIS_URL'),
@@ -173,6 +183,12 @@ function resolveEnvironment(env) {
     invalid('MONGO_MAX_COMMIT_TIME_MS', 'integer required');
   if (!Number.isInteger(config.mongodb.transactionTimeoutMS))
     invalid('MONGO_TRANSACTION_TIMEOUT_MS', 'integer required');
+  if (!Number.isInteger(config.http.keepAliveTimeoutMs))
+    invalid('HTTP_KEEP_ALIVE_TIMEOUT_MS', 'integer required');
+  if (!Number.isInteger(config.http.headersTimeoutMs))
+    invalid('HTTP_HEADERS_TIMEOUT_MS', 'integer required');
+  if (config.http.headersTimeoutMs <= config.http.keepAliveTimeoutMs)
+    invalid('HTTP_HEADERS_TIMEOUT_MS', 'must be greater than HTTP_KEEP_ALIVE_TIMEOUT_MS');
   if (!['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'].includes(config.logLevel))
     invalid('LOG_LEVEL', 'enum');
   if (!/^(0|1|loopback|linklocal|uniquelocal)$/.test(config.trustProxy))

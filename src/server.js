@@ -147,6 +147,13 @@ const server = async () => {
       startWorkers(workers);
     });
 
+    if (config.http?.keepAliveTimeoutMs) {
+      httpServer.keepAliveTimeout = config.http.keepAliveTimeoutMs;
+    }
+    if (config.http?.headersTimeoutMs) {
+      httpServer.headersTimeout = config.http.headersTimeoutMs;
+    }
+
     httpServer.workers = workers;
     return httpServer;
   } catch (error) {
