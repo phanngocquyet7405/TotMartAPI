@@ -95,6 +95,7 @@ app.use(
 );
 app.use(cookieParser());
 app.use(require('./middleware/cookieCsrf'));
+app.use(require('./middleware/serviceAvailability'));
 // Routes
 routes(app);
 

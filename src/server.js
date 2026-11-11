@@ -14,29 +14,33 @@ const { startDeliveryScheduler } = require('./jobs/deliveryScheduler');
 const { startOrderExpiryScheduler } = require('./jobs/orderExpiryScheduler');
 
 async function assertPaymentLedgerReady() {
-  if (
-    (await require('./models/Checkout').exists({
+  const [unversionedCheckout, unversionedPayment] = await Promise.all([
+    require('./models/Checkout').exists({
       paymentLedgerVersion: { $exists: false },
-    })) ||
-    (await require('./models/PaymentEvent').exists({
+    }),
+    require('./models/PaymentEvent').exists({
       paymentLedgerVersion: { $exists: false },
-    }))
-  ) {
+    }),
+  ]);
+  if (unversionedCheckout || unversionedPayment) {
     throw new Error('Run and review payment-ledger migration before accepting traffic');
   }
   if (config.nodeEnv === 'production') {
-    const legacyOpen = await require('./models/Checkout').exists({
-      paymentLedgerVersion: 1,
-      state: 'pending',
-    });
-    const legacyReceipts = await require('./models/PaymentEvent').exists({
-      paymentLedgerVersion: 1,
-      state: { $ne: 'processed' },
-    });
-    if (legacyOpen || legacyReceipts)
+    const [legacyOpen, legacyReceipts] = await Promise.all([
+      require('./models/Checkout').exists({
+        paymentLedgerVersion: 1,
+        state: 'pending',
+      }),
+      require('./models/PaymentEvent').exists({
+        paymentLedgerVersion: 1,
+        state: { $ne: 'processed' },
+      }),
+    ]);
+    if (legacyOpen || legacyReceipts) {
       throw new Error(
         'Unresolved legacy money requires reviewed bank reconciliation before production',
       );
+    }
   }
 }
 
@@ -57,8 +61,14 @@ async function prepareCollectionsIndexesAndTopology() {
   );
 
   // Explicit createIndexes is additive; never drop indexes during startup.
+  // Run in bounded parallel batches of 5 to reduce round-trip latency to Atlas.
   const tCreateIndexes = performance.now();
-  for (const model of Object.values(require('mongoose').models)) await model.createIndexes();
+  const models = Object.values(require('mongoose').models);
+  const concurrency = 5;
+  for (let i = 0; i < models.length; i += concurrency) {
+    const batch = models.slice(i, i + concurrency);
+    await Promise.all(batch.map((model) => model.createIndexes()));
+  }
   logger.info(
     {
       event: 'startup_phase',
@@ -94,7 +104,40 @@ function startWorkers(workers) {
 
 const server = async () => {
   const startupStart = performance.now();
+  const healthController = require('./controllers/healthController');
+  healthController.setServerReady(false);
+
+  const workers = [];
+  const PORT = config.port;
+  let httpServer;
+
   try {
+    await new Promise((resolve, reject) => {
+      httpServer = app.listen(PORT, (err) => {
+        if (err) return reject(err);
+        const portOpenMs = Math.round(performance.now() - startupStart);
+        logger.info(
+          {
+            event: 'startup_phase',
+            phase: 'portOpen',
+            ms: portOpenMs,
+          },
+          `Server running on http://localhost:${PORT}/api/home/health`,
+        );
+        logger.info(`Environment: ${config.nodeEnv}`);
+        resolve();
+      });
+      httpServer.once('error', reject);
+    });
+
+    if (config.http?.keepAliveTimeoutMs) {
+      httpServer.keepAliveTimeout = config.http.keepAliveTimeoutMs;
+    }
+    if (config.http?.headersTimeoutMs) {
+      httpServer.headersTimeout = config.http.headersTimeoutMs;
+    }
+    httpServer.workers = workers;
+
     const tConnectDB = performance.now();
     await connectDB();
     logger.info(
@@ -130,35 +173,30 @@ const server = async () => {
       'Redis startup completed',
     );
 
-    const workers = [];
-    const PORT = config.port;
-    const httpServer = app.listen(PORT, () => {
-      const portOpenMs = Math.round(performance.now() - startupStart);
-      logger.info(
-        {
-          event: 'startup_phase',
-          phase: 'portOpen',
-          ms: portOpenMs,
-        },
-        `Server running on http://localhost:${PORT}/api/home/health`,
-      );
-      logger.info(`Environment: ${config.nodeEnv}`);
+    startWorkers(workers);
 
-      startWorkers(workers);
-    });
+    healthController.setServerReady(true);
+    const readyMs = Math.round(performance.now() - startupStart);
+    logger.info(
+      {
+        event: 'startup_phase',
+        phase: 'ready',
+        ms: readyMs,
+      },
+      `Server initialization complete and ready to accept traffic on port ${PORT}`,
+    );
 
-    if (config.http?.keepAliveTimeoutMs) {
-      httpServer.keepAliveTimeout = config.http.keepAliveTimeoutMs;
-    }
-    if (config.http?.headersTimeoutMs) {
-      httpServer.headersTimeout = config.http.headersTimeoutMs;
-    }
-
-    httpServer.workers = workers;
     return httpServer;
   } catch (error) {
-    logger.error({ event: 'server_start_failed', type: error.name }, 'Failed to start server');
-    process.exit(1);
+    logger.error(
+      { event: 'server_start_failed', type: error.name, err: error.message },
+      'Failed to start server',
+    );
+    if (httpServer) {
+      gracefulShutdown(httpServer, 'server_start_failed', error);
+    } else {
+      process.exit(1);
+    }
   }
 };
 
