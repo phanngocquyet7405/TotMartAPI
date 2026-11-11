@@ -1,11 +1,49 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { execSync } = require('node:child_process');
+const { execFileSync } = require('node:child_process');
 
 describe('Docker Build & Image Optimization (Phase 5)', () => {
   const rootDir = path.resolve(__dirname, '..');
   const dockerfilePath = path.join(rootDir, 'Dockerfile');
   const dockerignorePath = path.join(rootDir, '.dockerignore');
+  // Unique tag owned by this run: never depends on an image built by hand,
+  // and cleanup only ever removes this exact tag.
+  const imageTag = `totmart-api:ci-verify-${process.pid}-${Date.now()}`;
+  let imageBuilt = false;
+
+  function dockerAvailable() {
+    try {
+      execFileSync('docker', ['info'], { stdio: 'ignore', timeout: 10000 });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  function docker(args, timeout) {
+    return execFileSync('docker', args, { encoding: 'utf8', timeout }).trim();
+  }
+
+  beforeAll(() => {
+    if (!dockerAvailable()) {
+      if (process.env.CI === 'true') {
+        throw new Error('Docker daemon is required in CI for runtime image verification');
+      }
+      console.warn('Docker daemon not running; skipping runtime image verification');
+      return;
+    }
+    docker(['build', '--quiet', '-t', imageTag, rootDir], 280000);
+    imageBuilt = true;
+  }, 300000);
+
+  afterAll(() => {
+    if (!imageBuilt) return;
+    try {
+      docker(['rmi', '-f', imageTag], 60000);
+    } catch (error) {
+      console.warn(`Could not remove test image ${imageTag}: ${error.message}`);
+    }
+  }, 90000);
 
   test('Dockerfile uses multi-stage build with node:24-bookworm-slim and non-root user', () => {
     const dockerfile = fs.readFileSync(dockerfilePath, 'utf8');
@@ -49,46 +87,46 @@ describe('Docker Build & Image Optimization (Phase 5)', () => {
     }
   });
 
-  test('Docker image totmart-api:phase5 runs as node user with functional bcrypt', () => {
-    let dockerAvailable;
-    try {
-      execSync('docker info', { stdio: 'ignore', timeout: 5000 });
-      dockerAvailable = true;
-    } catch {
-      dockerAvailable = false;
-    }
-
-    if (!dockerAvailable) {
-      console.warn('Docker daemon not running; skipping runtime image verification');
-      return;
-    }
+  test('freshly built image runs as node user with functional bcrypt', () => {
+    if (!imageBuilt) return;
 
     // Verify user and command metadata
-    const inspectOutput = execSync(
-      'docker inspect --format "{{json .Config.User}}|||{{json .Config.Cmd}}" totmart-api:phase5',
-      { encoding: 'utf8', timeout: 10000 },
-    ).trim();
-
+    const inspectOutput = docker(
+      ['inspect', '--format', '{{json .Config.User}}|||{{json .Config.Cmd}}', imageTag],
+      10000,
+    );
     const [user, cmd] = inspectOutput.split('|||');
     expect(JSON.parse(user)).toBe('node');
     expect(JSON.parse(cmd)).toEqual(['node', 'src/server.js']);
 
     // Verify bcrypt execution and uid inside the built container
-    const runtimeProbe = execSync(
-      "docker run --rm totmart-api:phase5 node -e \"const b = require('bcrypt'); console.log(JSON.stringify({ uid: process.getuid(), bcryptOk: !!b.hashSync('test', 10) }))\"",
-      { encoding: 'utf8', timeout: 15000 },
-    ).trim();
-
+    const runtimeProbe = docker(
+      [
+        'run',
+        '--rm',
+        imageTag,
+        'node',
+        '-e',
+        "const b = require('bcrypt'); console.log(JSON.stringify({ uid: process.getuid(), bcryptOk: !!b.hashSync('test', 10) }))",
+      ],
+      30000,
+    );
     const probe = JSON.parse(runtimeProbe);
     expect(probe.uid).toBe(1000);
     expect(probe.bcryptOk).toBe(true);
 
     // Verify forbidden files are absent from /app/
-    const forbiddenProbe = execSync(
-      "docker run --rm totmart-api:phase5 node -e \"const fs = require('fs'); const f = ['.env', 'artifacts', 'tests', 'coverage', 'docs', 'scripts'].filter(p => fs.existsSync('/app/' + p)); console.log(JSON.stringify(f))\"",
-      { encoding: 'utf8', timeout: 15000 },
-    ).trim();
-
+    const forbiddenProbe = docker(
+      [
+        'run',
+        '--rm',
+        imageTag,
+        'node',
+        '-e',
+        "const fs = require('fs'); const f = ['.env', 'artifacts', 'tests', 'coverage', 'docs', 'scripts'].filter(p => fs.existsSync('/app/' + p)); console.log(JSON.stringify(f))",
+      ],
+      30000,
+    );
     expect(JSON.parse(forbiddenProbe)).toEqual([]);
-  });
+  }, 120000);
 });
