@@ -271,7 +271,10 @@ class UserController {
 
   async getMyProfile(req, res, next) {
     try {
-      const user = await userModel.findById(req.userId);
+      const user = await userModel
+        .findById(req.userId)
+        .select('-password -refreshToken -resetPasswordToken -resetPasswordExpires')
+        .lean();
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }

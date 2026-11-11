@@ -121,6 +121,9 @@ function resolveEnvironment(env) {
       waitQueueTimeoutMS: number(env, 'MONGO_WAIT_QUEUE_TIMEOUT_MS', 5000, 500, 60000),
       maxCommitTimeMS: number(env, 'MONGO_MAX_COMMIT_TIME_MS', 10000, 1000, 60000),
       transactionTimeoutMS: number(env, 'MONGO_TRANSACTION_TIMEOUT_MS', 15000, 1000, 120000),
+      minPoolSize: number(env, 'MONGO_MIN_POOL_SIZE', 2, 0, 50),
+      maxPoolSize: number(env, 'MONGO_MAX_POOL_SIZE', 10, 1, 100),
+      maxIdleTimeMS: number(env, 'MONGO_MAX_IDLE_TIME_MS', 45000, 1000, 300000),
     },
     jwt: {
       secret: text(env, 'JWT_SECRET', 'your-secret-key-change-in-production'),
@@ -183,6 +186,12 @@ function resolveEnvironment(env) {
     invalid('MONGO_MAX_COMMIT_TIME_MS', 'integer required');
   if (!Number.isInteger(config.mongodb.transactionTimeoutMS))
     invalid('MONGO_TRANSACTION_TIMEOUT_MS', 'integer required');
+  if (!Number.isInteger(config.mongodb.minPoolSize))
+    invalid('MONGO_MIN_POOL_SIZE', 'integer required');
+  if (!Number.isInteger(config.mongodb.maxPoolSize))
+    invalid('MONGO_MAX_POOL_SIZE', 'integer required');
+  if (!Number.isInteger(config.mongodb.maxIdleTimeMS))
+    invalid('MONGO_MAX_IDLE_TIME_MS', 'integer required');
   if (!Number.isInteger(config.http.keepAliveTimeoutMs))
     invalid('HTTP_KEEP_ALIVE_TIMEOUT_MS', 'integer required');
   if (!Number.isInteger(config.http.headersTimeoutMs))

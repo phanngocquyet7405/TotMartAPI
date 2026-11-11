@@ -8,7 +8,8 @@ class BrandController {
     try {
       const data = await brand
         .findById(req.params._id)
-        .select('name slug logo description cityAddress ownerId');
+        .select('name slug logo description cityAddress ownerId')
+        .lean();
       if (!data) return res.status(404).json({ success: false, message: 'Brand not found' });
       res.set('Cache-Control', 'no-store');
       res.json({ success: true, data });
@@ -124,7 +125,7 @@ class BrandController {
   async getBrandProducts(req, res, next) {
     try {
       const brandId = req.params._id;
-      const products = await productModel.find({ brand: brandId });
+      const products = await productModel.find({ brand: brandId }).lean();
       res.status(200).json({
         success: true,
         message: 'Products retrieved successfully',
@@ -141,7 +142,7 @@ class BrandController {
         brand,
         req.query,
         {},
-        { sort: { name: 1 }, select: 'name slug logo description cityAddress' },
+        { sort: { name: 1 }, select: 'name slug logo description cityAddress', lean: true },
       );
 
       res.status(200).json({

@@ -10,7 +10,9 @@ const connectDB = async () => {
     logger.info({ dependency: 'MongoDB' }, 'Đang kết nối tới MongoDB');
     const conn = await mongoose.connect(config.mongodb.uri, {
       serverSelectionTimeoutMS: 5000,
-      maxPoolSize: 20,
+      minPoolSize: config.mongodb.minPoolSize,
+      maxPoolSize: config.mongodb.maxPoolSize,
+      maxIdleTimeMS: config.mongodb.maxIdleTimeMS,
       socketTimeoutMS: config.mongodb.socketTimeoutMS,
       waitQueueTimeoutMS: config.mongodb.waitQueueTimeoutMS,
       autoIndex: config.nodeEnv !== 'production',
