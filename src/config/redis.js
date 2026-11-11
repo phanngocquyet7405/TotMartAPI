@@ -51,6 +51,7 @@ async function startRedis() {
     socket: {
       connectTimeout: 5000,
       socketTimeout: 5000,
+      keepAlive: config.redis.keepAliveMs || 30000,
       reconnectStrategy: (retries) => Math.min(1000 + retries * 100, 5000),
     },
   });
@@ -99,6 +100,7 @@ async function startRedis() {
   });
   healthy = true;
   let probing = false;
+  const pingInterval = config.redis.pingIntervalMs || 1000;
   probeTimer = setInterval(async () => {
     if (probing) return;
     probing = true;
@@ -111,7 +113,7 @@ async function startRedis() {
     } finally {
       probing = false;
     }
-  }, 1000);
+  }, pingInterval);
   probeTimer.unref();
 }
 async function stopRedis() {

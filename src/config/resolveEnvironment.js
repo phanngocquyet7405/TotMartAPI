@@ -152,6 +152,8 @@ function resolveEnvironment(env) {
     redis: {
       url: env.REDIS_URL === '' && !strictSessions ? undefined : text(env, 'REDIS_URL'),
       namespace: text(env, 'REDIS_NAMESPACE', 'totmart:development'),
+      keepAliveMs: number(env, 'REDIS_KEEP_ALIVE_MS', 30000, 1000, 300000),
+      pingIntervalMs: number(env, 'REDIS_PING_INTERVAL_MS', 1000, 500, 60000),
     },
     sepay: {
       apiKey: text(env, 'SEPAY_API_KEY'),
@@ -198,6 +200,10 @@ function resolveEnvironment(env) {
     invalid('HTTP_HEADERS_TIMEOUT_MS', 'integer required');
   if (config.http.headersTimeoutMs <= config.http.keepAliveTimeoutMs)
     invalid('HTTP_HEADERS_TIMEOUT_MS', 'must be greater than HTTP_KEEP_ALIVE_TIMEOUT_MS');
+  if (!Number.isInteger(config.redis.keepAliveMs))
+    invalid('REDIS_KEEP_ALIVE_MS', 'integer required');
+  if (!Number.isInteger(config.redis.pingIntervalMs))
+    invalid('REDIS_PING_INTERVAL_MS', 'integer required');
   if (!['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'].includes(config.logLevel))
     invalid('LOG_LEVEL', 'enum');
   if (!/^(0|1|loopback|linklocal|uniquelocal)$/.test(config.trustProxy))

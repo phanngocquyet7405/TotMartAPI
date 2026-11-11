@@ -163,6 +163,33 @@ test('Mongo timeout defaults and explicit values are parsed and validated', () =
     /MONGO_MAX_IDLE_TIME_MS/,
   );
 });
+test('Redis keep-alive, ping interval defaults and explicit values are parsed and validated', () => {
+  const defaults = resolveEnvironment(fixture());
+  expect(defaults.redis.keepAliveMs).toBe(30000);
+  expect(defaults.redis.pingIntervalMs).toBe(1000);
+
+  const custom = resolveEnvironment({
+    ...fixture(),
+    REDIS_KEEP_ALIVE_MS: '60000',
+    REDIS_PING_INTERVAL_MS: '15000',
+    REDIS_URL: 'rediss://default:upstash-secret-pw@singapore-redis.upstash.io:6379',
+  });
+  expect(custom.redis.keepAliveMs).toBe(60000);
+  expect(custom.redis.pingIntervalMs).toBe(15000);
+  expect(custom.redis.url).toBe(
+    'rediss://default:upstash-secret-pw@singapore-redis.upstash.io:6379',
+  );
+
+  expect(() => resolveEnvironment({ ...fixture(), REDIS_KEEP_ALIVE_MS: '500' })).toThrow(
+    /REDIS_KEEP_ALIVE_MS/,
+  );
+  expect(() => resolveEnvironment({ ...fixture(), REDIS_PING_INTERVAL_MS: '100' })).toThrow(
+    /REDIS_PING_INTERVAL_MS/,
+  );
+  expect(() => resolveEnvironment({ ...fixture(), REDIS_PING_INTERVAL_MS: '12.5' })).toThrow(
+    /REDIS_PING_INTERVAL_MS/,
+  );
+});
 test.each(['15m', '900s', '1h', '0.5h'])(
   'issued access JWT matches configured lifetime %s',
   (lifetime) => {
